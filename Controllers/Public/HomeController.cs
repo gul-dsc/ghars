@@ -2,6 +2,7 @@ using GharsPlatform.Data;
 using GharsPlatform.Hubs;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
+using GharsPlatform.Models.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -140,16 +141,21 @@ public class HomeController : Controller
 
     // ------------------------------------------------------------------ Contact
 
+    /// <summary>
+    /// The required string properties are declared nullable on purpose. With nullable reference types
+    /// enabled, MVC synthesises an implicit <c>[Required]</c> for a non-nullable reference property and
+    /// that framework message — always English — pre-empts the bilingual one below.
+    /// </summary>
     public class ContactVm
     {
-        [Required(ErrorMessage = "Your name is required."), MaxLength(150)]
+        [BilingualRequired(ErrorMessage = "Your name is required.", Ar = "الاسم مطلوب."), MaxLength(150)]
         [Display(Name = "Full name")]
-        public string FullName { get; set; } = "";
+        public string? FullName { get; set; }
 
-        [Required(ErrorMessage = "An email address is required.")]
-        [EmailAddress(ErrorMessage = "Enter a valid email address.")]
+        [BilingualRequired(ErrorMessage = "An email address is required.", Ar = "البريد الإلكتروني مطلوب.")]
+        [BilingualEmailAddress(ErrorMessage = "Enter a valid email address.", Ar = "يرجى إدخال بريد إلكتروني صحيح.")]
         [MaxLength(250)]
-        public string Email { get; set; } = "";
+        public string? Email { get; set; }
 
         [MaxLength(50)]
         [Display(Name = "Phone")]
@@ -161,13 +167,14 @@ public class HomeController : Controller
 
         public ContactTopic Topic { get; set; } = ContactTopic.GeneralEnquiry;
 
-        [Required(ErrorMessage = "A subject is required."), MaxLength(200)]
-        public string Subject { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "A subject is required.", Ar = "عنوان الرسالة مطلوب."), MaxLength(200)]
+        public string? Subject { get; set; }
 
-        [Required(ErrorMessage = "A message is required.")]
+        [BilingualRequired(ErrorMessage = "A message is required.", Ar = "نص الرسالة مطلوب.")]
         [MaxLength(4000)]
-        [MinLength(10, ErrorMessage = "Please describe your enquiry in a little more detail.")]
-        public string Message { get; set; } = "";
+        [BilingualMinLength(10, ErrorMessage = "Please describe your enquiry in a little more detail.",
+            Ar = "يرجى تقديم تفاصيل أوفى عن استفسارك.")]
+        public string? Message { get; set; }
 
         /// <summary>
         /// Honeypot. Hidden from people by CSS and left empty by them; bots fill every field they find.
@@ -200,15 +207,16 @@ public class HomeController : Controller
 
         if (!ModelState.IsValid) return View(vm);
 
+        // Non-null past this point: ModelState.IsValid means every BilingualRequired check passed.
         var entity = new ContactMessage
         {
-            FullName = vm.FullName.Trim(),
-            Email = vm.Email.Trim(),
+            FullName = vm.FullName!.Trim(),
+            Email = vm.Email!.Trim(),
             Phone = string.IsNullOrWhiteSpace(vm.Phone) ? null : vm.Phone.Trim(),
             OrganizationName = string.IsNullOrWhiteSpace(vm.OrganizationName) ? null : vm.OrganizationName.Trim(),
             Topic = vm.Topic,
-            Subject = vm.Subject.Trim(),
-            Message = vm.Message.Trim(),
+            Subject = vm.Subject!.Trim(),
+            Message = vm.Message!.Trim(),
             Status = ContactMessageStatus.New,
             SubmittedByUserId = User.FindFirstValue(ClaimTypes.NameIdentifier),
             SubmittedFromIp = HttpContext.Connection.RemoteIpAddress?.ToString(),

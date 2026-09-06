@@ -1,0 +1,71 @@
+@model List<GharsPlatform.Models.Core.ContactMessage>
+@using System.Globalization
+@{
+    ViewData["Title"] = "Contact Messages";
+    ViewData["PageTitle"] = "Contact Messages";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    var current = ViewBag.Status as string;
+    var newCount = ViewBag.NewCount as int? ?? 0;
+}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div class="fw-semibold">
+        Contact Messages
+        @if (newCount > 0)
+        {
+            <span class="badge text-bg-danger rounded-pill ms-1">@newCount new</span>
+        }
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-sm @(current == "New" ? "btn-secondary" : "btn-outline-secondary")" href="/Admin/ContactMessages?status=New">New</a>
+        <a class="btn btn-sm @(current == "InProgress" ? "btn-secondary" : "btn-outline-secondary")" href="/Admin/ContactMessages?status=InProgress">In progress</a>
+        <a class="btn btn-sm @(current == "Resolved" ? "btn-secondary" : "btn-outline-secondary")" href="/Admin/ContactMessages?status=Resolved">Resolved</a>
+        <a class="btn btn-sm @(current == "Spam" ? "btn-secondary" : "btn-outline-secondary")" href="/Admin/ContactMessages?status=Spam">Spam</a>
+        <a class="btn btn-sm @(string.IsNullOrEmpty(current) ? "btn-secondary" : "btn-outline-secondary")" href="/Admin/ContactMessages">All</a>
+    </div>
+</div>
+
+@if (Model.Count == 0)
+{
+    <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4 text-muted">
+        No contact messages@(string.IsNullOrEmpty(current) ? "" : " with this status") yet.
+    </div></div>
+}
+else
+{
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>Received</th>
+                    <th>From</th>
+                    <th>Topic</th>
+                    <th>Subject</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var m in Model)
+                {
+                    <tr class="@(m.Status == ContactMessageStatus.New ? "fw-semibold" : "")">
+                        <td>@m.Id</td>
+                        <td class="text-nowrap">@m.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>
+                            <div>@m.FullName</div>
+                            <div class="text-muted small">@m.Email</div>
+                        </td>
+                        <td>@ContactLabels.Topic(m.Topic, ar)</td>
+                        <td>@m.Subject</td>
+                        <td><span class="badge text-bg-@ContactLabels.StatusBadge(m.Status)">@ContactLabels.Status(m.Status, ar)</span></td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-primary" href="/Admin/ContactMessages/Details/@m.Id">Open</a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

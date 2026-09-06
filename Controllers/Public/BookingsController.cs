@@ -33,7 +33,7 @@ public class BookingsController : Controller
     //    (club selects implementing entity + season, then describes the requested activity)
     [Authorize(Roles = RoleNames.ClubAdmin)]
     [HttpGet("/bookings/create")]
-    public async Task<IActionResult> Create(int? activityId, int? partnerId)
+    public async Task<IActionResult> Create(int? activityId, int? partnerId, ActivityType? type = null)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         var orgs = await UserClubsAsync(userId);
@@ -68,11 +68,20 @@ public class BookingsController : Controller
         }
 
         var activeSeason = await _db.Seasons.Where(x => x.IsActive).OrderByDescending(x => x.StartDate).FirstOrDefaultAsync();
+
+        // Requests arriving from the public Booking page are for a training session or a workshop, so
+        // that is what this entry point defaults to. Any other type is still selectable in the form —
+        // the value is only a starting point, and the posted value is what is persisted.
+        var requestedType = type is ActivityType.TrainingProgram or ActivityType.Workshop
+            ? type.Value
+            : ActivityType.TrainingProgram;
+
         return View(new BookingCreateVm
         {
             OrganizationId = orgs.FirstOrDefault()?.Id ?? 0,
             PartnerOrganizationId = partnerId,
             SeasonId = activeSeason?.Id,
+            RequestedActivityType = requestedType,
             ExpectedParticipants = 1
         });
     }

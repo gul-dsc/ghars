@@ -30,6 +30,8 @@ Work through this during a deployment. Background and the reasoning behind each 
       administrator (`GHARS_BOOTSTRAP_ADMIN_EMAIL`, `GHARS_BOOTSTRAP_ADMIN_PASSWORD`)
 - [ ] No development secrets present in production configuration — no `Ghars:Seed:DemoPassword`, no
       development connection string, no `appsettings.Development.json` in the deployed output
+- [ ] Public contact details configured if they are to be shown (`Ghars:Contact:*` — see `README.md`).
+      Unset is safe: the panel is hidden and the enquiry form still works
 - [ ] `ASPNETCORE_ENVIRONMENT` is set to `Production`
 
 ## Database
@@ -82,6 +84,8 @@ Work through this during a deployment. Background and the reasoning behind each 
 - [ ] Surveys page loads, internal and official
 - [ ] Digital library loads and a document opens
 - [ ] Reports and dashboards render with data
+- [ ] Contact page: submit an enquiry, confirm it appears under **Admin → Contact Messages** and that
+      a notification reached a DSC Admin. Delete the test enquiry afterwards
 
 ## Security checks
 

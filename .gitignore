@@ -78,6 +78,9 @@ logs/
 *.bak.*
 *~
 
+# Word/Excel owner files, created while a document in docs/ is open.
+~$*
+
 # --- Agent / tooling session state ----------------------------------------
 # Local assistant working memory and transcripts; machine-specific, not project source.
 .remember/

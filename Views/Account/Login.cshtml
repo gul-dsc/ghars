@@ -1,32 +1,38 @@
 @model GharsPlatform.Controllers.AccountController.LoginVm
+@using System.Globalization
 @{
-    ViewData["Title"] = "Login";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Login", "تسجيل الدخول");
 }
+@* The form has no action attribute, so it posts back to the current URL including its query string.
+   That is what carries ?returnUrl= through to the POST — for example when a visitor is sent here from
+   the Booking page. *@
 <div class="row justify-content-center">
     <div class="col-md-6 col-xl-5">
         <div class="card shadow-sm border-0 rounded-4">
             <div class="card-body p-4 p-md-5">
-                <h3 class="mb-3">Sign in</h3>
+                <h3 class="mb-3">@T("Sign in", "تسجيل الدخول")</h3>
                 <form method="post">
                     @Html.AntiForgeryToken()
                     <div class="mb-3">
-                        <label class="form-label">Email</label>
-                        <input class="form-control" asp-for="Email" />
+                        <label class="form-label">@T("Email", "البريد الإلكتروني")</label>
+                        <input class="form-control" asp-for="Email" autocomplete="username" />
                         <span class="text-danger small" asp-validation-for="Email"></span>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Password</label>
-                        <input class="form-control" asp-for="Password" type="password" />
+                        <label class="form-label">@T("Password", "كلمة المرور")</label>
+                        <input class="form-control" asp-for="Password" type="password" autocomplete="current-password" />
                         <span class="text-danger small" asp-validation-for="Password"></span>
                     </div>
                     <div class="form-check mb-3">
                         <input class="form-check-input" asp-for="RememberMe" />
-                        <label class="form-check-label">Remember me</label>
+                        <label class="form-check-label">@T("Remember me", "تذكرني")</label>
                     </div>
-                    <button class="btn btn-primary w-100" type="submit">Login</button>
+                    <button class="btn btn-primary w-100" type="submit">@T("Login", "دخول")</button>
                     <div class="text-danger small mt-3" asp-validation-summary="All"></div>
                 </form>
-                <div class="mt-3 small text-muted">Access is created by the system administrator.</div>
+                <div class="mt-3 small text-muted">@T("Access is created by the system administrator.", "يتم إنشاء الحسابات من قبل مسؤول النظام.")</div>
             </div>
         </div>
     </div>

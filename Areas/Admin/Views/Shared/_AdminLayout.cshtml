@@ -121,6 +121,10 @@
                 <i class="bi bi-bell"></i> <span>@(isRtl ? "الإشعارات" : "Notifications")</span>
             </a>
 
+            <a class="nav-link @ActiveIf("ContactMessages")" asp-area="Admin" asp-controller="ContactMessages" asp-action="Index">
+                <i class="bi bi-envelope"></i> <span>@(isRtl ? "رسائل التواصل" : "Contact Messages")</span>
+            </a>
+
             <a class="nav-link @ActiveIf("Reports")" asp-area="Admin" asp-controller="Reports" asp-action="Analytics">
                 <i class="bi bi-graph-up"></i> <span>@(isRtl ? "التقارير" : "Reports")</span>
             </a>

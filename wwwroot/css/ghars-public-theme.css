@@ -8,17 +8,20 @@ a { color: var(--primary); text-decoration: none; }
 
     a:hover { color: #3e907b; }
 
-.navbar { background: #ffffff !important; border-bottom: 1px solid var(--border); box-shadow: 0 2px 10px rgba(0,0,0,.03); min-height: 88px; padding-top: 12px; padding-bottom: 12px; }
+/* Header height is driven by the logo, which is portrait (443x563). A given height therefore buys
+   only ~0.79x that in width, so the brand column is sized in lockstep with the navbar's min-height
+   to keep the bar balanced rather than letting a taller mark push the nav around. */
+.navbar { background: #ffffff !important; border-bottom: 1px solid var(--border); box-shadow: 0 2px 10px rgba(0,0,0,.03); min-height: 124px; padding-top: 10px; padding-bottom: 10px; }
 
-.ghars-navbar-wrap { align-items: center; gap: 20px; }
+.ghars-navbar-wrap { align-items: center; gap: 16px; }
 
 .ghars-dsc-brand { display: flex; align-items: center; flex: 0 0 auto; }
 
-    .ghars-dsc-brand img { height: 64px; width: auto; display: block; object-fit: contain; }
+    .ghars-dsc-brand img { height: 96px; width: auto; display: block; object-fit: contain; }
 
-.ghars-main-nav { align-items: center; gap: 4px; }
+.ghars-main-nav { align-items: center; gap: 2px; }
 
-    .ghars-main-nav .nav-link { color: rgba(53,53,53,.85) !important; font-weight: 600; padding: .55rem .8rem !important; line-height: 1.25; white-space: nowrap; }
+    .ghars-main-nav .nav-link { color: rgba(53,53,53,.85) !important; font-weight: 600; padding: .5rem .7rem !important; line-height: 1.25; white-space: nowrap; }
 
         .ghars-main-nav .nav-link:hover { color: var(--dark) !important; }
 
@@ -137,31 +140,45 @@ html[dir="rtl"] .ghars-user-dropdown { text-align: right; }
 html[dir="rtl"] .booking-section-head { text-align: right; }
 
 @media (max-width: 1399.98px) {
-    .ghars-dsc-brand img { height: 56px; }
+    .navbar { min-height: 110px; }
+
+    .ghars-dsc-brand img { height: 84px; }
 
     .ghars-logo-right img { height: 66px; }
 
-    .ghars-main-nav .nav-link { padding: .45rem .55rem !important; font-size: .95rem; }
+    .ghars-main-nav .nav-link { padding: .4rem .5rem !important; font-size: .93rem; }
 }
 
+/* Below the navbar-expand-xl breakpoint the menu collapses, so the header row is only the brand and
+   the toggler. The logo keeps its full size there — there is nothing left for it to crowd. */
 @media (max-width: 1199.98px) {
+    .navbar { min-height: 0; }
+
     .ghars-top-actions { width: 100%; justify-content: flex-start; margin-top: 1rem; flex-wrap: wrap; }
 
     .ghars-main-nav { margin-top: 1rem; margin-bottom: 1rem; align-items: flex-start; }
 
-        .ghars-main-nav .nav-link { white-space: normal; }
+        .ghars-main-nav .nav-link { white-space: normal; padding: .55rem .25rem !important; font-size: 1rem; }
+
+    .ghars-dsc-brand img { height: 88px; }
 
     .ghars-logo-right img { height: 58px; }
 }
 
 @media (max-width: 991.98px) {
-    .ghars-dsc-brand img { height: 46px; }
+    .ghars-dsc-brand img { height: 76px; }
 
     .ghars-logo-right img { height: 48px; }
 
     .ghars-hero { padding: 28px 20px; }
 
     .ghars-story-media { min-height: 235px; }
+}
+
+@media (max-width: 575.98px) {
+    .ghars-dsc-brand img { height: 64px; }
+
+    .ghars-navbar-wrap { gap: 10px; }
 }
 /* User dropdown button fix */
 .ghars-user-menu { background: #ffffff !important; color: #353535 !important; border: 1px solid #d0d0d0 !important; }
@@ -208,3 +225,50 @@ footer,
 .ghars-filter-panel .form-label{font-size:.78rem;font-weight:700;color:#374151;margin-bottom:.25rem}
 .ghars-filter-panel .filter-title{font-weight:800;color:#1f2937;margin-bottom:.75rem;display:flex;align-items:center;gap:.45rem}
 .ghars-filter-empty{background:#fff3cd;border:1px solid #ffe69c;border-radius:12px;padding:10px 12px;margin-top:10px;color:#664d03}
+
+/* Promoted out of the old Partners view's inline <style>, which the Booking page replaced. */
+.partner-hero { background: linear-gradient(135deg,#1b5e32,#51b499); border-radius: 24px; color: #fff; padding: 34px; box-shadow: 0 18px 45px rgba(27,94,50,.18); }
+
+.btn-ghars { background: #2d9b6c; color: #fff; border-color: #2d9b6c; }
+
+    .btn-ghars:hover, .btn-ghars:focus { background: #1b5e32; color: #fff; border-color: #1b5e32; }
+
+@media (max-width: 575.98px) { .partner-hero { padding: 24px; } }
+
+/* ===========================================================================
+   Implementing-entity tiles on the public Booking page.
+   Logo-first: every tile reserves the same logo area regardless of the source
+   image, and `object-fit: contain` means a wide or a tall mark is letterboxed
+   into it rather than stretched or cropped. Direction-agnostic, so RTL needs
+   no overrides.
+   =========================================================================== */
+.entity-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+
+.entity-tile { display: flex; flex-direction: column; border: 1px solid #e4ebe8; border-radius: 20px; background: #fff; padding: 18px; box-shadow: 0 12px 30px rgba(53,53,53,.06); transition: box-shadow .15s ease, transform .15s ease; }
+
+    .entity-tile:hover { box-shadow: 0 18px 40px rgba(27,94,50,.14); transform: translateY(-2px); }
+
+.entity-logo-frame { display: flex; align-items: center; justify-content: center; height: 116px; border-radius: 14px; background: #f6faf8; border: 1px solid #eaf2ee; padding: 12px; margin-bottom: 14px; }
+
+    .entity-logo-frame img { max-height: 100%; max-width: 100%; width: auto; height: auto; object-fit: contain; }
+
+.entity-name { font-weight: 700; color: #25312e; text-align: center; line-height: 1.35; margin-bottom: 14px; }
+
+/* The action sits at the bottom of every tile so a short and a long entity name
+   still line their buttons up across a row. Always visible — never hover-only,
+   which would leave it unreachable on touch devices. */
+.entity-action { margin-top: auto; }
+
+    .entity-action .btn { width: 100%; font-weight: 700; }
+
+@media (max-width: 1199.98px) { .entity-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+@media (max-width: 767.98px) {
+    .entity-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+
+    .entity-logo-frame { height: 96px; }
+}
+
+/* Two tiles still read comfortably on a 390px phone; a single column is kept for the narrowest
+   devices only, where a two-up logo would be too small to identify. */
+@media (max-width: 359.98px) { .entity-grid { grid-template-columns: 1fr; } }

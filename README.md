@@ -188,6 +188,32 @@ accounts. Account names, and how to recover a forgotten demo password with
 > permanently exposed. Any database seeded before 2026-09-06 should have its demo passwords rotated —
 > see the notice at the top of `SEED_CREDENTIALS.md`.
 
+## Contact page
+
+`/Home/Contact` carries a public enquiry form. **This platform sends no email** — there is no SMTP
+configuration and no `IEmailSender`. A submitted enquiry is stored in `ContactMessages` and announced
+to DSC Admins and Super Admins through the existing in-app notification system; they read and close it
+at **Admin → Contact Messages**, and reply from their own mailbox.
+
+That is deliberate: a record in the database cannot be lost to a misconfigured mail server, and the
+notification links straight to the enquiry.
+
+The contact details shown beside the form are configuration-driven and have **no defaults** — an
+unset value is simply not rendered, so the page never publishes an invented address or a mailbox
+nobody reads. The form itself works either way.
+
+| Configuration key | Environment variable |
+| --- | --- |
+| `Ghars:Contact:Email` | `GHARS_CONTACT_EMAIL` |
+| `Ghars:Contact:Phone` | `GHARS_CONTACT_PHONE` |
+| `Ghars:Contact:AddressEn` / `AddressAr` | `GHARS_CONTACT_ADDRESS_EN` / `_AR` |
+| `Ghars:Contact:OfficeHoursEn` / `OfficeHoursAr` | `GHARS_CONTACT_OFFICE_HOURS_EN` / `_AR` |
+| `Ghars:Contact:WebsiteUrl` | `GHARS_CONTACT_WEBSITE_URL` |
+
+Spam protection is a hidden honeypot field plus a rate limit of **5 submissions per 10 minutes per
+client IP** (`contact-form` policy in [`Program.cs`](Program.cs)). This is the only anonymous POST
+endpoint in the application.
+
 ## Documentation
 
 | Document | Contents |

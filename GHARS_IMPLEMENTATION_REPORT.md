@@ -1166,3 +1166,151 @@ Guarantees, each enforced in `BootstrapAdministratorAsync`:
 5. When no administrator exists and no configuration is supplied, the application logs a critical
    message naming the variables to set, and starts normally. It does not invent an account, and it
    does not refuse to boot.
+
+---
+
+## 24. Public Contact Page
+
+`Views/Home/Contact.cshtml` was a five-line stub. It now carries a working enquiry form.
+
+**Where an enquiry goes.** The platform has no outbound email — no `IEmailSender`, no SMTP
+configuration. Rather than a `mailto:` that leaves no record, an enquiry is persisted to
+`ContactMessages` and announced through the in-app notification system already used by KPI
+submissions and bookings. The record is written **before** the notification, so an enquiry survives
+even if nobody is signed in to receive it.
+
+Notifications are delivered to `DSC Admin` **and** `Super Admin`. `TargetRoleName` records DSC Admin
+as the nominal audience, but an installation that has not yet created a DSC Admin must not lose
+enquiries into a notification with no recipients.
+
+| Piece | Location |
+| --- | --- |
+| Entity + bilingual labels | `Models/Core/ContactMessage.cs` |
+| Displayed contact details | `Models/Core/ContactDetails.cs` |
+| Public form + notification fan-out | `Controllers/Public/HomeController.cs` |
+| Admin queue | `Controllers/Admin/ContactMessagesController.cs`, `Areas/Admin/Views/ContactMessages/` |
+| Migration | `20260906162314_AddContactMessages` (one table, one index) |
+
+**Contact details are configuration-driven with no defaults** (`Ghars:Contact:*`, each with a
+`GHARS_CONTACT_*` environment fallback). Dubai Sports Council is a real government body; publishing
+an invented address for it would send people to a mailbox nobody reads. An unset value is simply not
+rendered, and the form works regardless. The seeded "Dubai Sports Council" organization row is not a
+source for these — it is created only by the Development demo seed and carries placeholder values.
+
+**Spam protection**, the first in the application, because this is its only anonymous POST endpoint: a
+hidden honeypot field (a filled honeypot returns the normal thank-you and persists nothing, so a bot
+gets no signal to retry differently) plus a `contact-form` rate limit of 5 submissions per 10 minutes
+per client IP.
+
+---
+
+## 25. Public UI Refinement — Navigation, Booking Entry Point, Logo
+
+A presentation-layer pass. No booking, KPI, agenda, gallery, survey or reporting logic was reopened,
+and no persisted enum value was renamed or deleted.
+
+### 25.1 Logo and header
+
+The Ghars mark is **portrait** (443 × 563), so height buys only about 0.79× that in width and the
+header's height is what the logo actually costs. Both were raised together rather than scaling the
+image alone:
+
+| Breakpoint | Navbar min-height | Logo height |
+| --- | --- | --- |
+| ≥ 1400px | 124px (was 88) | **96px** (was 64) |
+| 1200–1399px | 110px | 84px |
+| < 1200px (menu collapsed) | auto | 88px |
+| < 992px | auto | 76px |
+| < 576px | auto | 64px |
+
+Below `navbar-expand-xl` the menu collapses, so the header row is only the brand and the toggler —
+the logo keeps its full size there because there is nothing left for it to crowd. Nav padding and
+gaps were tightened slightly so ten signed-in items still fit one row at 1440px without wrapping.
+
+Measured in a real browser at every breakpoint: the logo never overflows the header box and no page
+scrolls horizontally.
+
+### 25.2 Partners → Booking
+
+The public "Partners" navigation link became **Booking** (`الحجز`), and it leads to a genuine booking
+entry point rather than a renamed directory:
+
+- `HomeController.Booking` renders approved implementing entities as a **logo grid**.
+- `HomeController.Partners` now **redirects** to it, so existing links and bookmarks keep working.
+- `Views/Home/Partners.cshtml` was removed; the description/metadata cards it rendered are gone.
+
+The entity list is queried from `Organization` with exactly the filter
+`BookingsController.PopulateCreateViewDataAsync` uses (`Status == Approved` and type
+`GovernmentAuthority` or `OtherPartner`). Sourcing it from `PartnerProfiles` instead would let a
+bookable entity disappear from the page simply because it has no profile row.
+
+### 25.3 Logo-only display
+
+Every tile reserves the same logo area and uses `object-fit: contain`, so a wide or a tall mark is
+letterboxed rather than stretched or cropped. An entity with no logo falls back to
+`default-partner.svg` rather than rendering broken media. Grid: 4 columns desktop, 3 at < 1200px,
+2 at < 768px, 1 below 360px. The call to action sits at the bottom of every tile and is **always
+visible** — never hover-only, which would leave it unreachable on touch devices.
+
+### 25.4 Request Booking
+
+For a signed-in `Club Admin` each tile offers **Request Booking** / **طلب حجز**, linking to the
+existing `/bookings/create?partnerId={id}`. No parallel booking implementation was created; the
+`partnerId` entry point already existed on `BookingsController.Create`.
+
+Behaviour by role, so no role is shown a call to action it cannot use:
+
+| Role | Booking page |
+| --- | --- |
+| Anonymous | Entities shown; "Sign in to request", carrying `returnUrl` back to the page |
+| Club Admin | **Request Booking** on every tile |
+| Partner Admin | No club call to action; pointed at their partner dashboard |
+| DSC / Super Admin | Pointed at admin booking management |
+
+### 25.5 Training and Workshop
+
+`ActivityType` already carried `Workshop` and `TrainingProgram`; **nothing was renamed or removed**.
+This entry point emphasises them instead: the activity-type selector groups Training and Workshop
+first under "Requested from the implementing entity", with Lecture, Event and Course retained under
+"Other activity types", and a direct request now defaults to `TrainingProgram` rather than `Lecture`.
+
+### 25.6 Course removed from Learning categories
+
+The `Course` filter tab is gone from the learning-programmes view in both languages. The enum value,
+the database records and the `?type=Course` URL are all untouched — existing Course programmes still
+load, still render with their own label, and remain reachable under "All". No record was reclassified.
+
+### 25.7 Navigation
+
+**Contact is now the last item** in both languages, on desktop and in the collapsed mobile menu. In
+RTL the list direction flips, so "last" correctly reads as leftmost.
+
+**"My Organizations" was removed from user-facing navigation** — the main nav and the profile
+dropdown. This is a menu change only: `OrganizationController.MyOrganizations`, organization
+membership, admin links, org scoping and `/Admin/Organizations` are all untouched and still respond.
+
+### 25.8 Arabic corrections
+
+| Fixed | Was |
+| --- | --- |
+| Navbar role buttons | `Partner` / `Club` were hardcoded English → `لوحة الشريك` / `لوحة النادي` |
+| Navbar login button | hardcoded `Login` → `تسجيل الدخول` |
+| Login page | entirely English → bilingual |
+| Dubai Islamic Economy Development Centre | Arabic name was half-untranslated (`دبي Islamic Economy Development Centre`) → `مركز دبي لتطوير الاقتصاد الإسلامي` |
+| Partner detail heading | `شريك غرس` → `جهة منفذة`, matching the booking vocabulary |
+| Contact page cross-link | pointed at the removed partners directory → the booking page |
+
+The seed correction affects newly seeded databases only: entities are matched on `NameEn`, so no
+existing row is rewritten and no duplicate is created.
+
+### 25.9 Security — unchanged
+
+The club remains **server-derived**. `BookingsController.Create` resolves the user's clubs from
+`OrganizationAdminLinks`; a single-club user is assigned their club and the posted value is discarded
+(`ModelState.Remove`), and a multi-club user's posted id must be one of their own or the request is
+rejected. There is no hidden trusted club id. Verified in a browser: the booking form reached from a
+tile shows the club as read-only text with **no dropdown**.
+
+The implementing entity may be chosen on the public page, but it is re-validated server-side on POST
+against `Status == Approved` and the permitted organization types before it is persisted. A
+`partnerId` in the query string is a preselection, never an authorization.

@@ -1,29 +1,45 @@
 @model GharsPlatform.Models.Core.PartnerProfile
 @using System.Globalization
+@using GharsPlatform.Models.Identity
 @{
     var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string en, string ar) => isAr ? ar : en;
     var org = Model.Organization!;
     var name = isAr && !string.IsNullOrWhiteSpace(org.NameAr) ? org.NameAr : org.NameEn;
-    var desc = isAr && !string.IsNullOrWhiteSpace(Model.OverviewAr) ? Model.OverviewAr : Model.OverviewEn;
     var logo = string.IsNullOrWhiteSpace(org.LogoPath) ? Url.Content("~/img/partners/default-partner.svg") : Url.Content(org.LogoPath);
     ViewData["Title"] = name;
+
+    var isClub = User.IsInRole(RoleNames.ClubAdmin);
+    var isAuthenticated = User.Identity?.IsAuthenticated ?? false;
+    var returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
 }
+@* Booking-first. The public purpose of this page is to start a booking with this implementing entity,
+   not to read its profile, so the contact/address metadata panels were removed. Administrative
+   organization detail lives at /Admin/Organizations/Details/{id} and is unchanged. *@
 @section Head{<style>.partner-detail{border-radius:26px;background:#fff;box-shadow:0 18px 48px rgba(53,53,53,.08);padding:32px}.partner-detail-logo{width:132px;height:132px;border-radius:26px;object-fit:contain;background:#f3faf7;border:1px solid #dceee7;padding:14px}.detail-chip{border:1px solid #dceee7;background:#f8fffb;border-radius:999px;padding:.35rem .75rem;color:#1b5e32;font-weight:600}</style>}
 <div class="partner-detail">
-    <div class="d-flex flex-column flex-lg-row gap-4 align-items-lg-center mb-4">
+    <div class="d-flex flex-column flex-lg-row gap-4 align-items-lg-center">
         <img class="partner-detail-logo" src="@logo" alt="@name" />
         <div class="flex-grow-1">
-            <span class="detail-chip">@T("Ghars Partner", "شريك غرس")</span>
-            <h1 class="display-6 fw-bold mt-3 mb-2">@name</h1>
-            <p class="text-muted mb-0">@(!string.IsNullOrWhiteSpace(desc) ? desc : T("Strategic learning partner participating in Ghars Platform programs.", "شريك تعليمي استراتيجي مشارك في برامج منصة غرس."))</p>
+            <span class="detail-chip">@T("Implementing Entity", "جهة منفذة")</span>
+            <h1 class="display-6 fw-bold mt-3 mb-0">@name</h1>
         </div>
-        <a class="btn btn-success btn-lg" href="/partners/@org.Id/learning-programs">@T("Available Learning Programs", "البرامج التعليمية المتاحة")</a>
-    </div>
-    <div class="row g-3">
-        <div class="col-md-4"><div class="border rounded-4 p-3 h-100"><div class="text-muted small">@T("Email", "البريد الإلكتروني")</div><div class="fw-semibold">@org.Email</div></div></div>
-        <div class="col-md-4"><div class="border rounded-4 p-3 h-100"><div class="text-muted small">@T("Phone", "الهاتف")</div><div class="fw-semibold">@org.Phone</div></div></div>
-        <div class="col-md-4"><div class="border rounded-4 p-3 h-100"><div class="text-muted small">@T("Published programs", "البرامج المنشورة")</div><div class="fw-semibold">@ViewBag.ProgramCount</div></div></div>
-        <div class="col-12"><div class="border rounded-4 p-3"><div class="text-muted small">@T("Address", "العنوان")</div><div class="fw-semibold">@(isAr ? org.AddressAr : org.AddressEn)</div></div></div>
+        <div class="d-flex flex-column gap-2">
+            @if (isClub)
+            {
+                <a class="btn btn-ghars btn-lg" href="/bookings/create?partnerId=@org.Id">
+                    <i class="bi bi-calendar-plus me-1"></i>@T("Request Booking", "طلب حجز")
+                </a>
+            }
+            else if (!isAuthenticated)
+            {
+                <a class="btn btn-ghars btn-lg" asp-controller="Account" asp-action="Login" asp-route-returnUrl="@returnUrl">
+                    <i class="bi bi-box-arrow-in-right me-1"></i>@T("Sign in to request", "سجّل الدخول للطلب")
+                </a>
+            }
+            <a class="btn btn-outline-success" href="/partners/@org.Id/learning-programs">
+                <i class="bi bi-mortarboard me-1"></i>@T("Available Learning Programs", "البرامج التعليمية المتاحة")
+            </a>
+        </div>
     </div>
 </div>

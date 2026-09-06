@@ -1,5 +1,160 @@
-@{ ViewData["Title"] = "Contact"; }
-<div class="card"><div class="card-body p-4">
-    <h1 class="section-title h3 mb-3">Contact</h1>
-    <p class="mb-0">For Ghars Platform support and collaboration inquiries, please contact the platform team.</p>
+@model GharsPlatform.Controllers.Public.HomeController.ContactVm
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Contact Us", "تواصل معنا");
+    var details = ViewBag.ContactDetails as ContactDetails ?? ContactDetails.None;
+}
+
+@section Head {
+    <style>
+        /* Honeypot: off-screen rather than display:none, which some bots skip. Never focusable. */
+        .ghars-hp { position: absolute; left: -9999px; top: -9999px; height: 0; width: 0; overflow: hidden; }
+    </style>
+}
+
+<div class="card mb-4"><div class="card-body p-4 p-md-5">
+    <h1 class="section-title h3 mb-2">@T("Contact Us", "تواصل معنا")</h1>
+    <p class="text-muted mb-0">
+        @T("Send an enquiry about the Ghars Program — lecture and event bookings, club or academy registration, partnership with an implementing entity, performance indicators, or technical support. Your message reaches the Dubai Sports Council team that administers the platform.",
+           "أرسل استفسارك حول برنامج غرس — حجز المحاضرات والفعاليات، أو تسجيل نادٍ أو أكاديمية، أو الشراكة كجهة منفذة، أو مؤشرات الأداء، أو الدعم الفني. تصل رسالتك إلى فريق مجلس دبي الرياضي المشرف على المنصة.")
+    </p>
 </div></div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card h-100"><div class="card-body p-4">
+            <h2 class="section-title h5 mb-3"><i class="bi bi-envelope me-2"></i>@T("Send us a message", "أرسل لنا رسالة")</h2>
+
+            <form method="post" asp-controller="Home" asp-action="Contact">
+                @Html.AntiForgeryToken()
+
+                <div class="ghars-hp" aria-hidden="true">
+                    <label>@T("Leave this field empty", "اترك هذا الحقل فارغاً")</label>
+                    <input asp-for="Website" type="text" tabindex="-1" autocomplete="off" />
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" asp-for="FullName">@T("Full name", "الاسم الكامل")</label>
+                        <input class="form-control" asp-for="FullName" autocomplete="name" />
+                        <span class="text-danger small" asp-validation-for="FullName"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" asp-for="Email">@T("Email", "البريد الإلكتروني")</label>
+                        <input class="form-control" asp-for="Email" type="email" autocomplete="email" />
+                        <span class="text-danger small" asp-validation-for="Email"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" asp-for="Phone">@T("Phone (optional)", "رقم الهاتف (اختياري)")</label>
+                        <input class="form-control" asp-for="Phone" type="tel" autocomplete="tel" />
+                        <span class="text-danger small" asp-validation-for="Phone"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" asp-for="OrganizationName">@T("Club / organization (optional)", "النادي / الجهة (اختياري)")</label>
+                        <input class="form-control" asp-for="OrganizationName" autocomplete="organization" />
+                        <span class="text-danger small" asp-validation-for="OrganizationName"></span>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" asp-for="Topic">@T("Topic", "الموضوع")</label>
+                        <select class="form-select" asp-for="Topic">
+                            @foreach (var topic in ContactLabels.Topics)
+                            {
+                                <option value="@topic">@ContactLabels.Topic(topic, ar)</option>
+                            }
+                        </select>
+                        <span class="text-danger small" asp-validation-for="Topic"></span>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" asp-for="Subject">@T("Subject", "عنوان الرسالة")</label>
+                        <input class="form-control" asp-for="Subject" />
+                        <span class="text-danger small" asp-validation-for="Subject"></span>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" asp-for="Message">@T("Message", "نص الرسالة")</label>
+                        <textarea class="form-control" asp-for="Message" rows="6"></textarea>
+                        <span class="text-danger small" asp-validation-for="Message"></span>
+                    </div>
+                </div>
+
+                <button class="btn btn-success fw-bold mt-4" type="submit">
+                    <i class="bi bi-send me-1"></i> @T("Send message", "إرسال الرسالة")
+                </button>
+
+                <div class="text-danger small mt-3" asp-validation-summary="ModelOnly"></div>
+            </form>
+        </div></div>
+    </div>
+
+    <div class="col-lg-5">
+        @if (details.HasAny)
+        {
+            <div class="card mb-4"><div class="card-body p-4">
+                <h2 class="section-title h5 mb-3"><i class="bi bi-geo-alt me-2"></i>@T("Contact details", "بيانات التواصل")</h2>
+                <ul class="list-unstyled mb-0">
+                    @if (details.Email is not null)
+                    {
+                        <li class="mb-3">
+                            <div class="text-muted small">@T("Email", "البريد الإلكتروني")</div>
+                            <a href="mailto:@details.Email">@details.Email</a>
+                        </li>
+                    }
+                    @if (details.Phone is { } phone)
+                    {
+                        <li class="mb-3">
+                            <div class="text-muted small">@T("Phone", "الهاتف")</div>
+                            <a href="tel:@(phone.Replace(" ", ""))" dir="ltr">@phone</a>
+                        </li>
+                    }
+                    @if (details.Address(ar) is { } address)
+                    {
+                        <li class="mb-3">
+                            <div class="text-muted small">@T("Address", "العنوان")</div>
+                            <div>@address</div>
+                        </li>
+                    }
+                    @if (details.OfficeHours(ar) is { } hours)
+                    {
+                        <li class="mb-3">
+                            <div class="text-muted small">@T("Office hours", "ساعات العمل")</div>
+                            <div>@hours</div>
+                        </li>
+                    }
+                    @if (details.WebsiteUrl is not null)
+                    {
+                        <li class="mb-0">
+                            <div class="text-muted small">@T("Website", "الموقع الإلكتروني")</div>
+                            <a href="@details.WebsiteUrl" target="_blank" rel="noopener noreferrer">@details.WebsiteUrl</a>
+                        </li>
+                    }
+                </ul>
+            </div></div>
+        }
+
+        <div class="card"><div class="card-body p-4">
+            <h2 class="section-title h5 mb-3"><i class="bi bi-signpost-split me-2"></i>@T("You may not need to write", "قد لا تحتاج إلى مراسلتنا")</h2>
+            <p class="text-muted small">@T("Some requests are handled directly in the platform:", "بعض الطلبات تُنفذ مباشرة عبر المنصة:")</p>
+            <ul class="list-unstyled mb-0">
+                <li class="mb-2">
+                    <i class="bi bi-building-add text-success me-2"></i>
+                    <a asp-controller="Organization" asp-action="Register">@T("Register a club, academy or partner entity", "تسجيل نادٍ أو أكاديمية أو جهة شريكة")</a>
+                </li>
+                <li class="mb-2">
+                    <i class="bi bi-calendar-plus text-success me-2"></i>
+                    <a asp-controller="Home" asp-action="Booking">@T("Request a training session or workshop from an implementing entity", "طلب تدريب أو ورشة عمل من إحدى الجهات المنفذة")</a>
+                </li>
+                <li class="mb-2">
+                    <i class="bi bi-journal-text text-success me-2"></i>
+                    <a asp-controller="Library" asp-action="Index">@T("Digital library — programme reference material", "المكتبة الرقمية — المواد المرجعية للبرنامج")</a>
+                </li>
+                <li class="mb-0">
+                    <i class="bi bi-info-circle text-success me-2"></i>
+                    <a asp-controller="Home" asp-action="About">@T("About the Ghars Program", "حول برنامج غرس")</a>
+                </li>
+            </ul>
+        </div></div>
+    </div>
+</div>
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

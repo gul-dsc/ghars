@@ -1,9 +1,14 @@
 using GharsPlatform.Data;
+using GharsPlatform.Hubs;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using System.Security.Claims;
 
 namespace GharsPlatform.Controllers.Public;
@@ -11,10 +16,14 @@ namespace GharsPlatform.Controllers.Public;
 public class HomeController : Controller
 {
     private readonly AppDbContext _db;
+    private readonly IHubContext<NotificationsHub> _hub;
+    private readonly IConfiguration _configuration;
 
-    public HomeController(AppDbContext db)
+    public HomeController(AppDbContext db, IHubContext<NotificationsHub> hub, IConfiguration configuration)
     {
         _db = db;
+        _hub = hub;
+        _configuration = configuration;
     }
 
     public async Task<IActionResult> Index()
@@ -66,18 +75,36 @@ public class HomeController : Controller
     public IActionResult About() => View();
     public IActionResult Vision() => View();
 
-    public async Task<IActionResult> Partners()
+    /// <summary>
+    /// The public booking entry point: approved implementing entities shown as logos, each offering
+    /// "Request Booking" into the existing <c>/bookings/create</c> workflow.
+    ///
+    /// The entity list is queried from <see cref="Organization"/> with exactly the filter
+    /// <c>BookingsController.PopulateCreateViewDataAsync</c> uses, so an entity offered here is always
+    /// one the booking form will accept — sourcing it from <c>PartnerProfiles</c> instead would let a
+    /// bookable entity go missing simply because it has no profile row.
+    ///
+    /// Anonymous visitors see the same entities; only the call to action differs, because the entity
+    /// list is public information and hiding it would make the page useless before sign-in.
+    /// </summary>
+    [AllowAnonymous]
+    public async Task<IActionResult> Booking()
     {
-        var partners = await _db.PartnerProfiles
-            .Include(x => x.Organization)
-            .Where(x => x.Organization != null && x.Organization.Status == ApprovalStatus.Approved &&
-                        (x.Organization.OrganizationType == OrganizationType.GovernmentAuthority || x.Organization.OrganizationType == OrganizationType.OtherPartner))
-            .OrderBy(x => x.FeatureSortOrder)
-            .ThenBy(x => x.Organization!.NameEn)
+        var entities = await _db.Organizations
+            .Where(x => x.Status == ApprovalStatus.Approved &&
+                        (x.OrganizationType == OrganizationType.GovernmentAuthority || x.OrganizationType == OrganizationType.OtherPartner))
+            .OrderBy(x => x.NameEn)
             .ToListAsync();
 
-        return View(partners);
+        return View(entities);
     }
+
+    /// <summary>
+    /// The former public partner directory. The booking page replaced it, so this keeps existing
+    /// links and bookmarks working instead of 404ing. Administrative organization management is a
+    /// different screen (<c>/Admin/Organizations</c>) and is unaffected.
+    /// </summary>
+    public IActionResult Partners() => RedirectToAction(nameof(Booking));
 
     [HttpGet("/partners/{id:int}")]
     public async Task<IActionResult> PartnerDetails(int id)
@@ -119,6 +146,152 @@ public class HomeController : Controller
         return View(programs);
     }
 
-    public IActionResult Contact() => View();
+    // ------------------------------------------------------------------ Contact
+
+    public class ContactVm
+    {
+        [Required(ErrorMessage = "Your name is required."), MaxLength(150)]
+        [Display(Name = "Full name")]
+        public string FullName { get; set; } = "";
+
+        [Required(ErrorMessage = "An email address is required.")]
+        [EmailAddress(ErrorMessage = "Enter a valid email address.")]
+        [MaxLength(250)]
+        public string Email { get; set; } = "";
+
+        [MaxLength(50)]
+        [Display(Name = "Phone")]
+        public string? Phone { get; set; }
+
+        [MaxLength(250)]
+        [Display(Name = "Club / organization")]
+        public string? OrganizationName { get; set; }
+
+        public ContactTopic Topic { get; set; } = ContactTopic.GeneralEnquiry;
+
+        [Required(ErrorMessage = "A subject is required."), MaxLength(200)]
+        public string Subject { get; set; } = "";
+
+        [Required(ErrorMessage = "A message is required.")]
+        [MaxLength(4000)]
+        [MinLength(10, ErrorMessage = "Please describe your enquiry in a little more detail.")]
+        public string Message { get; set; } = "";
+
+        /// <summary>
+        /// Honeypot. Hidden from people by CSS and left empty by them; bots fill every field they find.
+        /// A non-empty value is accepted with the normal thank-you and silently discarded, so a bot
+        /// gets no signal telling it to try again differently.
+        /// </summary>
+        public string? Website { get; set; }
+    }
+
+    [HttpGet]
+    public IActionResult Contact()
+    {
+        ViewBag.ContactDetails = ContactDetails.FromConfiguration(_configuration);
+        return View(new ContactVm());
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting("contact-form")]
+    public async Task<IActionResult> Contact(ContactVm vm)
+    {
+        ViewBag.ContactDetails = ContactDetails.FromConfiguration(_configuration);
+
+        if (!string.IsNullOrWhiteSpace(vm.Website))
+        {
+            // Honeypot tripped. Behave exactly as success, but persist nothing and notify nobody.
+            TempData["ToastSuccess"] = "Thank you. Your message has been received.";
+            return RedirectToAction(nameof(Contact));
+        }
+
+        if (!ModelState.IsValid) return View(vm);
+
+        var entity = new ContactMessage
+        {
+            FullName = vm.FullName.Trim(),
+            Email = vm.Email.Trim(),
+            Phone = string.IsNullOrWhiteSpace(vm.Phone) ? null : vm.Phone.Trim(),
+            OrganizationName = string.IsNullOrWhiteSpace(vm.OrganizationName) ? null : vm.OrganizationName.Trim(),
+            Topic = vm.Topic,
+            Subject = vm.Subject.Trim(),
+            Message = vm.Message.Trim(),
+            Status = ContactMessageStatus.New,
+            SubmittedByUserId = User.FindFirstValue(ClaimTypes.NameIdentifier),
+            SubmittedFromIp = HttpContext.Connection.RemoteIpAddress?.ToString(),
+            SubmittedCulture = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName,
+            CreatedAtUtc = DateTime.UtcNow,
+            CreatedByUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+        };
+
+        _db.ContactMessages.Add(entity);
+        await _db.SaveChangesAsync();
+
+        await NotifyReviewersAsync(entity);
+
+        TempData["ToastSuccess"] = "Thank you. Your message has been received and the Ghars team has been notified.";
+        return RedirectToAction(nameof(Contact));
+    }
+
+    /// <summary>
+    /// Announce a new enquiry to the people who handle it. There is no outbound email in this platform,
+    /// so this in-app notification is the whole delivery mechanism — it goes to DSC Admins and Super
+    /// Admins, the two roles with access to the admin queue the notification links to.
+    /// </summary>
+    private async Task NotifyReviewersAsync(ContactMessage entity)
+    {
+        var topicEn = ContactLabels.Topic(entity.Topic, ar: false);
+        var topicAr = ContactLabels.Topic(entity.Topic, ar: true);
+
+        var n = new Notification
+        {
+            TitleEn = "New contact enquiry",
+            TitleAr = "استفسار جديد عبر نموذج التواصل",
+            MessageEn = $"{entity.FullName} ({topicEn}): {entity.Subject}",
+            MessageAr = $"{entity.FullName} ({topicAr}): {entity.Subject}",
+            Type = NotificationType.Info,
+            TargetType = NotificationTargetType.Role,
+            TargetRoleName = RoleNames.DscAdmin,
+            // Site-relative: NotificationsController.Open passes this to LocalRedirect.
+            LinkUrl = $"/Admin/ContactMessages/Details/{entity.Id}",
+            CreatedAtUtc = DateTime.UtcNow,
+            CreatedByUserId = entity.SubmittedByUserId
+        };
+        _db.Notifications.Add(n);
+        await _db.SaveChangesAsync();
+
+        // Deliver to both admin roles. TargetRoleName above records DSC Admin as the nominal audience,
+        // but Super Admins can open the queue too and a site with no DSC Admin yet must not lose the
+        // enquiry into a notification nobody receives.
+        var roleNames = new[] { RoleNames.DscAdmin, RoleNames.SuperAdmin };
+        var roleIds = await _db.Roles.Where(r => r.Name != null && roleNames.Contains(r.Name))
+            .Select(r => r.Id).ToListAsync();
+        var userIds = await _db.UserRoles.Where(ur => roleIds.Contains(ur.RoleId))
+            .Select(ur => ur.UserId).Distinct().ToListAsync();
+
+        foreach (var uid in userIds)
+            _db.NotificationDeliveries.Add(new NotificationDelivery
+            {
+                NotificationId = n.Id,
+                UserId = uid,
+                DeliveredAtUtc = DateTime.UtcNow
+            });
+        await _db.SaveChangesAsync();
+
+        // "notification" with the rich payload is what admin.js renders as a toast.
+        await _hub.Clients.All.SendAsync("notification", new
+        {
+            id = n.Id,
+            titleEn = n.TitleEn,
+            titleAr = n.TitleAr,
+            messageEn = n.MessageEn,
+            messageAr = n.MessageAr,
+            type = n.Type.ToString(),
+            linkUrl = n.LinkUrl,
+            createdAtUtc = n.CreatedAtUtc
+        });
+    }
+
     public IActionResult Error() => View();
 }

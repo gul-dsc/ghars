@@ -6,6 +6,7 @@
     var partner = ViewBag.Partner as PartnerProfile;
     var org = partner?.Organization;
     var partnerId = org?.Id ?? 0;
+    var type = ViewBag.Type as ActivityType?;
     var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string en, string ar) => isAr ? ar : en;
     string ProgramType(ActivityType t) => t switch { ActivityType.Course => T("Course", "دورة"), ActivityType.TrainingProgram => T("Training", "تدريب"), ActivityType.Workshop => T("Workshop", "ورشة عمل"), ActivityType.Lecture => T("Lecture", "محاضرة"), _ => T("Activity", "نشاط") };
@@ -17,14 +18,17 @@
 @section Head{<style>.program-hero{background:linear-gradient(135deg,#1b5e32,#51b499);border-radius:24px;color:#fff;padding:30px;margin-bottom:22px}.program-card{border:1px solid #e4ebe8;border-radius:22px;background:#fff;padding:22px;box-shadow:0 14px 38px rgba(53,53,53,.08)}.program-meta{display:flex;flex-wrap:wrap;gap:8px}.program-meta span{background:#f3faf7;border:1px solid #dceee7;border-radius:999px;padding:.35rem .7rem;color:#1b5e32;font-size:.86rem}.program-type{background:#2d9b6c;color:white;border-radius:999px;padding:.35rem .75rem;font-weight:700;font-size:.85rem}</style>}
 <div class="program-hero d-flex flex-column flex-md-row justify-content-between gap-3">
     <div><h1 class="h2 fw-bold mb-1">@T("Learning Programs", "البرامج التعليمية")</h1><div class="opacity-75">@PartnerName()</div></div>
-    <a class="btn btn-light" href="/partners/@partnerId">@T("Partner Details", "تفاصيل الشريك")</a>
+    <a class="btn btn-light" href="/partners/@partnerId">@T("Implementing entity", "الجهة المنفذة")</a>
 </div>
+@* "Course" is deliberately not offered as a category. The ActivityType.Course value is retained in the
+   enum and in the database: existing Course programmes still load, still render with their own label
+   through ProgramType() below, and remain reachable under "All" and by their own URLs. Only the filter
+   tab is gone — no record was reclassified. *@
 <div class="d-flex flex-wrap gap-2 mb-3">
-    <a class="btn btn-sm btn-outline-success" href="/partners/@partnerId/learning-programs">@T("All", "الكل")</a>
-    <a class="btn btn-sm btn-outline-success" href="/partners/@partnerId/learning-programs?type=Course">@T("Courses", "الدورات")</a>
-    <a class="btn btn-sm btn-outline-success" href="/partners/@partnerId/learning-programs?type=TrainingProgram">@T("Trainings", "التدريبات")</a>
-    <a class="btn btn-sm btn-outline-success" href="/partners/@partnerId/learning-programs?type=Workshop">@T("Workshops", "ورش العمل")</a>
-    <a class="btn btn-sm btn-outline-success" href="/partners/@partnerId/learning-programs?type=Lecture">@T("Lectures", "المحاضرات")</a>
+    <a class="btn btn-sm @(type is null ? "btn-success" : "btn-outline-success")" href="/partners/@partnerId/learning-programs">@T("All", "الكل")</a>
+    <a class="btn btn-sm @(type == ActivityType.TrainingProgram ? "btn-success" : "btn-outline-success")" href="/partners/@partnerId/learning-programs?type=TrainingProgram">@T("Trainings", "التدريبات")</a>
+    <a class="btn btn-sm @(type == ActivityType.Workshop ? "btn-success" : "btn-outline-success")" href="/partners/@partnerId/learning-programs?type=Workshop">@T("Workshops", "ورش العمل")</a>
+    <a class="btn btn-sm @(type == ActivityType.Lecture ? "btn-success" : "btn-outline-success")" href="/partners/@partnerId/learning-programs?type=Lecture">@T("Lectures", "المحاضرات")</a>
 </div>
 @if(Model.Count == 0){<div class="empty-state">@T("No learning programs are currently available for this partner.", "لا توجد برامج تعليمية متاحة حالياً لهذا الشريك.")</div>}
 else{

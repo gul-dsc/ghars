@@ -1,6 +1,23 @@
 @using GharsPlatform.Models.Core
+@using System.Globalization
 @{
-    ViewData["Title"] = "Ghars Platform";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    // Prefer the Arabic column when it is populated; unfilled records fall back to English rather than
+    // rendering a blank card on the public landing page.
+    string Loc(string en, string arabic) => ar && !string.IsNullOrWhiteSpace(arabic) ? arabic : en;
+    string ProgramType(ActivityType t) => t switch
+    {
+        ActivityType.Lecture => T("Lecture", "محاضرة"),
+        ActivityType.Workshop => T("Workshop", "ورشة عمل"),
+        ActivityType.TrainingProgram => T("Training", "تدريب"),
+        ActivityType.Course => T("Course", "دورة"),
+        ActivityType.Event => T("Event", "فعالية"),
+        _ => T("Activity", "نشاط")
+    };
+
+    ViewData["Title"] = T("Ghars Platform", "منصة غرس");
+
     var season = ViewBag.Season as Season;
     var upcomingActivities = ViewBag.UpcomingActivities as List<Activity> ?? new();
     var stories = ViewBag.Stories as List<SuccessStory> ?? new();
@@ -9,44 +26,84 @@
     var supportingStories = stories.Skip(1).Take(2).ToList();
 }
 
+@* Vision, objectives, scope and mechanisms below are the approved wording from the "About the Ghars
+   Program" business document, rendered from GharsProgramContent so this page cannot drift from the
+   About and Vision pages. *@
 <div class="ghars-hero mb-4">
     <div class="row g-4 align-items-center">
         <div class="col-lg-7">
-            <div class="chip mb-3">Ghars Program</div>
-            <h1>Ghars Platform</h1>
-            <p class="mb-4">
-                A government-level platform that promotes values, sports culture, and youth development through lectures,
-                activities, partnerships, and smart digital services including attendance, certificates, analytics, reports, and bilingual digital services.
-            </p>
+            <div class="chip mb-3">@T("Ghars Program", "برنامج غرس")</div>
+            <h1>@T("Ghars Platform", "منصة غرس")</h1>
+            <p class="mb-4">@GharsProgramContent.Summary.For(ar)</p>
 
             <div class="d-flex flex-wrap gap-2">
                 <a class="btn btn-light fw-bold" asp-controller="Home" asp-action="About">
-                    <i class="bi bi-info-circle me-1"></i> About Us
+                    <i class="bi bi-info-circle me-1"></i> @T("About Us", "حول البرنامج")
                 </a>
                 <a class="btn btn-outline-light fw-bold" asp-controller="Home" asp-action="Vision">
-                    <i class="bi bi-bullseye me-1"></i> Vision & Objectives
+                    <i class="bi bi-bullseye me-1"></i> @T("Vision & Objectives", "الرؤية والأهداف")
                 </a>
-                <a class="btn btn-outline-light fw-bold" asp-controller="Home" asp-action="Partners">
-                    <i class="bi bi-people me-1"></i> Partners
+                <a class="btn btn-outline-light fw-bold" asp-controller="Home" asp-action="Booking">
+                    <i class="bi bi-calendar-plus me-1"></i> @T("Booking", "الحجز")
                 </a>
             </div>
         </div>
 
         <div class="col-lg-5">
             <div class="hero-panel">
-                <h5>Vision</h5>
-                <div class="mb-3">
-                    Empower youth with values-driven sports participation and measurable development outcomes.
-                </div>
+                <h5>@T("Program Vision", "رؤية البرنامج")</h5>
+                <div class="mb-3">@GharsProgramContent.Vision.For(ar)</div>
 
-                <h5 class="mt-3">Objectives</h5>
-                <ul class="mb-0">
-                    <li>Enable clubs and partners collaboration.</li>
-                    <li>Deliver curated lectures and activities.</li>
-                    <li>Issue verifiable smart certificates.</li>
-                    <li>Measure outcomes through KPI dashboards and season-end reports.</li>
-                </ul>
+                <h5 class="mt-3">@T("Scope of Application", "نطاق التطبيق")</h5>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var audience in GharsProgramContent.ScopeAudiences)
+                    {
+                        <span class="chip"><i class="bi @audience.Icon"></i> @audience.Label.For(ar)</span>
+                    }
+                </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body p-4">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+            <h2 class="section-title h4 mb-0">
+                <i class="bi bi-bullseye me-2"></i> @T("Program Objectives", "أهداف البرنامج")
+            </h2>
+            <a class="btn btn-sm btn-outline-success" asp-controller="Home" asp-action="Vision">
+                @T("Vision, objectives & KPI targets", "الرؤية والأهداف ومستهدفات المؤشرات")
+                <i class="bi bi-arrow-@(ar ? "left" : "right") ms-1"></i>
+            </a>
+        </div>
+        <div class="row g-3">
+            @foreach (var objective in GharsProgramContent.Objectives)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="d-flex gap-2 align-items-start">
+                        <i class="bi bi-check-circle-fill text-success mt-1"></i>
+                        <span>@objective.For(ar)</span>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body p-4">
+        <h2 class="section-title h4 mb-3">
+            <i class="bi bi-gear-wide-connected me-2"></i> @T("Implementation Mechanisms", "آليات التنفيذ")
+        </h2>
+        <div class="row g-4">
+            @foreach (var mechanism in GharsProgramContent.Mechanisms)
+            {
+                <div class="col-md-4">
+                    <h3 class="h6 fw-bold"><i class="bi @mechanism.Icon me-2 text-success"></i>@mechanism.Title.For(ar)</h3>
+                    <p class="text-muted mb-0">@mechanism.Body.For(ar)</p>
+                </div>
+            }
         </div>
     </div>
 </div>
@@ -57,17 +114,17 @@
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <h3 class="section-title h4 mb-0">
-                        <i class="bi bi-calendar-event me-2"></i> Upcoming Lectures &amp; Activities
+                        <i class="bi bi-calendar-event me-2"></i> @T("Upcoming Lectures & Activities", "المحاضرات والأنشطة القادمة")
                     </h3>
                     @if (season is not null)
                     {
-                        <span class="badge bg-teal rounded-pill">@season.TitleEn</span>
+                        <span class="badge bg-teal rounded-pill">@Loc(season.TitleEn, season.TitleAr)</span>
                     }
                 </div>
 
                 @if (upcomingActivities.Count == 0)
                 {
-                    <p class="text-muted mb-0">Published public activities and upcoming lectures will appear here.</p>
+                    <p class="text-muted mb-0">@T("Published public activities and upcoming lectures will appear here.", "ستظهر هنا الأنشطة العامة المنشورة والمحاضرات القادمة.")</p>
                 }
                 else
                 {
@@ -77,14 +134,14 @@
                             <div class="list-group-item px-0 py-3 border-bottom">
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
-                                        <div class="fw-semibold">@item.TitleEn</div>
+                                        <div class="fw-semibold">@Loc(item.TitleEn, item.TitleAr)</div>
                                         <div class="text-muted small mt-1">
-                                            <i class="bi bi-geo-alt"></i> @item.LocationEn
+                                            <i class="bi bi-geo-alt"></i> @Loc(item.LocationEn, item.LocationAr)
                                             <span class="mx-2">•</span>
                                             <i class="bi bi-clock"></i> @item.StartDateTime.ToString("yyyy-MM-dd HH:mm")
                                         </div>
                                     </div>
-                                    <span class="badge text-bg-light border">@item.Type</span>
+                                    <span class="badge text-bg-light border">@ProgramType(item.Type)</span>
                                 </div>
                             </div>
                         }
@@ -99,13 +156,13 @@
             <div class="card-body ghars-story-section">
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <h3 class="section-title h4 mb-0">
-                        <i class="bi bi-trophy me-2"></i> Success Stories
+                        <i class="bi bi-trophy me-2"></i> @T("Success Stories", "قصص النجاح")
                     </h3>
-                    <span class="ghars-story-kicker">Impact in action</span>
+                    <span class="ghars-story-kicker">@T("Impact in action", "الأثر في الواقع")</span>
                 </div>
                 @if (stories.Count == 0)
                 {
-                    <p class="text-muted mb-0">Stories will appear here after publication.</p>
+                    <p class="text-muted mb-0">@T("Stories will appear here after publication.", "ستظهر القصص هنا بعد نشرها.")</p>
                 }
                 else
                 {
@@ -114,15 +171,16 @@
                         var featuredImage = string.IsNullOrWhiteSpace(featuredStory.HeroImagePath)
                             ? null
                             : Url.Content(featuredStory.HeroImagePath);
-                        var featuredExcerpt = featuredStory.StoryEn.Length > 165
-                            ? featuredStory.StoryEn[..165] + "..."
-                            : featuredStory.StoryEn;
+                        var featuredBody = Loc(featuredStory.StoryEn, featuredStory.StoryAr);
+                        var featuredExcerpt = featuredBody.Length > 165
+                            ? featuredBody[..165] + "..."
+                            : featuredBody;
 
                         <article class="ghars-story-feature mb-3">
                             <div class="ghars-story-media" @(featuredImage is not null ? $"style=\"background-image:url('{featuredImage}')\"" : "")>
                                 <div class="ghars-story-overlay">
-                                    <span class="ghars-story-label">Featured story</span>
-                                    <h4 class="ghars-story-title">@featuredStory.TitleEn</h4>
+                                    <span class="ghars-story-label">@T("Featured story", "قصة مميزة")</span>
+                                    <h4 class="ghars-story-title">@Loc(featuredStory.TitleEn, featuredStory.TitleAr)</h4>
                                     <p class="ghars-story-excerpt mb-0">@featuredExcerpt</p>
                                 </div>
                             </div>
@@ -134,16 +192,17 @@
                         <div class="ghars-story-list">
                             @foreach (var story in supportingStories)
                             {
-                                var storyExcerpt = story.StoryEn.Length > 95
-                                    ? story.StoryEn[..95] + "..."
-                                    : story.StoryEn;
+                                var storyBody = Loc(story.StoryEn, story.StoryAr);
+                                var storyExcerpt = storyBody.Length > 95
+                                    ? storyBody[..95] + "..."
+                                    : storyBody;
 
                                 <article class="ghars-story-mini">
                                     <div class="ghars-story-mini-icon">
                                         <i class="bi bi-stars"></i>
                                     </div>
                                     <div>
-                                        <h5 class="ghars-story-mini-title">@story.TitleEn</h5>
+                                        <h5 class="ghars-story-mini-title">@Loc(story.TitleEn, story.TitleAr)</h5>
                                         <p class="ghars-story-mini-excerpt mb-0">@storyExcerpt</p>
                                     </div>
                                 </article>
@@ -156,21 +215,38 @@
 
         <div class="card">
             <div class="card-body">
-                <h3 class="section-title h4 mb-3">
-                    <i class="bi bi-people me-2"></i> Featured Partners
-                </h3>
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                    <h3 class="section-title h4 mb-0">
+                        <i class="bi bi-people me-2"></i> @T("Implementing Entities", "الجهات المنفذة")
+                    </h3>
+                    <a class="btn btn-sm btn-outline-success" asp-controller="Home" asp-action="Booking">
+                        @T("Book an activity", "احجز نشاطاً")
+                    </a>
+                </div>
                 @if (featuredPartners.Count == 0)
                 {
-                    <p class="text-muted mb-0">Featured partner entities will appear here.</p>
+                    <p class="text-muted mb-0">@T("Featured implementing entities will appear here.", "ستظهر هنا الجهات المنفذة المميزة.")</p>
                 }
                 else
                 {
-                    <ul class="list-unstyled mb-0">
-                        @foreach (var partner in featuredPartners.Take(4))
+                    @* Logos only, matching the Booking page. *@
+                    <div class="row row-cols-2 row-cols-sm-3 g-3">
+                        @foreach (var partner in featuredPartners.Take(6))
                         {
-                            <li class="mb-2 fw-semibold">@partner.Organization?.NameEn</li>
+                            var partnerOrg = partner.Organization;
+                            if (partnerOrg is null) { continue; }
+                            var partnerLogo = string.IsNullOrWhiteSpace(partnerOrg.LogoPath)
+                                ? Url.Content("~/img/partners/default-partner.svg")
+                                : Url.Content(partnerOrg.LogoPath);
+                            <div class="col">
+                                <a class="entity-logo-frame d-block mb-0" style="height:72px;"
+                                   asp-controller="Home" asp-action="Booking"
+                                   title="@Loc(partnerOrg.NameEn, partnerOrg.NameAr)">
+                                    <img src="@partnerLogo" alt="@Loc(partnerOrg.NameEn, partnerOrg.NameAr)" loading="lazy" />
+                                </a>
+                            </div>
                         }
-                    </ul>
+                    </div>
                 }
             </div>
         </div>

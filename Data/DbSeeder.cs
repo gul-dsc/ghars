@@ -352,7 +352,10 @@ public static class DbSeeder
             ("Dubai Economy and Tourism", "دائرة الاقتصاد والسياحة بدبي", "Entrepreneurship, tourism culture and economic awareness programs.", "برامج ريادة الأعمال والثقافة السياحية والوعي الاقتصادي.", "/img/partners/dubai-economy-tourism.svg"),
             ("Dubai Electricity and Water Authority", "هيئة كهرباء ومياه دبي", "Sustainability, energy, water and climate awareness programs.", "برامج الاستدامة والطاقة والمياه والتوعية المناخية.", "/img/partners/dewa.svg"),
             ("Dubai Health Authority", "هيئة الصحة في دبي والمؤسسات التابعة لها", "Wellbeing, preventive health and sports culture learning programs.", "برامج الرفاه والصحة الوقائية والثقافة الرياضية.", "/img/partners/dha.svg"),
-            ("Dubai Islamic Economy Development Centre", "دبي Islamic Economy Development Centre", "Ethics, values and Islamic economy awareness programs.", "برامج القيم والأخلاقيات والتوعية بالاقتصاد الإسلامي.", "/img/partners/default-partner.svg"),
+            // The Arabic name here was half-untranslated ("دبي Islamic Economy Development Centre").
+            // Entities are matched on NameEn, so correcting it affects newly seeded databases only —
+            // existing rows keep whatever they hold and no duplicate is created.
+            ("Dubai Islamic Economy Development Centre", "مركز دبي لتطوير الاقتصاد الإسلامي", "Ethics, values and Islamic economy awareness programs.", "برامج القيم والأخلاقيات والتوعية بالاقتصاد الإسلامي.", "/img/partners/default-partner.svg"),
             ("Dubai Judicial Institute", "معهد دبي القضائي", "Legal culture and responsible citizenship learning initiatives.", "مبادرات تعليمية في الثقافة القانونية والمواطنة المسؤولة.", "/img/partners/default-partner.svg"),
             ("Dubai Media Council", "مجلس دبي للإعلام", "Media literacy, responsible communication and creative content programs.", "برامج الثقافة الإعلامية والتواصل المسؤول والمحتوى الإبداعي.", "/img/partners/default-partner.svg"),
             ("Dubai Media Incorporated", "مؤسسة دبي للإعلام", "Media production, storytelling and public communication programs.", "برامج الإنتاج الإعلامي والسرد والتواصل العام.", "/img/partners/default-partner.svg"),

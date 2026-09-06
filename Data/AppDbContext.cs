@@ -63,6 +63,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<KpiSubmission> KpiSubmissions => Set<KpiSubmission>();
     public DbSet<KpiDocument> KpiDocuments => Set<KpiDocument>();
     public DbSet<GalleryItem> GalleryItems => Set<GalleryItem>();
+    public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
 
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -189,6 +190,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<GalleryItem>()
             .HasIndex(x => new { x.SeasonId, x.OrganizationId, x.MediaDate });
+
+        // The admin queue is "newest unhandled first", which is the only way this table is ever read.
+        builder.Entity<ContactMessage>()
+            .HasIndex(x => new { x.Status, x.CreatedAtUtc });
 
         // --------------------------------------------------------------------
         // FIX: Prevent SQL Server "multiple cascade paths" for SurveyAnswers

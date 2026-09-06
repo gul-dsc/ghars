@@ -178,3 +178,26 @@ public enum GalleryMediaType : byte
     OfficialPhoto = 5,
     OfficialVideo = 6
 }
+
+/// <summary>
+/// Subject of a public contact enquiry. Determines nothing but routing/filtering — every enquiry
+/// reaches the same DSC reviewers, because there is no per-topic mailbox in this system.
+/// </summary>
+public enum ContactTopic : byte
+{
+    GeneralEnquiry = 1,
+    LectureOrEventBooking = 2,
+    ClubOrAcademyRegistration = 3,
+    PartnershipOrImplementingEntity = 4,
+    KpiOrReporting = 5,
+    TechnicalSupport = 6,
+    Other = 10
+}
+
+public enum ContactMessageStatus : byte
+{
+    New = 1,
+    InProgress = 2,
+    Resolved = 3,
+    Spam = 4
+}

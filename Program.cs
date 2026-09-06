@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Threading.RateLimiting;
 using GharsPlatform.Data;
 using GharsPlatform.Helpers;
 using GharsPlatform.Hubs;
@@ -82,6 +83,33 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("RequireAdmin", p => p.RequireRole(RoleNames.SuperAdmin, RoleNames.DscAdmin));
 });
 
+// Rate limiting. The public contact form is the only anonymous POST in the application, so it is the
+// only endpoint that an unauthenticated caller can use to write rows; everything else is behind
+// Identity, which has its own lockout. Partitioned by client IP: 5 submissions per 10 minutes, no
+// queue — a rejected caller is told to wait rather than being held open.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("contact-form", context => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromMinutes(10),
+            QueueLimit = 0
+        }));
+
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.ContentType = "text/plain; charset=utf-8";
+        await context.HttpContext.Response.WriteAsync(
+            "Too many messages have been sent from this connection. Please try again later.\n" +
+            "تم إرسال عدد كبير من الرسائل من هذا الاتصال. يرجى المحاولة لاحقاً.",
+            token);
+    };
+});
+
 var app = builder.Build();
 
 // One-time operational utility for relocating protected uploads out of wwwroot. Runs instead of the
@@ -146,6 +174,9 @@ app.UseStaticFiles();
 app.UseRouting();
 
 app.UseRequestLocalization(app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<RequestLocalizationOptions>>().Value);
+
+// After UseRouting, so [EnableRateLimiting] on an endpoint resolves.
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

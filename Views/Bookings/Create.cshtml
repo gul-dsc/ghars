@@ -160,12 +160,19 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label asp-for="RequestedActivityType" class="form-label">@T("Activity type", "نوع النشاط")</label>
+                        @* Training and Workshop are what clubs request from an implementing entity, so
+                           they lead. The remaining types stay selectable — they are valid and are used
+                           by existing bookings, so none was removed. *@
                         <select asp-for="RequestedActivityType" class="form-select">
-                            <option value="@ActivityType.Lecture">@T("Lecture", "محاضرة")</option>
-                            <option value="@ActivityType.Event">@T("Event", "فعالية")</option>
-                            <option value="@ActivityType.Workshop">@T("Workshop", "ورشة عمل")</option>
-                            <option value="@ActivityType.TrainingProgram">@T("Training", "تدريب")</option>
-                            <option value="@ActivityType.Course">@T("Course", "دورة")</option>
+                            <optgroup label="@T("Requested from the implementing entity", "المطلوب من الجهة المنفذة")">
+                                <option value="@ActivityType.TrainingProgram">@T("Training", "تدريب")</option>
+                                <option value="@ActivityType.Workshop">@T("Workshop", "ورشة عمل")</option>
+                            </optgroup>
+                            <optgroup label="@T("Other activity types", "أنواع أنشطة أخرى")">
+                                <option value="@ActivityType.Lecture">@T("Lecture", "محاضرة")</option>
+                                <option value="@ActivityType.Event">@T("Event", "فعالية")</option>
+                                <option value="@ActivityType.Course">@T("Course", "دورة")</option>
+                            </optgroup>
                         </select>
                     </div>
                     <div class="col-md-6">

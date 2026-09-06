@@ -1,0 +1,101 @@
+@model List<GharsPlatform.Models.Core.Organization>
+@using System.Globalization
+@using GharsPlatform.Models.Identity
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    string Name(Organization o) => ar && !string.IsNullOrWhiteSpace(o.NameAr) ? o.NameAr : o.NameEn;
+    ViewData["Title"] = T("Booking", "الحجز");
+
+    var isAuthenticated = User.Identity?.IsAuthenticated ?? false;
+    var isClub = User.IsInRole(RoleNames.ClubAdmin);
+    var isPartner = User.IsInRole(RoleNames.PartnerAdmin);
+    var isAdmin = User.IsInRole(RoleNames.SuperAdmin) || User.IsInRole(RoleNames.DscAdmin);
+    var returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
+}
+
+<div class="partner-hero mb-4">
+    <h1 class="display-6 fw-bold mb-2">@T("Book a Ghars Activity", "حجز نشاط غرس")</h1>
+    <p class="mb-0 opacity-75">
+        @T("Choose an implementing entity and request a training session or workshop for your club.",
+           "اختر الجهة المنفذة واطلب تنفيذ تدريب أو ورشة عمل لناديك.")
+    </p>
+</div>
+
+@* Role-aware guidance. Each role is told what it can do here rather than being shown a club call to
+   action it cannot use. *@
+@if (!isAuthenticated)
+{
+    <div class="ghars-filter-empty mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <span>@T("Sign in with a club account to request a booking from any implementing entity below.",
+                 "سجّل الدخول بحساب نادٍ لتتمكن من طلب حجز من أي جهة منفذة أدناه.")</span>
+        <a class="btn btn-ghars btn-sm" asp-controller="Account" asp-action="Login" asp-route-returnUrl="@returnUrl">
+            <i class="bi bi-box-arrow-in-right me-1"></i>@T("Sign in", "تسجيل الدخول")
+        </a>
+    </div>
+}
+else if (isPartner)
+{
+    <div class="ghars-filter-empty mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <span>@T("You are signed in as an implementing entity. Booking requests from clubs are reviewed in your partner dashboard.",
+                 "أنت مسجّل الدخول كجهة منفذة. تتم مراجعة طلبات الحجز الواردة من الأندية عبر لوحة الشريك.")</span>
+        <a class="btn btn-ghars btn-sm" asp-controller="PartnerDashboard" asp-action="Index">
+            <i class="bi bi-grid-1x2 me-1"></i>@T("Partner dashboard", "لوحة الشريك")
+        </a>
+    </div>
+}
+else if (isAdmin)
+{
+    <div class="ghars-filter-empty mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <span>@T("You are signed in as an administrator. All booking requests are managed in the admin area.",
+                 "أنت مسجّل الدخول كمسؤول. تتم إدارة جميع طلبات الحجز من منطقة الإدارة.")</span>
+        <a class="btn btn-ghars btn-sm" asp-area="Admin" asp-controller="Bookings" asp-action="Index">
+            <i class="bi bi-calendar-check me-1"></i>@T("Manage bookings", "إدارة الحجوزات")
+        </a>
+    </div>
+}
+
+@if (Model.Count == 0)
+{
+    <div class="empty-state">@T("No implementing entities are available for booking at the moment.",
+                                "لا توجد جهات منفذة متاحة للحجز في الوقت الحالي.")</div>
+}
+else
+{
+    <div class="entity-grid">
+        @foreach (var entity in Model)
+        {
+            @* Fallback keeps the tile intact when an entity has no logo, rather than rendering a
+               broken image. *@
+            var logo = string.IsNullOrWhiteSpace(entity.LogoPath)
+                ? Url.Content("~/img/partners/default-partner.svg")
+                : Url.Content(entity.LogoPath);
+
+            <article class="entity-tile">
+                <div class="entity-logo-frame">
+                    <img src="@logo" alt="@Name(entity)" loading="lazy" />
+                </div>
+                <div class="entity-name">@Name(entity)</div>
+                <div class="entity-action">
+                    @if (isClub)
+                    {
+                        <a class="btn btn-ghars" href="/bookings/create?partnerId=@entity.Id">
+                            <i class="bi bi-calendar-plus me-1"></i>@T("Request Booking", "طلب حجز")
+                        </a>
+                    }
+                    else if (!isAuthenticated)
+                    {
+                        <a class="btn btn-outline-success"
+                           asp-controller="Account" asp-action="Login" asp-route-returnUrl="@returnUrl">
+                            <i class="bi bi-box-arrow-in-right me-1"></i>@T("Sign in to request", "سجّل الدخول للطلب")
+                        </a>
+                    }
+                    else
+                    {
+                        <span class="btn btn-outline-secondary disabled">@T("Clubs only", "للأندية فقط")</span>
+                    }
+                </div>
+            </article>
+        }
+    </div>
+}

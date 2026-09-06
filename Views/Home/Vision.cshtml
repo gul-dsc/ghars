@@ -4,38 +4,23 @@
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string e, string a) => ar ? a : e;
     ViewData["Title"] = T("Vision & Objectives", "الرؤية والأهداف");
-
-    // Approved objectives from the "About the Ghars Program" business document.
-    var objectives = new (string En, string Ar)[]
-    {
-        ("Instilling national values and Emirati identity among players.", "ترسيخ القيم الوطنية والهوية الإماراتية لدى اللاعبين."),
-        ("Promoting positive behaviors and building well-balanced athletic personalities.", "تعزيز السلوكيات الإيجابية وبناء شخصية رياضية متوازنة."),
-        ("Developing players’ life and leadership skills.", "تنمية المهارات الحياتية والقيادية لدى اللاعبين."),
-        ("Encouraging healthy lifestyles and enhancing health awareness.", "ترسيخ أنماط الحياة الصحية وتعزيز الوعي الصحي."),
-        ("Protecting and empowering sports talents while reducing negative behaviors.", "حماية وتمكين المواهب الرياضية والحد من السلوكيات السلبية."),
-        ("Raising community awareness among sports sector stakeholders.", "رفع مستوى الوعي المجتمعي لدى الكوادر الرياضية."),
-        ("Supporting the ecosystem for identifying and developing talents within Dubai clubs.", "دعم منظومة اكتشاف وتطوير المواهب في أندية دبي."),
-        ("Contributing to improving the quality of outcomes in the sports sector.", "الإسهام في تحسين جودة مخرجات القطاع الرياضي."),
-        ("Preparing a generation capable of representing clubs and national teams with distinction.", "إعداد جيل قادر على تمثيل الأندية والمنتخبات الوطنية بصورة مشرفة.")
-    };
 }
+@* Vision and objectives are the approved wording from the "About the Ghars Program" business
+   document; GharsProgramContent is the single source shared with the home and About pages. *@
 <div class="card mb-4"><div class="card-body p-4 p-md-5">
     <h1 class="section-title h3 mb-3">@T("Program Vision", "رؤية البرنامج")</h1>
-    <p class="fs-5 mb-0">
-        @T("To develop a well-rounded and aware generation of athletes, committed to national values and equipped to achieve sporting and societal excellence, thereby reinforcing Dubai’s position as a leading model in sports talent development.",
-           "إعداد جيل رياضي واعٍ ومتكامل، متمسك بالقيم الوطنية، ومؤهل لتحقيق التميز الرياضي والمجتمعي، بما يسهم في ترسيخ مكانة دبي نموذجاً رائداً في تنمية المواهب الرياضية.")
-    </p>
+    <p class="fs-5 mb-0">@GharsProgramContent.Vision.For(ar)</p>
 </div></div>
 
 <div class="card mb-4"><div class="card-body p-4 p-md-5">
     <h2 class="section-title h4 mb-3"><i class="bi bi-bullseye me-2"></i>@T("Program Objectives", "أهداف البرنامج")</h2>
     <div class="row g-3">
-        @foreach (var objective in objectives)
+        @foreach (var objective in GharsProgramContent.Objectives)
         {
             <div class="col-md-6">
                 <div class="d-flex gap-2 align-items-start">
                     <i class="bi bi-check-circle-fill text-success mt-1"></i>
-                    <span>@(ar ? objective.Ar : objective.En)</span>
+                    <span>@objective.For(ar)</span>
                 </div>
             </div>
         }

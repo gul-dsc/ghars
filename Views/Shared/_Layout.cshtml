@@ -79,12 +79,10 @@
                             <a class="nav-link" asp-area="" asp-controller="Home" asp-action="Vision">@(isRtl ? "الرؤية والأهداف" : "Vision & Objectives")</a>
                         </li>
 
+                        @* Booking replaces the former "Partners" information link: the implementing
+                           entities are now presented as a booking entry point, not a directory. *@
                         <li class="nav-item">
-                            <a class="nav-link" asp-area="" asp-controller="Home" asp-action="Partners">@(isRtl ? "الشركاء" : "Partners")</a>
-                        </li>
-
-                        <li class="nav-item">
-                            <a class="nav-link" asp-area="" asp-controller="Home" asp-action="Contact">@(isRtl ? "تواصل معنا" : "Contact")</a>
+                            <a class="nav-link" asp-area="" asp-controller="Home" asp-action="Booking">@(isRtl ? "الحجز" : "Booking")</a>
                         </li>
 
                         @if (isAuthenticated)
@@ -100,11 +98,13 @@
                             }
                             <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="Gallery" asp-action="Index">@(isRtl ? "المعرض" : "Gallery")</a></li>
                             <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="Surveys" asp-action="Index">@(isRtl ? "الاستبيانات" : "Surveys")</a></li>
-
-                            <li class="nav-item">
-                                <a class="nav-link" asp-area="" asp-controller="Organization" asp-action="MyOrganizations">@(isRtl ? "جهاتي" : "My Organizations")</a>
-                            </li>
                         }
+
+                        @* Contact is deliberately the last navigation item, in both languages. In RTL
+                           the list direction flips, so "last" reads as leftmost — which is correct. *@
+                        <li class="nav-item">
+                            <a class="nav-link" asp-area="" asp-controller="Home" asp-action="Contact">@(isRtl ? "تواصل معنا" : "Contact")</a>
+                        </li>
                     </ul>
 
                     <!-- Right actions -->
@@ -124,8 +124,9 @@
                             <a class="btn btn-outline-primary btn-sm ghars-auth-link"
                                asp-area=""
                                asp-controller="Account"
-                               asp-action="Login">
-                                Login
+                               asp-action="Login"
+                               asp-route-returnUrl="@($"{Context.Request.Path}{Context.Request.QueryString}")">
+                                @(isRtl ? "تسجيل الدخول" : "Login")
                             </a>
 
                         }
@@ -137,11 +138,11 @@
                             }
                             else if (isPartner)
                             {
-                                <a class="btn btn-outline-success btn-sm" asp-area="" asp-controller="PartnerDashboard" asp-action="Index">Partner</a>
+                                <a class="btn btn-outline-success btn-sm" asp-area="" asp-controller="PartnerDashboard" asp-action="Index">@(isRtl ? "لوحة الشريك" : "Partner")</a>
                             }
                             else if (isClub)
                             {
-                                <a class="btn btn-outline-success btn-sm" asp-area="" asp-controller="ClubDashboard" asp-action="Index">Club</a>
+                                <a class="btn btn-outline-success btn-sm" asp-area="" asp-controller="ClubDashboard" asp-action="Index">@(isRtl ? "لوحة النادي" : "Club")</a>
                             }
 
                             <div class="dropdown ghars-notification-menu">
@@ -204,14 +205,9 @@
                                         </li>
                                     }
 
-                                    <li>
-                                        <a class="dropdown-item"
-                                           asp-area=""
-                                           asp-controller="Organization"
-                                           asp-action="MyOrganizations">
-                                            <i class="bi bi-buildings me-2"></i>@(isRtl ? "جهاتي" : "My Organizations")
-                                        </a>
-                                    </li>
+                                    @* "My Organizations" was removed from user-facing navigation. The
+                                       route, the controller and every organization link and scoping
+                                       rule behind it are untouched — this is a menu change only. *@
 
                                     @if (isAdmin)
                                     {

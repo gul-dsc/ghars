@@ -94,9 +94,10 @@ dotnet ef database update
 > Run `dotnet build` first. `dotnet ef database update --no-build` will silently apply **nothing** if
 > the compiled assembly predates your latest migration — it still reports `Done.`
 
-On first run the application seeds roles, reference organizations, demo clubs, seasons and sample
-programme data automatically (see [`Data/DbSeeder.cs`](Data/DbSeeder.cs)), so a fresh database is
-immediately usable.
+On first run the application seeds the Identity roles and an active season in every environment. In
+`Development` it additionally seeds reference organizations, demo clubs and sample programme data, so
+a fresh development database is immediately usable. See
+[Startup seeding](#startup-seeding) below and [`Data/DbSeeder.cs`](Data/DbSeeder.cs).
 
 ## Run
 
@@ -121,15 +122,71 @@ The launch profile serves <https://localhost:60873> and <http://localhost:60874>
 Organization identity is always derived server-side from the signed-in user's organization link; it
 is never taken from a client-supplied value.
 
-### Seed accounts
+## Startup seeding
 
-`DbSeeder` creates demo accounts under the `@ghars.local` domain with **hard-coded development
-passwords**, listed in [`SEED_CREDENTIALS.md`](SEED_CREDENTIALS.md). They are intended for local
-development and demonstration only.
+Seeding is split by what the data is for, not by convenience:
 
-> **Before any production deployment**, read the security note at the top of `SEED_CREDENTIALS.md`.
-> Seeding is not currently gated by environment, so these accounts and passwords are created — and
-> reset on every application start — in whatever environment the application runs.
+| Runs | What it seeds |
+| --- | --- |
+| **Every environment** | Pending EF migrations, the seven Identity roles, and an active season. |
+| **Every environment, guarded** | The initial administrator — only when one is configured *and* the installation has none. |
+| **`Development` only** | Demo organizations, clubs, users, activities, bookings, KPIs, agenda, gallery, library and notifications. |
+
+Every block is guarded by an existence check, so restarting adds nothing and changes nothing.
+
+### Password behaviour
+
+**Application startup never resets an existing user's password.** A password changes only when a
+person changes it, or when an operator explicitly runs a reset command. Restarting the application —
+in any environment, for any reason — leaves every credential exactly as it was.
+
+### Initial production administrator
+
+A brand-new production database has no users, so the first administrator is created from
+configuration. Supply these before the first start:
+
+| Configuration key | Environment variable |
+| --- | --- |
+| `Ghars:Bootstrap:AdminEmail` | `GHARS_BOOTSTRAP_ADMIN_EMAIL` |
+| `Ghars:Bootstrap:AdminPassword` | `GHARS_BOOTSTRAP_ADMIN_PASSWORD` |
+| `Ghars:Bootstrap:AdminFullName` (optional) | `GHARS_BOOTSTRAP_ADMIN_FULL_NAME` |
+
+The password must meet the Identity policy in `Program.cs`: 10+ characters with upper case, lower
+case, a digit and a non-alphanumeric character.
+
+How it behaves:
+
+- **Creation happens only when no Super Admin and no DSC Admin exists.** Once you have an
+  administrator, this path does nothing, restart after restart.
+- **If the values are absent, no account is created.** There is no default and no fallback — nothing
+  guessable is ever produced. The application starts normally and logs a critical message explaining
+  which variables to set.
+- **If the email matches an existing account**, that account is granted the administrator role and its
+  password is left untouched. Bootstrap cannot be used to take over someone's credentials.
+- The password is never logged and never written to a committed file.
+
+Supply it through the deployment environment, not source control, and **remove
+`GHARS_BOOTSTRAP_ADMIN_PASSWORD` from the environment once the administrator has signed in and
+changed the password.**
+
+### Development demo data
+
+Demo and sample data — organizations, clubs, demo users, bookings, KPIs, agenda, gallery — is seeded
+**only** when the environment is `Development`. It cannot appear in production.
+
+Demo accounts share one password that you choose and keep out of source control:
+
+```bash
+dotnet user-secrets set "Ghars:Seed:DemoPassword" "<your own password>"
+```
+
+Without it the application still starts; it logs one warning and does not create the missing demo
+accounts. Account names, and how to recover a forgotten demo password with
+`dotnet run -- reset-demo-passwords`, are in [`SEED_CREDENTIALS.md`](SEED_CREDENTIALS.md).
+
+> **This repository is public, and earlier commits contain literal demo passwords.** Those values are
+> permanently exposed. Any database seeded before 2026-09-06 should have its demo passwords rotated —
+> see the notice at the top of `SEED_CREDENTIALS.md`.
 
 ## Documentation
 
@@ -140,6 +197,8 @@ development and demonstration only.
 | [`GHARS_IMPLEMENTATION_PLAN.md`](GHARS_IMPLEMENTATION_PLAN.md) | The plan derived from that analysis. |
 | [`GHARS_IMPLEMENTATION_REPORT.md`](GHARS_IMPLEMENTATION_REPORT.md) | What was built, decisions, risks, and the production-hardening pass. |
 | [`GHARS_PRODUCTION_OPERATIONS.md`](GHARS_PRODUCTION_OPERATIONS.md) | Backup, restore, deployment, permissions and disaster recovery. |
+| [`GHARS_PRODUCTION_DEPLOYMENT_CHECKLIST.md`](GHARS_PRODUCTION_DEPLOYMENT_CHECKLIST.md) | Operator checklist to work through during a deployment. |
+| [`SEED_CREDENTIALS.md`](SEED_CREDENTIALS.md) | Development demo accounts and how to enable them. |
 | [`GHARS_REPOSITORY_BASELINE.md`](GHARS_REPOSITORY_BASELINE.md) | The verified production-candidate baseline for this repository. |
 | [`docs/`](docs/) | The approved bilingual programme documents this platform implements. |
 

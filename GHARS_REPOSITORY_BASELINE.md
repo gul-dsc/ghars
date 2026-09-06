@@ -116,20 +116,32 @@ by the baseline work:
   published media stays public.
 - Static access to `/uploads/kpi`, `/uploads/surveys` and `/uploads/agenda` is denied.
 
-No secrets were found in the committed tree. `appsettings.json` contains only a Windows-authentication
-development connection string with no credentials.
+`appsettings.json` contains only a Windows-authentication development connection string with no
+credentials.
+
+> **Correction, 2026-09-06.** This section originally read "no secrets were found in the committed
+> tree". That was wrong. `Data/DbSeeder.cs` and `SEED_CREDENTIALS.md` both contained literal demo
+> passwords, and the baseline judged them acceptable on the assumption that the repository was
+> private. `gh repo view gul-dsc/ghars` reports `"visibility":"PUBLIC"`. The literals have since been
+> removed from both files, but they remain in the public history of commits `4f1e77b` and `bb3772a`
+> and must be treated as permanently exposed. See §23 of `GHARS_IMPLEMENTATION_REPORT.md`.
 
 ## 6. Known open items
 
-### Security item requiring a decision before go-live
+### Security item — resolved after this baseline
 
-**Seeding is not environment-gated.** `Program.cs` calls `DbSeeder.SeedAsync` unconditionally, and
-`EnsureSeedPasswordAsync` resets every seeded account's password to a hard-coded constant on **every**
-application start. The demo accounts are therefore created in whatever environment the application
-runs, and an administrator who changes one of those passwords will find it reset at the next restart.
+**Seeding was not environment-gated**, and `EnsureSeedPasswordAsync` reset every seeded account's
+password to a hard-coded constant on **every** application start. It was flagged here rather than
+changed, because gating the seeder without a bootstrap path would leave a fresh production database
+with no administrator.
 
-This was flagged rather than changed: gating the seeder without providing a bootstrap path would leave
-a fresh production database with no administrator. Details in `SEED_CREDENTIALS.md`.
+Fixed in the following pass, verified against four fresh-database scenarios: demo data is now
+`Development`-only, the first production administrator comes from configuration, no password is ever
+reset by startup, and no password literal remains in the source. See §23 of
+`GHARS_IMPLEMENTATION_REPORT.md`.
+
+**Still outstanding:** the demo passwords published in commits `4f1e77b` and `bb3772a` of this public
+repository cannot be un-published. Rotate them anywhere they were used.
 
 ### Business decisions, unchanged and still open
 
@@ -158,4 +170,5 @@ from 2026-05-13 and the dangling reference predates this work.
 | `GHARS_IMPLEMENTATION_PLAN.md` | The plan derived from that analysis. |
 | `GHARS_IMPLEMENTATION_REPORT.md` | Implementation, hardening (§21) and baseline (§22) detail. |
 | `GHARS_PRODUCTION_OPERATIONS.md` | Backup, restore, deployment, permissions, disaster recovery. |
+| `GHARS_PRODUCTION_DEPLOYMENT_CHECKLIST.md` | Operator checklist for a deployment. |
 | `docs/` | The approved bilingual programme documents. |

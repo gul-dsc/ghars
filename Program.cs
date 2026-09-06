@@ -96,11 +96,22 @@ if (args.Length > 0 && string.Equals(args[0], "migrate-protected-files", StringC
         purge: args.Contains("--purge"));
 }
 
-// Migrate & seed roles/admin at startup (safe for first-run; in production gate behind env/flag)
+// Explicit developer recovery for a forgotten demo password. Like the migrator above it runs instead
+// of the web host, and DbSeeder refuses it outside Development.
+//   dotnet run -- reset-demo-passwords
+if (args.Length > 0 && string.Equals(args[0], "reset-demo-passwords", StringComparison.OrdinalIgnoreCase))
+{
+    using var resetScope = app.Services.CreateScope();
+    return await DbSeeder.ResetDevelopmentDemoPasswordsAsync(resetScope.ServiceProvider, app.Environment);
+}
+
+// Migrate and seed at startup. Structural data (roles, the active season) and the configured bootstrap
+// administrator run in every environment; demo/sample data is Development-only. Nothing here changes
+// an existing user's password — see Data/DbSeeder.cs.
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
-    await DbSeeder.SeedAsync(services);
+    await DbSeeder.SeedAsync(services, app.Environment);
 }
 
 if (!app.Environment.IsDevelopment())

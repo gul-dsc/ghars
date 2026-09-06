@@ -1052,3 +1052,117 @@ This was **not** changed here. Gating the seeder is a deployment decision with a
 a production database with seeding disabled and no bootstrap path has no administrator at all — and
 this pass was explicitly not a development cycle. The risk is now documented at its source, in
 `SEED_CREDENTIALS.md`, and referenced from the README. It belongs on the go-live checklist.
+
+> **Resolved in §23.** The gate was added in the following pass, together with the bootstrap path
+> that made it safe.
+
+---
+
+## 23. Startup Seeding Hardening
+
+Follow-up on the item flagged in §22.3. The gate could not be added on its own, because a production
+database with seeding disabled and no bootstrap path has no administrator at all. This section
+records the seed-data classification that made a safe split possible, then the change.
+
+### 23.1 A finding that changed the risk rating
+
+The repository is **public**:
+
+```
+gh repo view gul-dsc/ghars --json isPrivate,visibility
+{"isPrivate":false,"visibility":"PUBLIC"}
+```
+
+The baseline pass assumed a private repository when it judged the hard-coded demo passwords
+acceptable to commit. They are not. Five passwords, the account-name pattern that goes with them
+(`superadmin@`, `dscadmin@`, `club-<slug>@`, `partner-<slug>@ghars.local`) and — before this change —
+a seeder that created those accounts in **every** environment were together published on the open
+internet. Anyone who found a reachable Ghars instance had a credential list for it.
+
+The literals have been removed from `Data/DbSeeder.cs` and `SEED_CREDENTIALS.md`. They remain in the
+public history of commits `4f1e77b` and `bb3772a` and cannot be removed without a force push, so
+**they must be treated as permanently compromised**: any environment ever seeded with them needs
+those accounts' passwords changed. After this change, no environment is seeded with them again.
+
+### 23.2 Seed data classification
+
+Every operation in `DbSeeder`, classified before any behaviour was modified.
+
+| # | Seed operation | Entities | Class | Runs in Production |
+| --- | --- | --- | --- | --- |
+| 1 | Apply pending migrations | `__EFMigrationsHistory` | Structural | Yes |
+| 2 | Identity roles | `AspNetRoles` × 7 | Structural | Yes |
+| 3 | Active season | `Seasons` | Structural | Yes |
+| 4 | Bootstrap administrator | `AspNetUsers`, `AspNetUserRoles` | Bootstrap | Only when configured **and** no admin exists |
+| 5 | Fixed admin accounts (`superadmin@`, `dscadmin@`, `admin1-3@`) | `AspNetUsers` | Demo | No |
+| 6 | 29 government entities + partner profiles | `Organizations`, `PartnerProfiles` | Demo | No |
+| 7 | 7 clubs | `Organizations` | Demo | No |
+| 8 | Partner and club admin users + org links | `AspNetUsers`, `OrganizationAdminLinks` | Demo | No |
+| 9 | Learning programmes | `Activities` | Demo | No |
+| 10 | Library categories and items | `LibraryCategories`, `LibraryItems` | Demo | No |
+| 11 | Bookings, proposed times, audit trails | `BookingRequests`, `BookingProposedTimeOptions`, `BookingAuditTrails` | Demo | No |
+| 12 | Attendance sessions and records | `AttendanceSessions`, `AttendanceRecords` | Demo | No |
+| 13 | Certificates | `Certificates` | Demo | No |
+| 14 | KPI submissions (2026 + 2027) | `KpiSubmissions` | Demo | No |
+| 15 | Agenda entries | `AgendaEntries` | Demo | No |
+| 16 | Gallery items, albums, media | `GalleryItems`, `MediaAlbums`, `MediaItems` | Demo | No |
+| 17 | Official survey sample | `ExternalSurveys` | Demo | No |
+| 18 | Notifications | `Notifications`, `NotificationDeliveries` | Demo | No |
+
+Two classifications deserve their reasoning recorded.
+
+**The season is structural, not demo.** Every controller resolves it with `FirstOrDefaultAsync`, so a
+season-less database does not crash. But KPI, agenda, gallery and booking submission all require a
+valid `SeasonId`, and `BookingsController` accepts only a season with `IsActive`. A production
+database with no season starts cleanly and then rejects every club submission. It is reference data
+the application needs in order to function, it carries no credentials, and it is idempotent.
+
+**The 29 government entities are demo, despite being real organizations.** They arrive with 29
+partner-admin accounts sharing one password, and that is the whole of the risk being removed here.
+Real organizations are created by DSC through the admin UI, where each gets its own account. A fresh
+production install therefore starts with no organizations — correct for a new installation, not a
+regression.
+
+### 23.3 The change
+
+`SeedAsync` now takes `IHostEnvironment` and splits three ways:
+
+| Method | Runs | Contains |
+| --- | --- | --- |
+| `SeedRequiredDataAsync` | Every environment | Migrations, roles, active season |
+| `BootstrapAdministratorAsync` | Every environment, guarded | The first administrator, from configuration only |
+| `SeedDevelopmentDemoDataAsync` | `Development` only | Rows 5–18 above |
+
+**`EnsureSeedPasswordAsync` is deleted.** It called `ResetPasswordAsync` on every seeded account on
+every application start. A password must not change because a process restarted. Demo passwords are
+now set once, at account creation, and never touched again. Recovering a forgotten demo password is
+an explicit operator action — `dotnet run -- reset-demo-passwords` — which refuses to run outside
+`Development` and only ever touches `@ghars.local` accounts.
+
+**No hard-coded passwords remain.** The demo password comes from `Ghars:Seed:DemoPassword`; when it
+is absent, demo accounts are not created and everything depending on them is skipped, with one
+warning naming the `dotnet user-secrets set` command that fixes it. Existing databases are
+unaffected, because their demo accounts already exist.
+
+### 23.4 Bootstrap administrator
+
+The first administrator of a fresh production database is created from configuration:
+
+| Configuration key | Environment variable |
+| --- | --- |
+| `Ghars:Bootstrap:AdminEmail` | `GHARS_BOOTSTRAP_ADMIN_EMAIL` |
+| `Ghars:Bootstrap:AdminPassword` | `GHARS_BOOTSTRAP_ADMIN_PASSWORD` |
+| `Ghars:Bootstrap:AdminFullName` | `GHARS_BOOTSTRAP_ADMIN_FULL_NAME` |
+
+Guarantees, each enforced in `BootstrapAdministratorAsync`:
+
+1. It runs only when **no** user holds `Super Admin` or `DSC Admin`. An existing administrator ends
+   the check before configuration is read.
+2. There is no default and no fallback value. Absent configuration creates nothing.
+3. The password is never logged, never echoed in an error, and never written to a committed file.
+   Identity validation failures are logged as descriptions only.
+4. If the email names an existing account, the account is granted the role and its **password is left
+   alone** — the bootstrap path cannot be used to take over an existing user's credentials.
+5. When no administrator exists and no configuration is supplied, the application logs a critical
+   message naming the variables to set, and starts normally. It does not invent an account, and it
+   does not refuse to boot.

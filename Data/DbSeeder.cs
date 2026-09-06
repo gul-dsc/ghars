@@ -7,68 +7,59 @@ namespace GharsPlatform.Data;
 
 public static class DbSeeder
 {
-    // Development/test seed credentials are intentionally explicit so Club and Partner users are not ambiguous.
-    // Change these before any staging or production deployment.
-    private const string SuperAdminSeedPassword = "Ghars@2026#Super";
-    private const string DscAdminSeedPassword = "Ghars@2026#Dsc";
-    private const string ClubSeedPassword = "Ghars@2026#Club";
-    private const string PartnerSeedPassword = "Ghars@2026#Partner";
-    private const string AcademySeedPassword = "Ghars@2026#Academy";
+    /// <summary>Domain used by every demo account. Nothing outside it is ever touched by demo seeding.</summary>
+    private const string DemoEmailDomain = "@ghars.local";
 
-    public static async Task SeedAsync(IServiceProvider services)
+    // Configuration keys. Each is also readable as a flat environment variable, so an operator can
+    // export GHARS_BOOTSTRAP_ADMIN_PASSWORD without knowing the ASP.NET "__" section convention.
+    private const string BootstrapEmailKey = "Ghars:Bootstrap:AdminEmail";
+    private const string BootstrapPasswordKey = "Ghars:Bootstrap:AdminPassword";
+    private const string BootstrapFullNameKey = "Ghars:Bootstrap:AdminFullName";
+    private const string DemoPasswordKey = "Ghars:Seed:DemoPassword";
+
+    private const string BootstrapEmailEnv = "GHARS_BOOTSTRAP_ADMIN_EMAIL";
+    private const string BootstrapPasswordEnv = "GHARS_BOOTSTRAP_ADMIN_PASSWORD";
+    private const string BootstrapFullNameEnv = "GHARS_BOOTSTRAP_ADMIN_FULL_NAME";
+    private const string DemoPasswordEnv = "GHARS_SEED_DEMO_PASSWORD";
+
+    /// <summary>
+    /// Startup seeding. Structural data and the bootstrap administrator run in every environment;
+    /// demo/sample data runs only in Development.
+    /// </summary>
+    /// <remarks>
+    /// Nothing here ever changes an existing user's password. Demo passwords are set once, when the
+    /// account is created. See <see cref="ResetDevelopmentDemoPasswordsAsync"/> for the explicit
+    /// developer recovery path.
+    /// </remarks>
+    public static async Task SeedAsync(IServiceProvider services, IHostEnvironment environment)
     {
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("DbSeeder");
 
         try
         {
             var db = services.GetRequiredService<AppDbContext>();
-            await db.Database.MigrateAsync();
-
             var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
             var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+            var configuration = services.GetRequiredService<IConfiguration>();
 
-            var roles = new[]
-            {
-                RoleNames.SuperAdmin,
-                RoleNames.DscAdmin,
-                RoleNames.ClubAdmin,
-                RoleNames.AcademyAdmin,
-                RoleNames.PartnerAdmin,
-                RoleNames.Speaker,
-                RoleNames.Viewer
-            };
+            await SeedRequiredDataAsync(db, roleManager, logger);
 
-            foreach (var r in roles)
+            if (environment.IsDevelopment())
             {
-                if (!await roleManager.RoleExistsAsync(r))
-                    await roleManager.CreateAsync(new IdentityRole(r));
+                await SeedDevelopmentDemoDataAsync(db, userManager, configuration, logger);
+            }
+            else
+            {
+                logger.LogInformation(
+                    "Demo/sample seeding skipped: environment is {Environment}, not Development.",
+                    environment.EnvironmentName);
             }
 
-            if (!await db.Seasons.AnyAsync())
-            {
-                var year = DateTime.UtcNow.Year;
-                db.Seasons.Add(new Season
-                {
-                    TitleEn = $"Season {year}-{year + 1}",
-                    TitleAr = $"الموسم {year + 1}-{year}",
-                    StartDate = new DateOnly(year, 8, 1),
-                    EndDate = new DateOnly(year + 1, 5, 31),
-                    IsActive = true,
-                    CreatedAtUtc = DateTime.UtcNow
-                });
-                await db.SaveChangesAsync();
-            }
-
-            await EnsureUserAsync(userManager, "superadmin@ghars.local", "Super Admin", RoleNames.SuperAdmin, null, SuperAdminSeedPassword, logger);
-            await EnsureUserAsync(userManager, "dscadmin@ghars.local", "DSC Admin", RoleNames.DscAdmin, null, DscAdminSeedPassword, logger);
-            await EnsureUserAsync(userManager, "admin1@ghars.local", "Ghars Council Admin 1", RoleNames.DscAdmin, null, DscAdminSeedPassword, logger);
-            await EnsureUserAsync(userManager, "admin2@ghars.local", "Ghars Council Admin 2", RoleNames.DscAdmin, null, DscAdminSeedPassword, logger);
-            await EnsureUserAsync(userManager, "admin3@ghars.local", "Ghars Council Admin 3", RoleNames.DscAdmin, null, DscAdminSeedPassword, logger);
-
-            await SeedOrganizationsAsync(db, logger);
-            await SeedOrgUsersAndLearningProgramsAsync(db, userManager, logger);
-            await SeedLibraryAgendaKpiGalleryAsync(db, logger);
-            await SeedComprehensiveDummyDataAsync(db, userManager, logger);
+            // Last, so that in Development the demo administrators already count as "an administrator
+            // exists". Running it earlier would log a critical "nobody can sign in" that the demo seed
+            // then makes untrue a second later. In Production nothing precedes it, so the behaviour is
+            // identical either way.
+            await BootstrapAdministratorAsync(userManager, configuration, logger);
         }
         catch (Exception ex)
         {
@@ -77,11 +68,244 @@ public static class DbSeeder
         }
     }
 
-    private static async Task<ApplicationUser?> EnsureUserAsync(UserManager<ApplicationUser> userManager, string email, string fullName, string role, int? primaryOrganizationId, string seedPassword, ILogger logger)
+    /// <summary>
+    /// Data the application cannot function without, in any environment. Idempotent, and carries no
+    /// credentials of any kind.
+    /// </summary>
+    private static async Task SeedRequiredDataAsync(AppDbContext db, RoleManager<IdentityRole> roleManager, ILogger logger)
+    {
+        await db.Database.MigrateAsync();
+
+        var roles = new[]
+        {
+            RoleNames.SuperAdmin,
+            RoleNames.DscAdmin,
+            RoleNames.ClubAdmin,
+            RoleNames.AcademyAdmin,
+            RoleNames.PartnerAdmin,
+            RoleNames.Speaker,
+            RoleNames.Viewer
+        };
+
+        foreach (var r in roles)
+        {
+            if (!await roleManager.RoleExistsAsync(r))
+                await roleManager.CreateAsync(new IdentityRole(r));
+        }
+
+        // An active season is required reference data, not demo content: KPI, agenda, gallery and
+        // booking submission all need a valid SeasonId, and BookingsController accepts only a season
+        // with IsActive. A season-less database starts cleanly and then rejects every club submission.
+        if (!await db.Seasons.AnyAsync())
+        {
+            var year = DateTime.UtcNow.Year;
+            db.Seasons.Add(new Season
+            {
+                TitleEn = $"Season {year}-{year + 1}",
+                TitleAr = $"الموسم {year + 1}-{year}",
+                StartDate = new DateOnly(year, 8, 1),
+                EndDate = new DateOnly(year + 1, 5, 31),
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+            logger.LogInformation("Seeded the initial active season.");
+        }
+    }
+
+    /// <summary>
+    /// Creates the first administrator of a brand-new installation from configuration only.
+    /// </summary>
+    /// <remarks>
+    /// Deliberate properties, in order of how badly each would hurt if it were missing:
+    /// <list type="bullet">
+    /// <item>Runs only when no Super Admin and no DSC Admin exists, so it can never disturb a live system.</item>
+    /// <item>Has no default and no fallback. Absent configuration creates nothing — never a guessable account.</item>
+    /// <item>Never logs the password, including inside Identity validation failures.</item>
+    /// <item>If the email matches an existing account, grants the role but leaves the password alone,
+    /// so this path cannot be used to take over someone's credentials.</item>
+    /// </list>
+    /// </remarks>
+    private static async Task BootstrapAdministratorAsync(UserManager<ApplicationUser> userManager, IConfiguration configuration, ILogger logger)
+    {
+        var existingSuperAdmins = await userManager.GetUsersInRoleAsync(RoleNames.SuperAdmin);
+        var existingDscAdmins = await userManager.GetUsersInRoleAsync(RoleNames.DscAdmin);
+        if (existingSuperAdmins.Count > 0 || existingDscAdmins.Count > 0)
+        {
+            logger.LogDebug("Bootstrap administrator skipped: an administrator already exists.");
+            return;
+        }
+
+        var email = ReadSetting(configuration, BootstrapEmailKey, BootstrapEmailEnv);
+        var password = ReadSetting(configuration, BootstrapPasswordKey, BootstrapPasswordEnv);
+
+        if (email is null && password is null)
+        {
+            logger.LogCritical(
+                "This installation has no administrator and no bootstrap configuration, so nobody can sign in. " +
+                "Set {EmailEnv} and {PasswordEnv} (or the configuration keys {EmailKey} and {PasswordKey}) and restart. " +
+                "No default account has been created.",
+                BootstrapEmailEnv, BootstrapPasswordEnv, BootstrapEmailKey, BootstrapPasswordKey);
+            return;
+        }
+
+        if (email is null || password is null)
+        {
+            logger.LogError(
+                "Bootstrap administrator configuration is incomplete: {Missing} is not set. Both the email and the " +
+                "password are required. No account has been created.",
+                email is null ? BootstrapEmailKey : BootstrapPasswordKey);
+            return;
+        }
+
+        var existing = await userManager.Users.FirstOrDefaultAsync(x => x.Email == email);
+        if (existing is not null)
+        {
+            // The account exists but holds no administrative role. Grant the role; do not touch the
+            // password — bootstrap must never be a way to seize an existing account.
+            if (!await userManager.IsInRoleAsync(existing, RoleNames.SuperAdmin))
+                await userManager.AddToRoleAsync(existing, RoleNames.SuperAdmin);
+
+            logger.LogWarning(
+                "Bootstrap: {Email} already existed, so it was granted {Role} and its password was left unchanged.",
+                email, RoleNames.SuperAdmin);
+            return;
+        }
+
+        var admin = new ApplicationUser
+        {
+            UserName = email,
+            Email = email,
+            FullName = ReadSetting(configuration, BootstrapFullNameKey, BootstrapFullNameEnv) ?? "Ghars Administrator",
+            PreferredLanguage = "en",
+            EmailConfirmed = true,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        var created = await userManager.CreateAsync(admin, password);
+        if (!created.Succeeded)
+        {
+            // Descriptions only. Identity never echoes the password, but keep the shape explicit.
+            logger.LogError(
+                "Bootstrap administrator {Email} could not be created: {Errors}. No account exists; fix the " +
+                "configuration and restart.",
+                email, string.Join(", ", created.Errors.Select(e => e.Description)));
+            return;
+        }
+
+        await userManager.AddToRoleAsync(admin, RoleNames.SuperAdmin);
+        logger.LogWarning(
+            "Bootstrap administrator {Email} created with role {Role}. Sign in, change the password, then remove " +
+            "{PasswordEnv} from the deployment environment.",
+            email, RoleNames.SuperAdmin, BootstrapPasswordEnv);
+    }
+
+    /// <summary>
+    /// Reads a setting from configuration, falling back to a flat environment variable name.
+    /// Returns null for absent or whitespace values so callers can treat "not configured" as one case.
+    /// </summary>
+    private static string? ReadSetting(IConfiguration configuration, string configurationKey, string environmentVariable)
+    {
+        var value = configuration[configurationKey];
+        if (string.IsNullOrWhiteSpace(value)) value = configuration[environmentVariable];
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    /// <summary>
+    /// Development-only demo content. Every block is guarded by an existence check, so repeated runs
+    /// add nothing and change nothing.
+    /// </summary>
+    private static async Task SeedDevelopmentDemoDataAsync(AppDbContext db, UserManager<ApplicationUser> userManager, IConfiguration configuration, ILogger logger)
+    {
+        var demoPassword = ReadSetting(configuration, DemoPasswordKey, DemoPasswordEnv);
+        if (demoPassword is null)
+        {
+            // Warn once here rather than once per account. Existing demo users still resolve normally,
+            // so an established development database is unaffected by this.
+            logger.LogWarning(
+                "No demo password configured, so missing demo accounts will not be created. To enable them run: " +
+                "dotnet user-secrets set \"{Key}\" \"<a password meeting the Identity policy>\"",
+                DemoPasswordKey);
+        }
+
+        await EnsureUserAsync(userManager, "superadmin@ghars.local", "Super Admin", RoleNames.SuperAdmin, null, demoPassword, logger);
+        await EnsureUserAsync(userManager, "dscadmin@ghars.local", "DSC Admin", RoleNames.DscAdmin, null, demoPassword, logger);
+        await EnsureUserAsync(userManager, "admin1@ghars.local", "Ghars Council Admin 1", RoleNames.DscAdmin, null, demoPassword, logger);
+        await EnsureUserAsync(userManager, "admin2@ghars.local", "Ghars Council Admin 2", RoleNames.DscAdmin, null, demoPassword, logger);
+        await EnsureUserAsync(userManager, "admin3@ghars.local", "Ghars Council Admin 3", RoleNames.DscAdmin, null, demoPassword, logger);
+
+        await SeedOrganizationsAsync(db, logger);
+        await SeedOrgUsersAndLearningProgramsAsync(db, userManager, demoPassword, logger);
+        await SeedLibraryAgendaKpiGalleryAsync(db, logger);
+        await SeedComprehensiveDummyDataAsync(db, userManager, logger);
+    }
+
+    /// <summary>
+    /// Explicit developer recovery for a forgotten demo password. Invoked as
+    /// <c>dotnet run -- reset-demo-passwords</c>; never part of a normal start.
+    /// </summary>
+    /// <returns>A process exit code.</returns>
+    public static async Task<int> ResetDevelopmentDemoPasswordsAsync(IServiceProvider services, IHostEnvironment environment)
+    {
+        var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("DbSeeder");
+
+        if (!environment.IsDevelopment())
+        {
+            logger.LogError(
+                "reset-demo-passwords refused: the environment is {Environment}, not Development.",
+                environment.EnvironmentName);
+            return 1;
+        }
+
+        var configuration = services.GetRequiredService<IConfiguration>();
+        var demoPassword = ReadSetting(configuration, DemoPasswordKey, DemoPasswordEnv);
+        if (demoPassword is null)
+        {
+            logger.LogError(
+                "reset-demo-passwords refused: {Key} is not configured. Set it first with " +
+                "dotnet user-secrets set \"{Key}\" \"<password>\".",
+                DemoPasswordKey, DemoPasswordKey);
+            return 1;
+        }
+
+        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+
+        // Scoped to the demo domain so this can never reach a real account, whatever the database holds.
+        var demoUsers = await userManager.Users
+            .Where(x => x.Email != null && x.Email.EndsWith(DemoEmailDomain))
+            .ToListAsync();
+
+        var reset = 0;
+        foreach (var user in demoUsers)
+        {
+            var token = await userManager.GeneratePasswordResetTokenAsync(user);
+            var result = await userManager.ResetPasswordAsync(user, token, demoPassword);
+            if (result.Succeeded) reset++;
+            else logger.LogWarning("Could not reset {Email}: {Errors}", user.Email, string.Join(", ", result.Errors.Select(e => e.Description)));
+        }
+
+        logger.LogInformation("Reset {Count} of {Total} demo account passwords.", reset, demoUsers.Count);
+        return reset == demoUsers.Count ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Finds or creates a demo account. Creation needs <paramref name="demoPassword"/>; when it is
+    /// null the account is skipped rather than created with a guessable one.
+    /// </summary>
+    /// <remarks>
+    /// An existing account's password is never modified here. Callers already tolerate a null return.
+    /// </remarks>
+    private static async Task<ApplicationUser?> EnsureUserAsync(UserManager<ApplicationUser> userManager, string email, string fullName, string role, int? primaryOrganizationId, string? demoPassword, ILogger logger)
     {
         var user = await userManager.Users.FirstOrDefaultAsync(x => x.Email == email);
         if (user is null)
         {
+            if (demoPassword is null)
+            {
+                logger.LogDebug("Demo account {Email} not created: no demo password configured.", email);
+                return null;
+            }
+
             user = new ApplicationUser
             {
                 UserName = email,
@@ -93,11 +317,11 @@ public static class DbSeeder
                 CreatedAtUtc = DateTime.UtcNow
             };
 
-            var create = await userManager.CreateAsync(user, seedPassword);
+            var create = await userManager.CreateAsync(user, demoPassword);
             if (!create.Succeeded)
             {
-                logger.LogWarning("Failed to create seed user {Email}: {Errors}", email, string.Join(", ", create.Errors.Select(e => e.Description)));
-                return user;
+                logger.LogWarning("Failed to create demo user {Email}: {Errors}", email, string.Join(", ", create.Errors.Select(e => e.Description)));
+                return null;
             }
         }
 
@@ -107,25 +331,10 @@ public static class DbSeeder
             await userManager.UpdateAsync(user);
         }
 
-        await EnsureSeedPasswordAsync(userManager, user, seedPassword, logger);
-
         if (!await userManager.IsInRoleAsync(user, role))
             await userManager.AddToRoleAsync(user, role);
 
         return user;
-    }
-
-
-    private static async Task EnsureSeedPasswordAsync(UserManager<ApplicationUser> userManager, ApplicationUser user, string seedPassword, ILogger logger)
-    {
-        // Keeps already-created local seed users loginable after new seed credentials are introduced.
-        // This only affects users seeded by this file because EnsureUserAsync is only called for known seed users.
-        var token = await userManager.GeneratePasswordResetTokenAsync(user);
-        var reset = await userManager.ResetPasswordAsync(user, token, seedPassword);
-        if (!reset.Succeeded)
-        {
-            logger.LogWarning("Failed to reset seed password for {Email}: {Errors}", user.Email, string.Join(", ", reset.Errors.Select(e => e.Description)));
-        }
     }
 
     private static async Task SeedOrganizationsAsync(AppDbContext db, ILogger logger)
@@ -249,7 +458,7 @@ public static class DbSeeder
         logger.LogInformation("Seed organizations and partner profiles completed.");
     }
 
-    private static async Task SeedOrgUsersAndLearningProgramsAsync(AppDbContext db, UserManager<ApplicationUser> userManager, ILogger logger)
+    private static async Task SeedOrgUsersAndLearningProgramsAsync(AppDbContext db, UserManager<ApplicationUser> userManager, string? demoPassword, ILogger logger)
     {
         var season = await db.Seasons.OrderByDescending(x => x.IsActive).ThenByDescending(x => x.Id).FirstAsync();
 
@@ -264,7 +473,7 @@ public static class DbSeeder
             if (org is null) continue;
 
             var email = $"partner-{MakeSlug(name)}@ghars.local";
-            var user = await EnsureUserAsync(userManager, email, $"{name} Partner Admin", RoleNames.PartnerAdmin, org.Id, PartnerSeedPassword, logger);
+            var user = await EnsureUserAsync(userManager, email, $"{name} Partner Admin", RoleNames.PartnerAdmin, org.Id, demoPassword, logger);
             if (user is null) continue;
             await EnsureOrgLinkAsync(db, org.Id, user.Id, OrganizationType.OtherPartner);
             await SeedProgramsForPartnerAsync(db, season.Id, org, user.Id);
@@ -278,14 +487,14 @@ public static class DbSeeder
         foreach (var club in clubs)
         {
             var email = $"club-{MakeSlug(club.NameEn)}@ghars.local";
-            var user = await EnsureUserAsync(userManager, email, $"{club.NameEn} Club Admin", RoleNames.ClubAdmin, club.Id, ClubSeedPassword, logger);
+            var user = await EnsureUserAsync(userManager, email, $"{club.NameEn} Club Admin", RoleNames.ClubAdmin, club.Id, demoPassword, logger);
             if (user is not null) await EnsureOrgLinkAsync(db, club.Id, user.Id, OrganizationType.Club);
         }
 
         var shabab = clubs.FirstOrDefault(x => x.NameEn == "Shabab Al Ahli Club");
         if (shabab is not null)
         {
-            var user = await EnsureUserAsync(userManager, "club1@ghars.local", "Shabab Al Ahli Club Admin", RoleNames.ClubAdmin, shabab.Id, ClubSeedPassword, logger);
+            var user = await EnsureUserAsync(userManager, "club1@ghars.local", "Shabab Al Ahli Club Admin", RoleNames.ClubAdmin, shabab.Id, demoPassword, logger);
             if (user is not null) await EnsureOrgLinkAsync(db, shabab.Id, user.Id, OrganizationType.Club);
         }
 

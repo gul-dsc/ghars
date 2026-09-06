@@ -240,7 +240,59 @@ them outside the deployment directory and point the application at that location
 `protected-uploads/` on a mounted volume or file share outside the application directory, so it cannot be
 destroyed by a redeploy.
 
-### 6.2 Deployment checklist
+### 6.2 First deployment
+
+The sequence for a brand-new installation, where the database does not yet exist and nobody can sign
+in. A step-by-step operator version with checkboxes is in
+[`GHARS_PRODUCTION_DEPLOYMENT_CHECKLIST.md`](GHARS_PRODUCTION_DEPLOYMENT_CHECKLIST.md).
+
+1. **Create the database** (empty) on the target SQL Server instance, or restore it if you are
+   migrating an existing one.
+2. **Apply EF migrations** — `dotnet ef database update`, or a generated idempotent script. See §6.3,
+   including the one-time history repair for databases created before 2026-09-06.
+3. **Configure the production connection string** through the hosting environment's protected
+   configuration (`ConnectionStrings__DefaultConnection`, IIS configuration, container secret, or an
+   `appsettings.Production.json` kept outside Git). Never commit it.
+4. **Configure protected-upload storage** — create `protected-uploads/`, apply the permissions in
+   §2.3, and confirm it is outside any directory a redeploy will mirror-delete (§6.1).
+5. **Set the bootstrap administrator values**, but only if the database is new and has no
+   administrator:
+
+   ```
+   GHARS_BOOTSTRAP_ADMIN_EMAIL=<the real administrator's address>
+   GHARS_BOOTSTRAP_ADMIN_PASSWORD=<a strong one-time password>
+   ```
+
+   If the database already has a Super Admin or DSC Admin, skip this — the values would be ignored
+   anyway.
+6. **Set `ASPNETCORE_ENVIRONMENT=Production`** and start the application.
+7. **Verify the initial administrator**: sign in with the bootstrap address and immediately change the
+   password from the account page.
+8. **Remove `GHARS_BOOTSTRAP_ADMIN_PASSWORD` from the deployment environment** and restart. Leaving it
+   set does no harm — the bootstrap path is inert once an administrator exists — but a one-time
+   password should not persist in the environment, a process listing, or a deployment pipeline's
+   stored variables. It must never be committed to source control.
+9. **Verify no demo data was created.** Production seeding creates the seven roles, one active season
+   and nothing else:
+
+   ```sql
+   SELECT COUNT(*) FROM AspNetUsers WHERE Email LIKE '%@ghars.local';  -- expect 0
+   SELECT COUNT(*) FROM Organizations;                                 -- expect 0 on a new install
+   SELECT COUNT(*) FROM AspNetRoles;                                   -- expect 7
+   SELECT COUNT(*) FROM Seasons WHERE IsActive = 1;                    -- expect 1
+   ```
+
+   Any `@ghars.local` account in production means the application was started with
+   `ASPNETCORE_ENVIRONMENT=Development`. Those accounts and their passwords are public — see
+   `SEED_CREDENTIALS.md`. Delete them and rotate anything they could have reached.
+
+The startup log states which path ran. On a correct production start you will see
+`Demo/sample seeding skipped: environment is Production, not Development.`
+
+> Application startup never resets an existing user's password, in any environment. An administrator
+> who changes their password keeps it across restarts.
+
+### 6.2.1 Deployment checklist (existing installation)
 
 1. Back up the database and both upload roots.
 2. Publish/copy the application, preserving the upload roots.

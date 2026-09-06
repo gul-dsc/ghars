@@ -21,7 +21,6 @@
     var season = ViewBag.Season as Season;
     var upcomingActivities = ViewBag.UpcomingActivities as List<Activity> ?? new();
     var stories = ViewBag.Stories as List<SuccessStory> ?? new();
-    var featuredPartners = ViewBag.FeaturedPartners as List<PartnerProfile> ?? new();
     var featuredStory = stories.FirstOrDefault();
     var supportingStories = stories.Skip(1).Take(2).ToList();
 }
@@ -152,7 +151,7 @@
     </div>
 
     <div class="col-lg-5">
-        <div class="card mb-4">
+        <div class="card">
             <div class="card-body ghars-story-section">
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <h3 class="section-title h4 mb-0">
@@ -209,44 +208,6 @@
                             }
                         </div>
                     }
-                }
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-                    <h3 class="section-title h4 mb-0">
-                        <i class="bi bi-people me-2"></i> @T("Implementing Entities", "الجهات المنفذة")
-                    </h3>
-                    <a class="btn btn-sm btn-outline-success" asp-controller="Home" asp-action="Booking">
-                        @T("Book an activity", "احجز نشاطاً")
-                    </a>
-                </div>
-                @if (featuredPartners.Count == 0)
-                {
-                    <p class="text-muted mb-0">@T("Featured implementing entities will appear here.", "ستظهر هنا الجهات المنفذة المميزة.")</p>
-                }
-                else
-                {
-                    @* Logos only, matching the Booking page. *@
-                    <div class="row row-cols-2 row-cols-sm-3 g-3">
-                        @foreach (var partner in featuredPartners.Take(6))
-                        {
-                            var partnerOrg = partner.Organization;
-                            if (partnerOrg is null) { continue; }
-                            var partnerLogo = string.IsNullOrWhiteSpace(partnerOrg.LogoPath)
-                                ? Url.Content("~/img/partners/default-partner.svg")
-                                : Url.Content(partnerOrg.LogoPath);
-                            <div class="col">
-                                <a class="entity-logo-frame d-block mb-0" style="height:72px;"
-                                   asp-controller="Home" asp-action="Booking"
-                                   title="@Loc(partnerOrg.NameEn, partnerOrg.NameAr)">
-                                    <img src="@partnerLogo" alt="@Loc(partnerOrg.NameEn, partnerOrg.NameAr)" loading="lazy" />
-                                </a>
-                            </div>
-                        }
-                    </div>
                 }
             </div>
         </div>

@@ -50,13 +50,6 @@ public class HomeController : Controller
             .Take(6)
             .ToListAsync();
 
-        var featuredPartners = await _db.PartnerProfiles
-            .Include(x => x.Organization)
-            .Where(x => x.IsFeatured && x.Organization != null && x.Organization.Status == ApprovalStatus.Approved)
-            .OrderBy(x => x.FeatureSortOrder)
-            .Take(8)
-            .ToListAsync();
-
         var stories = await _db.SuccessStories
             .Where(x => x.IsPublished)
             .OrderByDescending(x => x.PublishedAtUtc)
@@ -66,7 +59,6 @@ public class HomeController : Controller
         ViewBag.News = news;
         ViewBag.Season = season;
         ViewBag.UpcomingActivities = upcomingActivities;
-        ViewBag.FeaturedPartners = featuredPartners;
         ViewBag.Stories = stories;
 
         return View();

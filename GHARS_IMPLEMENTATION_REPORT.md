@@ -1314,3 +1314,86 @@ tile shows the club as read-only text with **no dropdown**.
 The implementing entity may be chosen on the public page, but it is re-validated server-side on POST
 against `Status == Approved` and the permitted organization types before it is persisted. A
 `partnerId` in the query string is a preselection, never an authorization.
+
+---
+
+## 26. Contact Migration Verification (2026-09-06)
+
+A verification pass to bring the development database up to the committed code and confirm the
+result at runtime. One defect was found and fixed; nothing else changed.
+
+### 26.1 Migration state
+
+`20260906162314_AddContactMessages` was **already applied** when this pass began. `DbSeeder`
+calls `Database.MigrateAsync()` during startup, so the running application had applied it itself.
+`dotnet ef database update` (a full build, not `--no-build`) confirmed *"No migrations were applied.
+The database is already up to date."*, and `has-pending-model-changes` reported no changes.
+
+`__EFMigrationsHistory` holds 11 rows for 10 migration files. The extra row is
+`20260505103249_new one `, whose source file is absent — the known artifact of the migration-chain
+repair recorded in §22.2, not a fault.
+
+### 26.2 Schema verified against the migration
+
+Verified from `INFORMATION_SCHEMA` and `sys.indexes` rather than trusting migration history:
+
+| Check | Result |
+| --- | --- |
+| Columns | 19, matching the migration's declared types, lengths and nullability exactly |
+| Identity | `Id` only |
+| Primary key | `PK_ContactMessages`, clustered on `Id` |
+| Index | `IX_ContactMessages_Status_CreatedAtUtc`, non-clustered, key order `(Status, CreatedAtUtc)` |
+| Foreign keys | none, matching the migration — `SubmittedByUserId` is a free string, not a FK |
+
+### 26.3 Runtime results
+
+Application started from current `main` in Development. No seeder, migration or missing-column
+errors; the only warning is the expected hardened-seeder notice that no demo password is configured.
+
+| Area | English | Arabic |
+| --- | --- | --- |
+| Nav order | Home · About Us · Vision & Objectives · Booking · **Contact last** | same order, `dir="rtl"`, Contact last |
+| Contact page | renders, all labels and topics localized | renders RTL, all labels and topics in Arabic |
+| Valid submission | persisted + success confirmation | persisted + success confirmation |
+| Required/format validation | rejected with field messages | rejected with field messages |
+
+Stored rows were inspected directly: anonymous submissions correctly store `NULL` for
+`SubmittedByUserId`/`CreatedByUserId`, `Status = New (1)`, the submitting culture and client IP,
+and genuine UTC timestamps. Arabic content stored without corruption.
+
+**Security.** Antiforgery-less POST → `400`. Sixth POST in the window → `429`. A filled honeypot
+returned the normal thank-you and persisted **nothing**. The stored
+`<script>alert('xss')</script>` payload renders as text in the admin detail view — no raw markup in
+the DOM and no dialog fired. Length limits match the model.
+
+### 26.4 Defect found and fixed
+
+Every contact validation message rendered in **English on the Arabic interface** — the only place in
+the codebase with hardcoded English `ErrorMessage` strings. Fixed in commit `42fd080` with
+`Models/Validation/BilingualValidationAttributes.cs`; see that commit for why the attributes derive
+from `ValidationAttribute` (a framework-derived attribute has its message baked once, in whichever
+language served the first request) and implement `IClientModelValidator` themselves. Verified in both
+language orderings against a fresh application.
+
+`MaxLength` messages still use the framework English default. They are unreachable through the UI,
+which caps input with the `maxlength` attribute, and surface only on a hand-crafted post.
+
+### 26.5 Regression checks
+
+| Role | Verified |
+| --- | --- |
+| Anonymous | logo 96/76/64 px at desktop/tablet/mobile, aspect preserved, no overlap or horizontal overflow; `Booking` present, no `Partners`, no `My Organization`; no Course tab; 29 entity logos, `object-fit: contain`, none distorted, all actions visible without hover; login `returnUrl` honoured |
+| Club Admin | club rendered read-only — **no `OrganizationId` control exists in the DOM**; entity preselected from the tile; Training/Workshop grouped first |
+| Partner Admin | `/partner` dashboard intact; booking tiles show a non-actionable *Clubs only*; `/bookings/create` → `AccessDenied` |
+| DSC Admin | `/Admin/Organizations`, `/Admin/Bookings`, `/Admin/ContactMessages` all reachable; organization management intact |
+
+**Ownership proven, not assumed.** An authenticated Club Admin of organization 30 posted
+`OrganizationId=31` (a different club). The persisted booking recorded organization **30** — the
+server discarded the posted value. Posting a club id as the implementing entity was rejected with
+*"The selected implementing entity is not valid."* and persisted nothing.
+
+### 26.6 Test data removed
+
+All rows created by this pass were deleted: 4 contact messages, 1 booking request, 1 booking audit
+trail, 5 notifications and 21 notification deliveries. The 15 pre-existing bookings and 14
+pre-existing notifications were left untouched, and no orphaned deliveries remain.

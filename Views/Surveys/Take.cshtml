@@ -1,0 +1,96 @@
+@model GharsPlatform.Models.Core.Survey
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var title = ar ? Model.TitleAr : Model.TitleEn;
+    var activityTitle = ar ? (Model.Activity?.TitleAr ?? Model.Activity?.TitleEn) : (Model.Activity?.TitleEn ?? Model.Activity?.TitleAr);
+    ViewData["Title"] = title;
+}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card shadow-sm border-0 rounded-4">
+            <div class="card-body p-4 p-md-5">
+                <span class="ghars-story-kicker">@T("Ghars Survey", "استبيان غرس")</span>
+                <h3 class="mb-1 mt-3">@title</h3>
+                <div class="text-muted mb-4">@activityTitle</div>
+
+                <form method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="vstack gap-4">
+                        @foreach (var q in Model.Questions.OrderBy(x => x.SortOrder))
+                        {
+                            <div class="p-3 p-md-4 bg-body-tertiary rounded-4">
+                                <div class="fw-semibold mb-2">
+                                    @(ar ? q.QuestionAr : q.QuestionEn)
+                                    @if (q.IsRequired) { <span class="text-danger">*</span> }
+                                </div>
+
+                                @if (q.QuestionType == SurveyQuestionType.Stars)
+                                {
+                                    <div class="d-flex gap-3 flex-wrap">
+                                        @for (int i = 1; i <= 5; i++)
+                                        {
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="q_@q.Id" value="@i" id="q_@(q.Id)_@i" @(q.IsRequired ? "required" : "")>
+                                                <label class="form-check-label" for="q_@(q.Id)_@i">@i</label>
+                                            </div>
+                                        }
+                                    </div>
+                                    <div class="small text-muted mt-1">@T("1 = lowest, 5 = highest", "١ = الأدنى، ٥ = الأعلى")</div>
+                                }
+                                else if (q.QuestionType == SurveyQuestionType.YesNo)
+                                {
+                                    <div class="d-flex gap-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="q_@q.Id" value="true" id="q_@(q.Id)_yes" @(q.IsRequired ? "required" : "")>
+                                            <label class="form-check-label" for="q_@(q.Id)_yes">@T("Yes", "نعم")</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="q_@q.Id" value="false" id="q_@(q.Id)_no">
+                                            <label class="form-check-label" for="q_@(q.Id)_no">@T("No", "لا")</label>
+                                        </div>
+                                    </div>
+                                }
+                                else if (q.QuestionType == SurveyQuestionType.Mcq)
+                                {
+                                    @if (q.Options.Any())
+                                    {
+                                        <div class="vstack gap-2">
+                                            @foreach (var option in q.Options.OrderBy(o => o.SortOrder))
+                                            {
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="q_@q.Id" value="@option.Id" id="q_@(q.Id)_o@(option.Id)" @(q.IsRequired ? "required" : "")>
+                                                    <label class="form-check-label" for="q_@(q.Id)_o@(option.Id)">@(ar ? option.OptionAr : option.OptionEn)</label>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="text-muted small">@T("No options are configured for this question.", "لا توجد خيارات معرفة لهذا السؤال.")</div>
+                                    }
+                                }
+                                else if (q.QuestionType == SurveyQuestionType.Text)
+                                {
+                                    <textarea class="form-control" name="q_@q.Id" rows="3" @(q.IsRequired ? "required" : "")></textarea>
+                                }
+                                else
+                                {
+                                    <input class="form-control" name="q_@q.Id" @(q.IsRequired ? "required" : "") />
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-4 flex-wrap gap-2">
+                        <a class="btn btn-outline-secondary" href="/surveys">@T("Back to surveys", "العودة للاستبيانات")</a>
+                        <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>@T("Submit", "إرسال")</button>
+                    </div>
+
+                    <div class="text-danger small mt-3" asp-validation-summary="All"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

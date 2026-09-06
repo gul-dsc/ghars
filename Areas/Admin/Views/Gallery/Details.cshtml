@@ -1,0 +1,142 @@
+@model GharsPlatform.Models.Core.MediaAlbum
+@using GharsPlatform.Models.Core
+@using GharsPlatform.Models.Identity
+@{
+    ViewData["Title"] = Model.TitleEn;
+    ViewData["PageTitle"] = "Manage Gallery Album";
+}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="h4 mb-0">Manage Album Items</h1>
+        <div class="text-muted">@Model.TitleEn</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-outline-secondary" asp-area="Admin" asp-controller="Gallery" asp-action="Index">Back to Albums</a>
+        <a class="btn btn-outline-info" asp-area="" asp-controller="Gallery" asp-action="Details" asp-route-id="@Model.Id" target="_blank"><i class="bi bi-eye"></i> Public Preview</a>
+        @if (User.IsInRole(RoleNames.SuperAdmin))
+        {
+            <a class="btn btn-outline-primary" asp-area="Admin" asp-controller="Gallery" asp-action="Edit" asp-route-id="@Model.Id"><i class="bi bi-pencil-square"></i> Edit Album Info</a>
+            <a class="btn btn-primary" asp-area="Admin" asp-controller="Gallery" asp-action="AddItem" asp-route-albumId="@Model.Id"><i class="bi bi-plus-lg"></i> Add Photo / Video / PDF</a>
+        }
+    </div>
+</div>
+
+<div class="card p-3 rounded-4 border-0 shadow-sm mb-3">
+    <div class="row g-3 align-items-center">
+        @if(!string.IsNullOrWhiteSpace(Model.CoverImagePath))
+        {
+            <div class="col-md-2"><img src="@Model.CoverImagePath" class="img-fluid rounded-4" style="max-height:130px;object-fit:cover" /></div>
+        }
+        <div class="col">
+            <h5 class="mb-1">@Model.TitleEn</h5>
+            <div class="text-muted mb-2">@Model.TitleAr</div>
+            <p class="mb-1">@Model.DescriptionEn</p>
+            <div class="text-muted small">@Model.DescriptionAr</div>
+            <div class="mt-2">
+                <span class="badge @(Model.IsPublic ? "text-bg-success" : "text-bg-secondary")">@(Model.IsPublic ? "Published" : "Hidden")</span>
+                <span class="text-muted ms-2">@Model.AlbumDate.ToString("yyyy-MM-dd")</span>
+                <span class="text-muted ms-2">Linked: @(Model.Activity?.TitleEn ?? Model.Organization?.NameEn ?? "General album")</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card rounded-4 border-0 shadow-sm overflow-hidden mb-4">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <div>
+            <strong>Album Media Items</strong>
+            <div class="text-muted small">Edit, replace, reorder, or delete photos, videos, and PDFs inside this album.</div>
+        </div>
+        @if (User.IsInRole(RoleNames.SuperAdmin))
+        {
+            <a class="btn btn-success btn-sm" asp-area="Admin" asp-controller="Gallery" asp-action="AddItem" asp-route-albumId="@Model.Id"><i class="bi bi-plus-lg"></i> Add Item</a>
+        }
+    </div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th style="width:90px">Preview</th>
+                    <th>Caption</th>
+                    <th>Type</th>
+                    <th>Source</th>
+                    <th>Sort</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach(var item in Model.Items.OrderBy(x=>x.SortOrder))
+            {
+                var source = item.FilePath ?? item.VideoUrl ?? "";
+                <tr>
+                    <td>
+                        @if(item.MediaType == MediaType.Image && !string.IsNullOrWhiteSpace(item.FilePath))
+                        {
+                            <img src="@item.FilePath" class="rounded" style="width:70px;height:52px;object-fit:cover" />
+                        }
+                        else if(item.MediaType == MediaType.Video)
+                        {
+                            <div class="rounded bg-dark text-white d-flex align-items-center justify-content-center" style="width:70px;height:52px"><i class="bi bi-play-circle-fill fs-4"></i></div>
+                        }
+                        else
+                        {
+                            <div class="rounded bg-light d-flex align-items-center justify-content-center" style="width:70px;height:52px"><i class="bi bi-file-earmark-pdf fs-4"></i></div>
+                        }
+                    </td>
+                    <td><strong>@(item.CaptionEn ?? "Untitled media")</strong><div class="text-muted small">@item.CaptionAr</div></td>
+                    <td><span class="badge text-bg-secondary">@item.MediaType</span></td>
+                    <td class="small text-truncate" style="max-width:320px">@source</td>
+                    <td>@item.SortOrder</td>
+                    <td class="text-end">
+                        @if (User.IsInRole(RoleNames.SuperAdmin))
+                        {
+                            <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Gallery" asp-action="EditItem" asp-route-id="@item.Id"><i class="bi bi-pencil-square"></i> Edit Item</a>
+                            <form method="post" asp-area="Admin" asp-controller="Gallery" asp-action="DeleteItem" asp-route-id="@item.Id" onsubmit="return confirm('Delete this media item?');" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Delete</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+            @if(!Model.Items.Any())
+            {
+                <tr><td colspan="6" class="text-center text-muted py-4">No media yet. Use Add Item to upload a photo, video, or PDF.</td></tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row g-3">
+@foreach(var item in Model.Items.OrderBy(x=>x.SortOrder))
+{
+    <div class="col-md-4">
+        <div class="card h-100 rounded-4 border-0 shadow-sm overflow-hidden">
+            <div class="bg-light d-flex align-items-center justify-content-center" style="height:190px;">
+            @if(item.MediaType == MediaType.Image && !string.IsNullOrWhiteSpace(item.FilePath))
+            { <img src="@item.FilePath" style="width:100%;height:190px;object-fit:cover" /> }
+            else if(item.MediaType == MediaType.Video)
+            { <i class="bi bi-play-circle-fill" style="font-size:4rem"></i> }
+            else
+            { <i class="bi bi-file-earmark-pdf" style="font-size:4rem"></i> }
+            </div>
+            <div class="card-body">
+                <span class="badge text-bg-secondary">@item.MediaType</span>
+                <h6 class="mt-2">@(item.CaptionEn ?? item.CaptionAr ?? "Media item")</h6>
+                <div class="text-muted small">Sort: @item.SortOrder</div>
+                @if (User.IsInRole(RoleNames.SuperAdmin))
+                {
+                    <div class="d-flex gap-2 mt-2">
+                        <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Gallery" asp-action="EditItem" asp-route-id="@item.Id">Edit Item</a>
+                        <form method="post" asp-area="Admin" asp-controller="Gallery" asp-action="DeleteItem" asp-route-id="@item.Id" onsubmit="return confirm('Delete this media item?');" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <button class="btn btn-sm btn-outline-danger">Delete</button>
+                        </form>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+</div>

@@ -1,0 +1,68 @@
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("About the Ghars Program", "حول برنامج غرس");
+}
+@* Approved wording from the "About the Ghars Program" business document (AR/EN). *@
+<div class="card mb-4"><div class="card-body p-4 p-md-5">
+    <h1 class="section-title h3 mb-3">@T("About the “Ghars” Program", "حول برنامج \"غرس\"")</h1>
+
+    @if (ar)
+    {
+        <p class="mb-3">في إطار تنفيذ الخطة الاستراتيجية لمجلس دبي الرياضي (2025–2033)، ومواءمة مع مستهدفات أجندة دبي الاجتماعية (33)، يولي المجلس أولوية استراتيجية لتطوير منظومة متكاملة لرعاية وتطوير المواهب الرياضية، بما يسهم في إعداد جيل رياضي قادر على تحقيق التميز، ومتمسك بالقيم الوطنية والسلوكيات الإيجابية، بما يعكس الهوية الوطنية لدولة الإمارات.</p>
+        <p class="mb-3">وتجسيداً لهذه التوجهات، ينظم مجلس دبي الرياضي بالتعاون مع أندية دبي، برنامج "غرس"، باعتباره إحدى المبادرات الاستراتيجية الهادفة إلى تعزيز المنظومة القيمية في القطاع الرياضي، من خلال ترسيخ السلوكيات الإيجابية، وتنمية المهارات الحياتية، وبناء وعي متكامل لدى اللاعبين والفنيين والإداريين.</p>
+        <p class="mb-0">ويشكل البرنامج ركيزة تنفيذية لدعم مستهدفات الأجندة في مجالات تعزيز الهوية الوطنية، وترسيخ أنماط الحياة الصحية، وتعزيز التلاحم المجتمعي، وتوفير بيئة رياضية آمنة ومحفزة تسهم في حماية وتمكين المواهب الرياضية، بما ينعكس إيجاباً على جودة مخرجات القطاع الرياضي واستدامة تطوره في إمارة دبي.</p>
+    }
+    else
+    {
+        <p class="mb-3">As part of the implementation of the Dubai Sports Council’s Strategic Plan (2025–2033), and in alignment with the objectives of the Dubai Social Agenda 33, the Council places a strategic priority on developing an integrated and sustainable system for nurturing and advancing sports talents. This approach aims to prepare a generation of athletes capable of achieving excellence, while upholding national values and positive behaviors that reflect the identity of the United Arab Emirates.</p>
+        <p class="mb-3">In line with these strategic directions, the Dubai Sports Council, in collaboration with Dubai clubs, annually implements the “Ghars” Program as a flagship initiative designed to strengthen the value framework within the sports sector. The program focuses on instilling positive behaviors, enhancing life skills, and fostering comprehensive awareness among players, coaches, and administrators.</p>
+        <p class="mb-0">The program represents a key operational pillar in advancing the objectives of the agenda, including reinforcing national identity, promoting healthy lifestyles, enhancing social cohesion, and providing a safe and enabling sports environment. It contributes to the protection and empowerment of sports talents, ultimately enhancing the quality of outcomes within the sports sector and supporting its sustainable development in the Emirate of Dubai.</p>
+    }
+</div></div>
+
+<div class="card mb-4"><div class="card-body p-4 p-md-5">
+    <h2 class="section-title h4 mb-3"><i class="bi bi-people me-2"></i>@T("Scope of Application", "نطاق التطبيق")</h2>
+    @if (ar)
+    {
+        <p class="mb-3">يطبق برنامج "غرس" على منتسبي أندية دبي والأكاديميات الخاصة في إمارة دبي، ويشمل اللاعبين والمدربين والإداريين وأولياء الأمور.</p>
+    }
+    else
+    {
+        <p class="mb-3">The “Ghars” Program applies to all affiliates of Dubai clubs and private sports academies across the Emirate of Dubai, including players, coaches, administrators, and parents.</p>
+    }
+    <div class="d-flex flex-wrap gap-2">
+        <span class="badge text-bg-light border p-2"><i class="bi bi-person-badge me-1"></i>@T("Players", "اللاعبون")</span>
+        <span class="badge text-bg-light border p-2"><i class="bi bi-whistle me-1"></i>@T("Coaches", "المدربون")</span>
+        <span class="badge text-bg-light border p-2"><i class="bi bi-briefcase me-1"></i>@T("Administrators", "الإداريون")</span>
+        <span class="badge text-bg-light border p-2"><i class="bi bi-people me-1"></i>@T("Parents", "أولياء الأمور")</span>
+    </div>
+</div></div>
+
+<div class="card"><div class="card-body p-4 p-md-5">
+    <h2 class="section-title h4 mb-4"><i class="bi bi-gear-wide-connected me-2"></i>@T("Implementation Mechanisms", "آليات التنفيذ")</h2>
+    <div class="row g-4">
+        <div class="col-md-4">
+            <h3 class="h6 fw-bold">@T("Educational Lectures", "المحاضرات التثقيفية")</h3>
+            <p class="text-muted mb-0">
+                @T("Delivered through a structured and interactive approach, aimed at enhancing awareness of sports behavior among club members and reinforcing positive values. These sessions are presented through verbal delivery supported by visual aids, contributing to the development of players’ personalities and the creation of a motivating and safe sports environment.",
+                   "تنفذ وفق منهجية منظمة وبأسلوب تفاعلي، بهدف تعزيز وعي منتسبي الأندية بالسلوك الرياضي وترسيخ القيم الإيجابية، من خلال عروض شفوية مدعمة بوسائل بصرية، بما يسهم في بناء شخصية اللاعب وتوفير بيئة رياضية محفزة وآمنة.")
+            </p>
+        </div>
+        <div class="col-md-4">
+            <h3 class="h6 fw-bold">@T("Digital Awareness", "التوعية عن بعد")</h3>
+            <p class="text-muted mb-0">
+                @T("Implemented through the development and dissemination of digital awareness content, including educational videos, interactive platforms, and animated materials tailored for players. This approach aims to promote key sports behavior concepts through simplified, engaging, and accessible formats.",
+                   "من خلال إنتاج وتقديم محتوى توعوي رقمي، مثل الفيديوهات التثقيفية والروابط التفاعلية والأفلام الكرتونية الموجهة للاعبين، بهدف تعزيز مفاهيم السلوك الرياضي بأساليب مبسطة وجاذبة.")
+            </p>
+        </div>
+        <div class="col-md-4">
+            <h3 class="h6 fw-bold">@T("Workshops and Competitions", "ورش العمل والمسابقات")</h3>
+            <p class="text-muted mb-0">
+                @T("Designed to develop life and sports skills among youth players, in addition to organizing inter-club competitions that promote positive competitiveness, and reinforce values of collaboration and interaction among clubs.",
+                   "تهدف إلى تنمية المهارات الحياتية والرياضية لدى اللاعبين، إلى جانب تنظيم مسابقات بين الأندية لتعزيز روح التنافس الإيجابي، وترسيخ قيم التعاون والتفاعل بين مختلف الأندية.")
+            </p>
+        </div>
+    </div>
+</div></div>

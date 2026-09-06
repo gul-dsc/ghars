@@ -1,0 +1,35 @@
+@model GharsPlatform.Controllers.Admin.AttendanceController.CreateSessionVm
+@{
+    ViewData["Title"] = "Create Attendance Session";
+    ViewData["PageTitle"] = "Create Attendance Session";
+    var activities = ViewBag.Activities as List<GharsPlatform.Models.Core.Activity> ?? new();
+}
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-4">
+        <form method="post">
+            @Html.AntiForgeryToken()
+            <div class="row g-3">
+                <div class="col-md-8">
+                    <label class="form-label">Activity</label>
+                    <select class="form-select" name="ActivityId">
+                        @foreach (var a in activities)
+                        {
+                            <option value="@a.Id" selected="@(Model.ActivityId == a.Id)">@a.TitleEn (@a.StartDateTime.ToString("yyyy-MM-dd"))</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Optional Code</label>
+                    <input class="form-control" asp-for="Code" />
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a class="btn btn-outline-secondary" href="/Admin/Attendance/Sessions">Cancel</a>
+                <button class="btn btn-primary" type="submit">Create</button>
+            </div>
+
+            <div class="text-danger small mt-3" asp-validation-summary="All"></div>
+        </form>
+    </div>
+</div>

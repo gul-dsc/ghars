@@ -1,0 +1,178 @@
+@using GharsPlatform.Models.Core
+@{
+    ViewData["Title"] = "Ghars Platform";
+    var season = ViewBag.Season as Season;
+    var upcomingActivities = ViewBag.UpcomingActivities as List<Activity> ?? new();
+    var stories = ViewBag.Stories as List<SuccessStory> ?? new();
+    var featuredPartners = ViewBag.FeaturedPartners as List<PartnerProfile> ?? new();
+    var featuredStory = stories.FirstOrDefault();
+    var supportingStories = stories.Skip(1).Take(2).ToList();
+}
+
+<div class="ghars-hero mb-4">
+    <div class="row g-4 align-items-center">
+        <div class="col-lg-7">
+            <div class="chip mb-3">Ghars Program</div>
+            <h1>Ghars Platform</h1>
+            <p class="mb-4">
+                A government-level platform that promotes values, sports culture, and youth development through lectures,
+                activities, partnerships, and smart digital services including attendance, certificates, analytics, reports, and bilingual digital services.
+            </p>
+
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-light fw-bold" asp-controller="Home" asp-action="About">
+                    <i class="bi bi-info-circle me-1"></i> About Us
+                </a>
+                <a class="btn btn-outline-light fw-bold" asp-controller="Home" asp-action="Vision">
+                    <i class="bi bi-bullseye me-1"></i> Vision & Objectives
+                </a>
+                <a class="btn btn-outline-light fw-bold" asp-controller="Home" asp-action="Partners">
+                    <i class="bi bi-people me-1"></i> Partners
+                </a>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="hero-panel">
+                <h5>Vision</h5>
+                <div class="mb-3">
+                    Empower youth with values-driven sports participation and measurable development outcomes.
+                </div>
+
+                <h5 class="mt-3">Objectives</h5>
+                <ul class="mb-0">
+                    <li>Enable clubs and partners collaboration.</li>
+                    <li>Deliver curated lectures and activities.</li>
+                    <li>Issue verifiable smart certificates.</li>
+                    <li>Measure outcomes through KPI dashboards and season-end reports.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h3 class="section-title h4 mb-0">
+                        <i class="bi bi-calendar-event me-2"></i> Upcoming Lectures &amp; Activities
+                    </h3>
+                    @if (season is not null)
+                    {
+                        <span class="badge bg-teal rounded-pill">@season.TitleEn</span>
+                    }
+                </div>
+
+                @if (upcomingActivities.Count == 0)
+                {
+                    <p class="text-muted mb-0">Published public activities and upcoming lectures will appear here.</p>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var item in upcomingActivities.Take(4))
+                        {
+                            <div class="list-group-item px-0 py-3 border-bottom">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="fw-semibold">@item.TitleEn</div>
+                                        <div class="text-muted small mt-1">
+                                            <i class="bi bi-geo-alt"></i> @item.LocationEn
+                                            <span class="mx-2">•</span>
+                                            <i class="bi bi-clock"></i> @item.StartDateTime.ToString("yyyy-MM-dd HH:mm")
+                                        </div>
+                                    </div>
+                                    <span class="badge text-bg-light border">@item.Type</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card mb-4">
+            <div class="card-body ghars-story-section">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h3 class="section-title h4 mb-0">
+                        <i class="bi bi-trophy me-2"></i> Success Stories
+                    </h3>
+                    <span class="ghars-story-kicker">Impact in action</span>
+                </div>
+                @if (stories.Count == 0)
+                {
+                    <p class="text-muted mb-0">Stories will appear here after publication.</p>
+                }
+                else
+                {
+                    @if (featuredStory is not null)
+                    {
+                        var featuredImage = string.IsNullOrWhiteSpace(featuredStory.HeroImagePath)
+                            ? null
+                            : Url.Content(featuredStory.HeroImagePath);
+                        var featuredExcerpt = featuredStory.StoryEn.Length > 165
+                            ? featuredStory.StoryEn[..165] + "..."
+                            : featuredStory.StoryEn;
+
+                        <article class="ghars-story-feature mb-3">
+                            <div class="ghars-story-media" @(featuredImage is not null ? $"style=\"background-image:url('{featuredImage}')\"" : "")>
+                                <div class="ghars-story-overlay">
+                                    <span class="ghars-story-label">Featured story</span>
+                                    <h4 class="ghars-story-title">@featuredStory.TitleEn</h4>
+                                    <p class="ghars-story-excerpt mb-0">@featuredExcerpt</p>
+                                </div>
+                            </div>
+                        </article>
+                    }
+
+                    @if (supportingStories.Count > 0)
+                    {
+                        <div class="ghars-story-list">
+                            @foreach (var story in supportingStories)
+                            {
+                                var storyExcerpt = story.StoryEn.Length > 95
+                                    ? story.StoryEn[..95] + "..."
+                                    : story.StoryEn;
+
+                                <article class="ghars-story-mini">
+                                    <div class="ghars-story-mini-icon">
+                                        <i class="bi bi-stars"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="ghars-story-mini-title">@story.TitleEn</h5>
+                                        <p class="ghars-story-mini-excerpt mb-0">@storyExcerpt</p>
+                                    </div>
+                                </article>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h3 class="section-title h4 mb-3">
+                    <i class="bi bi-people me-2"></i> Featured Partners
+                </h3>
+                @if (featuredPartners.Count == 0)
+                {
+                    <p class="text-muted mb-0">Featured partner entities will appear here.</p>
+                }
+                else
+                {
+                    <ul class="list-unstyled mb-0">
+                        @foreach (var partner in featuredPartners.Take(4))
+                        {
+                            <li class="mb-2 fw-semibold">@partner.Organization?.NameEn</li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+</div>

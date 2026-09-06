@@ -1,0 +1,229 @@
+@using GharsPlatform.Models.Core
+@using Microsoft.AspNetCore.Mvc.Rendering
+@using System.Globalization
+@{
+    ViewData["Title"] = "Executive Dashboard";
+    ViewData["PageTitle"] = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? "لوحة المؤشرات التنفيذية" : "Executive Dashboard";
+    var isRtl = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string en, string ar) => isRtl ? ar : en;
+    var seasons = ViewBag.Seasons as List<SelectListItem> ?? new();
+    var clubs = ViewBag.Clubs as List<SelectListItem> ?? new();
+    var partners = ViewBag.Partners as List<SelectListItem> ?? new();
+    dynamic filters = ViewBag.Filters;
+    var recentActivity = ViewBag.RecentActivity as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+    var upcomingList = ViewBag.UpcomingList as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+    var approvals = ViewBag.Approvals as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+    var heatmap = ViewBag.Heatmap as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+    var insights = ViewBag.Insights as IEnumerable<string> ?? Enumerable.Empty<string>();
+
+    // Missing measurements render as "No Data" - never as 0% (approved KPI rule).
+    string NoData() => T("No Data", "لا توجد بيانات");
+    string Pct(object? value) => value is decimal d ? $"{d:0.#}%" : NoData();
+    var satisfactionScore = ViewBag.SatisfactionScore as decimal?;
+    var complianceScore = ViewBag.ComplianceScore as decimal?;
+    var avgAttendance = ViewBag.AvgAttendance as decimal?;
+    var avgPhysicalActivity = ViewBag.AvgPhysicalActivity as decimal?;
+    var violationsReduction = ViewBag.ViolationsReduction as decimal?;
+    var internalStarScore = ViewBag.InternalStarScore as decimal?;
+}
+
+@section Head {
+<style>
+    .exec-dashboard { --ghars: #4f9a5d; --ghars-dark: #1f5b37; --ink: #1f2530; --muted: #687281; }
+    .exec-hero { position: relative; overflow: hidden; border-radius: 28px; padding: 28px; color: #fff; background: radial-gradient(circle at top right, rgba(115,192,125,.95), rgba(45,91,55,.92) 42%, rgba(31,37,48,.98)); box-shadow: 0 18px 48px rgba(0,0,0,.16); }
+    .exec-hero:after { content:""; position:absolute; inset:auto -80px -130px auto; width:320px; height:320px; border-radius:50%; background:rgba(255,255,255,.09); }
+    .hero-kicker { display:inline-flex; align-items:center; gap:.5rem; padding:.45rem .85rem; border-radius:999px; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.22); font-weight:700; }
+    .filter-panel, .dash-card, .chart-card, .insight-card { border:0; border-radius:22px; background:#fff; box-shadow: 0 12px 34px rgba(22,34,51,.08); }
+    .filter-panel .form-label { font-weight: 700; color:#3b4350; }
+    .kpi-card { position:relative; overflow:hidden; min-height:146px; padding:20px; border-radius:22px; background:#fff; box-shadow: 0 12px 34px rgba(22,34,51,.08); border:1px solid rgba(31,91,55,.06); transition: transform .22s ease, box-shadow .22s ease; }
+    .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 18px 44px rgba(22,34,51,.13); }
+    .kpi-card .icon { width:46px; height:46px; display:grid; place-items:center; border-radius:15px; background:rgba(79,154,93,.12); color:var(--ghars-dark); font-size:1.35rem; }
+    .kpi-card .label { color:var(--muted); font-size:.86rem; font-weight:700; }
+    .kpi-card .value { font-size:2rem; font-weight:900; color:var(--ink); line-height:1.1; }
+    .kpi-card .trend { font-size:.78rem; font-weight:700; color:#4f9a5d; }
+    .kpi-card:after { content:""; position:absolute; width:110px; height:110px; border-radius:50%; background:rgba(79,154,93,.08); right:-35px; bottom:-45px; }
+    html[dir="rtl"] .kpi-card:after { right:auto; left:-35px; }
+    .chart-card { padding:20px; min-height:360px; }
+    .chart-title { font-size:1rem; font-weight:900; color:var(--ink); margin-bottom:.25rem; }
+    .chart-subtitle { color:var(--muted); font-size:.85rem; margin-bottom:1rem; }
+    .activity-row { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.82rem 0; border-bottom:1px solid #edf0f3; }
+    .activity-row:last-child { border-bottom:0; }
+    .status-pill { display:inline-flex; align-items:center; padding:.25rem .65rem; border-radius:999px; background:rgba(79,154,93,.13); color:#2f6840; font-weight:800; font-size:.78rem; }
+    .approval-item { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.7rem .85rem; border-radius:15px; background:#f7f9fb; margin-bottom:.55rem; }
+    .heat-cell { min-width:72px; padding:.55rem .7rem; border-radius:12px; color:#1f2530; background:rgba(79,154,93,.08); text-align:center; font-weight:800; }
+    .mini-bar { height:7px; border-radius:999px; background:#edf0f3; overflow:hidden; }
+    .mini-bar span { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#4f9a5d,#8bc88f); }
+    .fade-up { animation: dashFadeUp .52s ease both; }
+    @@keyframes dashFadeUp { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform: translateY(0); } }
+    @@media (max-width: 992px) { .exec-hero { padding:22px; } .kpi-card .value { font-size:1.6rem; } .chart-card { min-height:300px; } }
+</style>
+}
+
+<div class="exec-dashboard">
+    <div class="exec-hero mb-4 fade-up">
+        <div class="row align-items-center g-4">
+            <div class="col-lg-7">
+                <div class="hero-kicker mb-3"><i class="bi bi-speedometer2"></i>@T("360° Ghars Intelligence Center", "مركز غرس التحليلي الشامل")</div>
+                <h1 class="display-6 fw-black mb-2">@T("Executive Analytics Dashboard", "لوحة التحليلات التنفيذية")</h1>
+                <p class="mb-0 opacity-75 fs-5">@T("A complete live overview of clubs, partners, programs, bookings, KPI progress, attendance, library, gallery, and governance actions.", "نظرة شاملة ومباشرة على الأندية والشركاء والبرامج والحجوزات والمؤشرات والحضور والمكتبة والمعرض وإجراءات الحوكمة.")</p>
+            </div>
+            <div class="col-lg-5">
+                <div class="row g-3">
+                    <div class="col-6"><div class="p-3 rounded-4" style="background:rgba(255,255,255,.13);"><div class="small opacity-75">@T("Program Coverage", "تغطية البرنامج")</div><div class="h2 mb-0 fw-bold counter" data-target="@ViewBag.ProgramCoverage">0</div><div class="small">%</div></div></div>
+                    <div class="col-6"><div class="p-3 rounded-4" style="background:rgba(255,255,255,.13);"><div class="small opacity-75">@T("Compliance Score", "درجة الامتثال")</div>@if(complianceScore.HasValue){<div class="h2 mb-0 fw-bold counter" data-target="@complianceScore">0</div><div class="small">%</div>}else{<div class="h5 mb-0 fw-bold">@NoData()</div>}</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="get" class="filter-panel p-3 p-lg-4 mb-4 fade-up">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+            <div class="h5 fw-bold mb-0"><i class="bi bi-funnel me-2"></i>@T("Dashboard Filters", "فلاتر لوحة التحكم")</div>
+            <a class="btn btn-outline-secondary" asp-area="Admin" asp-controller="Dashboard" asp-action="Index">@T("Reset", "إعادة تعيين")</a>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-3"><label class="form-label">@T("Sports season", "الموسم الرياضي")</label><select name="seasonId" class="form-select"><option value="">@T("All", "الكل")</option>@foreach (var s in seasons){<option value="@s.Value" selected="@s.Selected">@s.Text</option>}</select></div>
+            <div class="col-md-3"><label class="form-label">@T("Club", "النادي")</label><select name="clubId" class="form-select"><option value="">@T("All clubs", "كل الأندية")</option>@foreach (var c in clubs){<option value="@c.Value" selected="@c.Selected">@c.Text</option>}</select></div>
+            <div class="col-md-3"><label class="form-label">@T("Partner / entity", "الشريك / الجهة")</label><select name="partnerId" class="form-select"><option value="">@T("All entities", "كل الجهات")</option>@foreach (var p in partners){<option value="@p.Value" selected="@p.Selected">@p.Text</option>}</select></div>
+            <div class="col-md-3"><label class="form-label">@T("Activity type", "نوع النشاط")</label><select name="activityType" class="form-select"><option value="">@T("All types", "كل الأنواع")</option>@foreach (ActivityType item in Enum.GetValues(typeof(ActivityType))){<option value="@item" selected="@(filters.activityType == item)">@item</option>}</select></div>
+            <div class="col-md-3"><label class="form-label">@T("From", "من")</label><input class="form-control" type="date" name="from" value="@(filters.from == null ? "" : ((DateTime)filters.from).ToString("yyyy-MM-dd"))" /></div>
+            <div class="col-md-3"><label class="form-label">@T("To", "إلى")</label><input class="form-control" type="date" name="to" value="@(filters.to == null ? "" : ((DateTime)filters.to).ToString("yyyy-MM-dd"))" /></div>
+            <div class="col-md-3"><label class="form-label">@T("KPI category", "فئة المؤشر")</label><select name="kpiCategory" class="form-select"><option value="">@T("All KPIs", "كل المؤشرات")</option><option>Coverage</option><option>Participation</option><option>Attendance</option><option>Health</option><option>Behavior</option><option>Satisfaction</option></select></div>
+            <div class="col-md-3 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit"><i class="bi bi-sliders me-2"></i>@T("Apply filters", "تطبيق الفلاتر")</button></div>
+        </div>
+    </form>
+
+    <div class="row g-3 mb-4">
+        @foreach (var card in new[] {
+            new { Icon="bi-buildings", Label=T("Total Clubs", "إجمالي الأندية"), Value=(object)ViewBag.TotalClubs, Hint=T("Covered by Ghars", "ضمن غرس") },
+            new { Icon="bi-diagram-3", Label=T("Partners / Entities", "الشركاء / الجهات"), Value=(object)ViewBag.TotalPartners, Hint=T("Implementing entities", "جهات منفذة") },
+            new { Icon="bi-calendar-event", Label=T("Total Programs", "إجمالي البرامج"), Value=(object)ViewBag.TotalPrograms, Hint=T("Lectures, workshops, training", "محاضرات وورش وتدريب") },
+            new { Icon="bi-people", Label=T("Participants", "المشاركون"), Value=(object)ViewBag.TotalParticipants, Hint=T("From agenda data", "من بيانات الأجندة") },
+            new { Icon="bi-journal-check", Label=T("Bookings", "الحجوزات"), Value=(object)ViewBag.TotalBookings, Hint=T("All statuses", "كل الحالات") },
+            new { Icon="bi-hourglass-split", Label=T("Pending Actions", "إجراءات معلقة"), Value=(object)ViewBag.PendingApprovals, Hint=T("Needs response", "تحتاج إجراء") },
+            new { Icon="bi-person-check", Label=T("Attendance Rate", "نسبة الحضور"), Value=(object)(avgAttendance.HasValue ? Pct(avgAttendance) : Pct(ViewBag.AttendanceRate)), Hint=avgAttendance.HasValue ? T("Approved KPI data", "بيانات معتمدة") : T("Check-ins vs capacity", "الحضور مقابل السعة") },
+            new { Icon="bi-emoji-smile", Label=T("Happiness Score", "مؤشر السعادة"), Value=(object)Pct(satisfactionScore), Hint=T("Official survey results", "نتائج الاستبيان الرسمي") },
+            new { Icon="bi-bullseye", Label=T("Coverage", "التغطية"), Value=(object)(ViewBag.ProgramCoverage + "%"), Hint=T("Target ≥ 80%", "المستهدف ≥ 80%") },
+            new { Icon="bi-graph-up-arrow", Label=T("Growth vs 2026", "النمو مقابل 2026"), Value=(object)(ViewBag.ParticipationGrowth + "%"), Hint=T("Baseline comparison", "مقارنة بالأساس") },
+            new { Icon="bi-person-lines-fill", Label=T("Active Users", "المستخدمون النشطون"), Value=(object)ViewBag.ActiveUsers, Hint=T("Platform accounts", "حسابات المنصة") },
+            new { Icon="bi-calendar2-week", Label=T("Upcoming Events", "الفعاليات القادمة"), Value=(object)ViewBag.UpcomingEvents, Hint=T("Published programs", "برامج منشورة") }
+        })
+        {
+            <div class="col-12 col-sm-6 col-xl-3 fade-up">
+                <div class="kpi-card">
+                    <div class="d-flex justify-content-between align-items-start mb-3"><div class="icon"><i class="bi @card.Icon"></i></div><span class="trend"><i class="bi bi-lightning-charge"></i> @card.Hint</span></div>
+                    <div class="label">@card.Label</div>
+                    <div class="value counter" data-target="@card.Value">@card.Value</div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-xl-8"><div class="chart-card"><div class="chart-title">@T("Booking & Attendance Trend", "اتجاه الحجوزات والحضور")</div><div class="chart-subtitle">@T("Monthly movement across selected filters", "الحركة الشهرية حسب الفلاتر المحددة")</div><canvas id="trendChart"></canvas></div></div>
+        <div class="col-xl-4"><div class="chart-card"><div class="chart-title">@T("Booking Status Distribution", "توزيع حالات الحجوزات")</div><div class="chart-subtitle">@T("Confirmed, rejected, modified and pending", "مؤكد ومرفوض ومعدل ومعلق")</div><canvas id="bookingStatusChart"></canvas></div></div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-4"><div class="chart-card"><div class="chart-title">@T("Program Type Mix", "توزيع أنواع البرامج")</div><div class="chart-subtitle">@T("Lectures, workshops, courses and training", "محاضرات وورش ودورات وتدريب")</div><canvas id="programTypeChart"></canvas></div></div>
+        <div class="col-lg-4"><div class="chart-card"><div class="chart-title">@T("Participants by Category", "المشاركون حسب الفئة")</div><div class="chart-subtitle">@T("Players, coaches, administrators, parents and others", "لاعبون ومدربون وإداريون وأولياء أمور وغيرهم")</div><canvas id="categoryChart"></canvas></div></div>
+        <div class="col-lg-4"><div class="chart-card"><div class="chart-title">@T("KPI Target vs Actual", "المستهدف مقابل الفعلي")</div><div class="chart-subtitle">@T("Traffic-light KPI monitoring", "متابعة المؤشرات بالألوان")</div><canvas id="kpiChart"></canvas></div></div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-xl-6"><div class="chart-card"><div class="chart-title">@T("Club KPI Comparison", "مقارنة أداء الأندية")</div><div class="chart-subtitle">@T("Top clubs by approved KPI score", "أفضل الأندية حسب المؤشرات المعتمدة")</div><canvas id="clubChart"></canvas></div></div>
+        <div class="col-xl-6"><div class="chart-card"><div class="chart-title">@T("Partner Contribution", "مساهمة الشركاء")</div><div class="chart-subtitle">@T("Programs and total capacity by entity", "البرامج والسعة حسب الجهة")</div><canvas id="partnerChart"></canvas></div></div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-xl-4"><div class="chart-card"><div class="chart-title">@T("Digital Library", "المكتبة الرقمية")</div><div class="chart-subtitle">@T("Content count by type", "عدد المحتويات حسب النوع")</div><canvas id="libraryChart"></canvas></div></div>
+        <div class="col-xl-4"><div class="chart-card"><div class="chart-title">@T("Gallery & Media", "المعرض والوسائط")</div><div class="chart-subtitle">@T("Media type distribution", "توزيع أنواع الوسائط")</div><canvas id="mediaChart"></canvas></div></div>
+        <div class="col-xl-4"><div class="chart-card"><div class="chart-title">@T("Upload Momentum", "زخم الرفع")</div><div class="chart-subtitle">@T("Album upload trend", "اتجاه رفع الألبومات")</div><canvas id="uploadChart"></canvas></div></div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-xl-4"><div class="insight-card p-4 h-100"><div class="h5 fw-bold mb-3"><i class="bi bi-magic me-2"></i>@T("Smart Insights", "رؤى ذكية")</div>@foreach (var insight in insights){<div class="approval-item"><span>@insight</span><i class="bi bi-chevron-right"></i></div>}</div></div>
+        <div class="col-xl-4"><div class="insight-card p-4 h-100"><div class="h5 fw-bold mb-3"><i class="bi bi-bell me-2"></i>@T("Governance & Pending Actions", "الحوكمة والإجراءات المعلقة")</div>@foreach (var item in approvals){<div class="approval-item"><span>@item.Label</span><span class="status-pill">@item.Value</span></div>}</div></div>
+        <div class="col-xl-4"><div class="insight-card p-4 h-100"><div class="h5 fw-bold mb-3"><i class="bi bi-award me-2"></i>@T("Operational Snapshot", "ملخص تشغيلي")</div>
+            <div class="approval-item"><span>@T("Violations reduction (vs last season)", "خفض المخالفات (مقارنة بالموسم السابق)")</span><span class="status-pill">@Pct(violationsReduction)</span></div>
+            <div class="approval-item"><span>@T("Physical activity ≥150 min/week", "النشاط البدني ≥150 دقيقة أسبوعياً")</span><span class="status-pill">@Pct(avgPhysicalActivity)</span></div>
+            <div class="approval-item"><span>@T("Certificates issued", "الشهادات الصادرة")</span><span class="status-pill">@ViewBag.CertificatesIssued</span></div>
+            <div class="approval-item"><span>@T("Library items", "مواد المكتبة")</span><span class="status-pill">@ViewBag.LibraryCount</span></div>
+            <div class="approval-item"><span>@T("Gallery uploads", "مرفوعات المعرض")</span><span class="status-pill">@ViewBag.GalleryUploadCount</span></div>
+            @* Internal Ghars survey - kept visibly separate from the official Happiness Score above. *@
+            <div class="approval-item"><span>@T("Ghars internal survey score", "مؤشر استبيان غرس الداخلي")</span><span class="status-pill">@Pct(internalStarScore)</span></div>
+        </div></div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-xl-6"><div class="insight-card p-4 h-100"><div class="h5 fw-bold mb-3"><i class="bi bi-activity me-2"></i>@T("Real-Time Activity", "النشاط اللحظي")</div>@foreach (var item in recentActivity){<div class="activity-row"><div><div class="fw-bold">@item.Title</div><div class="small text-muted">@item.Club · @item.Date</div></div><span class="status-pill">@item.Status</span></div>}</div></div>
+        <div class="col-xl-6"><div class="insight-card p-4 h-100"><div class="h5 fw-bold mb-3"><i class="bi bi-calendar-week me-2"></i>@T("Upcoming Activities", "الأنشطة القادمة")</div>@foreach (var item in upcomingList){<div class="activity-row"><div><div class="fw-bold">@item.Title</div><div class="small text-muted">@item.Entity · @item.Date</div></div><span class="status-pill">@item.Type</span></div>}</div></div>
+    </div>
+
+    <div class="insight-card p-4 mb-4">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+            <div><div class="h5 fw-bold mb-1"><i class="bi bi-grid-3x3-gap me-2"></i>@T("Activity Heatmap", "خريطة كثافة الأنشطة")</div><div class="text-muted small">@T("Club and activity type concentration", "تركيز الأنشطة حسب النادي والنوع")</div></div>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            @foreach (var h in heatmap)
+            {
+                <div class="heat-cell"><div class="small text-muted">@h.Club</div><div>@h.Type</div><div class="fs-5">@h.Count</div></div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    const rtl = document.documentElement.dir === 'rtl';
+    const labels = @Html.Raw(ViewBag.MonthLabelsJson ?? "[]");
+    const bookingTrend = @Html.Raw(ViewBag.BookingTrendJson ?? "[]");
+    const attendanceTrend = @Html.Raw(ViewBag.AttendanceTrendJson ?? "[]");
+    const uploadTrend = @Html.Raw(ViewBag.UploadTrendJson ?? "[]");
+    const bookingStatus = @Html.Raw(ViewBag.BookingStatusJson ?? "[]");
+    const programType = @Html.Raw(ViewBag.ProgramTypeJson ?? "[]");
+    const agendaCategory = @Html.Raw(ViewBag.AgendaCategoryJson ?? "[]");
+    const mediaDistribution = @Html.Raw(ViewBag.MediaDistributionJson ?? "[]");
+    const libraryDistribution = @Html.Raw(ViewBag.LibraryDistributionJson ?? "[]");
+    const kpiTargets = @Html.Raw(ViewBag.KpiTargetsJson ?? "[]");
+    const clubComparison = @Html.Raw(ViewBag.ClubComparisonJson ?? "[]");
+    const partnerContribution = @Html.Raw(ViewBag.PartnerContributionJson ?? "[]");
+
+    Chart.defaults.font.family = "system-ui, -apple-system, Segoe UI, sans-serif";
+    Chart.defaults.color = '#566070';
+    const grid = { color: 'rgba(90,105,120,.12)' };
+    const opts = { responsive: true, maintainAspectRatio: false, animation: { duration: 900, easing: 'easeOutQuart' }, plugins: { legend: { position: 'bottom', rtl: rtl } }, scales: { y: { beginAtZero: true, grid: grid }, x: { grid: { display:false } } } };
+    const pickLabels = arr => arr.map(x => x.Label || x.Club || x.Partner);
+    const pickValues = (arr, key='Value') => arr.map(x => x[key] ?? 0);
+
+    function chart(id, config) { const el = document.getElementById(id); if (el) new Chart(el, config); }
+    chart('trendChart', { type:'line', data:{ labels, datasets:[{ label:'@T("Bookings", "الحجوزات")', data:bookingTrend, tension:.35, fill:true },{ label:'@T("Attendance", "الحضور")', data:attendanceTrend, tension:.35, fill:true }] }, options:opts });
+    chart('bookingStatusChart', { type:'doughnut', data:{ labels:pickLabels(bookingStatus), datasets:[{ data:pickValues(bookingStatus) }] }, options:{ responsive:true, maintainAspectRatio:false, animation:{duration:900}, plugins:{ legend:{position:'bottom', rtl:rtl} } } });
+    chart('programTypeChart', { type:'pie', data:{ labels:pickLabels(programType), datasets:[{ data:pickValues(programType) }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'bottom', rtl:rtl} } } });
+    chart('categoryChart', { type:'bar', data:{ labels:pickLabels(agendaCategory), datasets:[{ label:'@T("Participants", "المشاركون")', data:pickValues(agendaCategory) }] }, options:opts });
+    chart('kpiChart', { type:'bar', data:{ labels:kpiTargets.map(x=>x.Label), datasets:[{ label:'@T("Target", "المستهدف")', data:kpiTargets.map(x=>x.Target) },{ label:'@T("Actual", "الفعلي")', data:kpiTargets.map(x=>x.Actual) }] }, options:opts });
+    chart('clubChart', { type:'bar', data:{ labels:pickLabels(clubComparison), datasets:[{ label:'@T("KPI Score", "درجة المؤشر")', data:clubComparison.map(x=>Math.round((x.Score ?? 0)*10)/10) }] }, options:opts });
+    chart('partnerChart', { type:'bar', data:{ labels:pickLabels(partnerContribution), datasets:[{ label:'@T("Programs", "البرامج")', data:partnerContribution.map(x=>x.Programs ?? 0) },{ label:'@T("Capacity", "السعة")', data:partnerContribution.map(x=>x.Capacity ?? 0) }] }, options:opts });
+    chart('libraryChart', { type:'doughnut', data:{ labels:pickLabels(libraryDistribution), datasets:[{ data:pickValues(libraryDistribution) }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'bottom', rtl:rtl} } } });
+    chart('mediaChart', { type:'doughnut', data:{ labels:pickLabels(mediaDistribution), datasets:[{ data:pickValues(mediaDistribution) }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'bottom', rtl:rtl} } } });
+    chart('uploadChart', { type:'line', data:{ labels, datasets:[{ label:'@T("Albums", "الألبومات")', data:uploadTrend, tension:.35, fill:true }] }, options:opts });
+
+    document.querySelectorAll('.counter').forEach(el => {
+        const raw = String(el.dataset.target || el.textContent || '0').replace('%','');
+        const target = parseFloat(raw);
+        if (Number.isNaN(target)) return;
+        const suffix = String(el.textContent).includes('%') || String(el.dataset.target).includes('%') ? '%' : '';
+        let start = null;
+        function step(ts) {
+            start ??= ts;
+            const p = Math.min((ts - start) / 900, 1);
+            const val = target * p;
+            el.textContent = (target % 1 === 0 ? Math.round(val) : val.toFixed(1)) + suffix;
+            if (p < 1) requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+    });
+})();
+</script>
+}

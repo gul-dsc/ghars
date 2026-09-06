@@ -1,0 +1,110 @@
+:root { /* Ghars palette */ --ghars-green: #2D9B6C; --ghars-deep: #1B5E32; --ghars-sprout: #AED581; --dsc-charcoal: #353535; --dsc-teal: #51b499; --dsc-white: #ffffff; /* UI neutrals */ --ui-bg: #f6f7f8; --ui-card: #ffffff; --ui-border: #e6e8eb; --ui-text: #1c1f23; --ui-muted: #6c757d; /* Theme mapping */ --brand-primary: var(--ghars-green); --brand-dark: var(--dsc-charcoal); --sidebar-bg: var(--brand-dark); --sidebar-text: #e9ecef; --sidebar-muted: rgba(255,255,255,.70); --sidebar-hover: rgba(255,255,255,.08); --sidebar-active: rgba(81,180,153,.22); --topbar-bg: var(--dsc-white); --topbar-border: #e9ecef; --btn-primary-bg: var(--brand-primary); --btn-primary-border: var(--brand-primary); --btn-primary-hover: #449e86; --focus-ring: rgba(81,180,153,.35); }
+
+/* Base */
+html, body { height: 100%; }
+body { background: var(--ui-bg); color: var(--ui-text); }
+
+/* Links */
+a { color: var(--brand-primary); }
+    a:hover { color: #3e907b; }
+
+/* Bootstrap overrides */
+.btn-primary { background: var(--btn-primary-bg, #2D9B6C) !important; border-color: var(--btn-primary-border, #2D9B6C) !important; color: #fff !important; opacity: 1 !important; pointer-events: auto !important; }
+    .btn-primary:hover { background: var(--btn-primary-hover, #247a56) !important; border-color: var(--btn-primary-hover, #247a56) !important; color: #fff !important; }
+.btn-outline-primary { color: var(--brand-primary) !important; border-color: var(--brand-primary) !important; }
+    .btn-outline-primary:hover { background: var(--brand-primary) !important; border-color: var(--brand-primary) !important; color: #fff !important; }
+.form-control:focus, .form-select:focus { border-color: var(--brand-primary) !important; box-shadow: 0 0 0 .2rem var(--focus-ring) !important; }
+
+/* Cards */
+.card { border: 1px solid var(--ui-border); border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+.card-header { background: #fff; border-bottom: 1px solid var(--ui-border); }
+
+/* Admin shell */
+.admin-shell { min-height: 100vh; display: flex; }
+
+/* Sidebar */
+.admin-sidebar { width: 280px; background: var(--sidebar-bg); color: var(--sidebar-text); position: sticky; top: 0; height: 100vh; }
+    .admin-sidebar .brand { padding: 18px 18px 10px 18px; border-bottom: 1px solid rgba(255,255,255,.08); }
+        .admin-sidebar .brand img { max-width: 200px; height: auto; display: block; /* keep safe whitespace around the logo in the layout, don’t crop */ }
+    .admin-sidebar .nav-section-title { padding: 14px 18px 6px; color: var(--sidebar-muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; }
+    .admin-sidebar .nav-link { color: var(--sidebar-text); padding: 10px 14px; margin: 2px 10px; border-radius: 10px; display: flex; align-items: center; gap: 10px; }
+        .admin-sidebar .nav-link:hover { background: var(--sidebar-hover); color: #fff; }
+        .admin-sidebar .nav-link.active { background: var(--sidebar-active); border: 1px solid rgba(81,180,153,.35); }
+
+/* Content area */
+.admin-content { flex: 1; display: flex; flex-direction: column; }
+.admin-topbar { background: var(--topbar-bg); border-bottom: 1px solid var(--topbar-border); padding: 12px 18px; position: sticky; top: 0; z-index: 20; }
+.admin-page { padding: 18px; }
+
+/* Notification pill */
+.notif-pill { background: rgba(81,180,153,.12); border: 1px solid rgba(81,180,153,.25); color: #1c4a3f; padding: 6px 10px; border-radius: 999px; font-weight: 600; }
+
+/* Tables (gov look) */
+.table { background: #fff; border-radius: 12px; overflow: hidden; }
+    .table thead th { background: #f3f5f7; border-bottom: 1px solid var(--ui-border) !important; color: #2b2f34; font-weight: 700; }
+.badge.bg-teal { background: var(--brand-primary) !important; }
+
+/* Responsive sidebar */
+@media (max-width: 992px) {
+    .admin-sidebar { width: 86px; }
+        .admin-sidebar .brand img { max-width: 54px; }
+        .admin-sidebar .nav-section-title { display: none; }
+        .admin-sidebar .nav-link span { display: none; }
+}
+
+
+/* =========================================================
+   ADMIN ONLY SCROLL FIX
+   ========================================================= */
+
+body.admin-shell { min-height: 100vh; overflow-x: hidden; overflow-y: auto; }
+
+    body.admin-shell .admin-shell { min-height: 100vh; display: flex; align-items: stretch; overflow: visible; }
+
+    body.admin-shell .admin-sidebar { width: 280px; min-height: 100vh; height: 100vh; overflow-y: auto; overflow-x: hidden; position: sticky; top: 0; flex-shrink: 0; }
+
+    body.admin-shell .admin-content { flex: 1 1 auto; min-width: 0; min-height: 100vh; display: flex; flex-direction: column; overflow: visible; }
+
+    body.admin-shell .admin-topbar { position: sticky; top: 0; z-index: 100; flex-shrink: 0; }
+
+    body.admin-shell .admin-page { flex: 1 1 auto; padding: 18px; overflow: visible; min-height: calc(100vh - 73px); }
+
+        body.admin-shell .admin-page .table-responsive { overflow-x: auto; }
+
+        body.admin-shell .admin-page .card,
+        body.admin-shell .admin-page .table,
+        body.admin-shell .admin-page .table-responsive { overflow: visible; }
+
+@media (max-width: 991.98px) {
+    body.admin-shell .admin-sidebar { position: fixed; top: 0; left: 0; z-index: 1040; transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: 0 0 20px rgba(0,0,0,.18); }
+
+        body.admin-shell .admin-sidebar.open { transform: translateX(0); }
+
+    html[dir="rtl"] body.admin-shell .admin-sidebar { left: auto; right: 0; transform: translateX(100%); }
+
+        html[dir="rtl"] body.admin-shell .admin-sidebar.open { transform: translateX(0); }
+
+    body.admin-shell .admin-content { min-height: 100vh; }
+
+    body.admin-shell .admin-page { min-height: auto; }
+}
+
+/* Super Admin action visibility fix */
+.admin-page .btn-primary,
+.admin-topbar .btn-primary,
+.admin-page a.btn-primary,
+.admin-page button.btn-primary,
+.super-admin-action {
+    background-color: #2D9B6C !important;
+    border-color: #2D9B6C !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    visibility: visible !important;
+}
+.admin-page .btn-primary:hover,
+.super-admin-action:hover {
+    background-color: #1B5E32 !important;
+    border-color: #1B5E32 !important;
+    color: #ffffff !important;
+}

@@ -1,0 +1,43 @@
+@model GharsPlatform.Controllers.Public.KpiController.KpiVm
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var currentStatus = ViewBag.CurrentStatus as KpiSubmissionStatus?;
+    var reviewNotes = ViewBag.ReviewNotes as string;
+    ViewData["Title"] = T("Edit KPI Submission", "تعديل بيانات مؤشرات الأداء");
+}
+<h1 class="mb-1">@ViewData["Title"]</h1>
+<p class="text-muted">@T("Update the reported figures and evidence, then resubmit for Council approval.", "حدّث الأرقام والمستندات الداعمة ثم أعد الإرسال لاعتماد المجلس.")</p>
+
+@if (currentStatus == KpiSubmissionStatus.MoreInfoRequired)
+{
+    <div class="required-action-banner">
+        <i class="bi bi-arrow-counterclockwise me-2"></i>@T("This submission was returned for correction.", "تمت إعادة هذا الإرسال للتصحيح.")
+        @if (!string.IsNullOrWhiteSpace(reviewNotes))
+        {
+            <div class="small fw-normal mt-1">@T("Reviewer notes:", "ملاحظات المراجع:") @reviewNotes</div>
+        }
+    </div>
+}
+else if (currentStatus == KpiSubmissionStatus.Rejected && !string.IsNullOrWhiteSpace(reviewNotes))
+{
+    <div class="alert alert-danger rounded-4 border-0"><strong>@T("Reviewer notes:", "ملاحظات المراجع:")</strong> @reviewNotes</div>
+}
+
+<form method="post" enctype="multipart/form-data" class="card rounded-4 border-0 shadow-sm p-4">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Id" />
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+
+    <partial name="_KpiForm" model="Model" />
+
+    <div class="d-flex gap-2 mt-4">
+        <button class="btn btn-success" name="SaveAsDraft" value="false">@T("Submit for Approval", "إرسال للاعتماد")</button>
+        <button class="btn btn-outline-secondary" name="SaveAsDraft" value="true">@T("Save as Draft", "حفظ كمسودة")</button>
+        <a class="btn btn-outline-dark" href="/kpi">@T("Cancel", "إلغاء")</a>
+    </div>
+</form>
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

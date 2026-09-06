@@ -1,0 +1,78 @@
+@model GharsPlatform.Controllers.Public.AgendaController.AgendaVm
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+ var ar=CultureInfo.CurrentUICulture.TwoLetterISOLanguageName=="ar"; string T(string e,string a)=>ar?a:e;
+ var seasons=ViewBag.Seasons as List<Season>??new(); var clubs=ViewBag.Clubs as List<Organization>??new();
+ var existingMedia=ViewBag.ExistingMedia as List<AgendaMedia>??new();
+ string N(Organization? o)=>ar?(o?.NameAr??o?.NameEn??""):(o?.NameEn??o?.NameAr??"");
+ string CategoryText(AgendaTargetCategory c)=>c switch{AgendaTargetCategory.Players=>T("Players","لاعبون"),AgendaTargetCategory.Coaches=>T("Coaches","مدربون"),AgendaTargetCategory.Administrators=>T("Administrators","إداريون"),AgendaTargetCategory.Parents=>T("Parents","أولياء أمور"),AgendaTargetCategory.Others=>T("Others","أخرى"),_=>c.ToString()};
+ string TypeText(ActivityType t)=>t switch{ActivityType.Lecture=>T("Lecture","محاضرة"),ActivityType.Event=>T("Event","فعالية"),ActivityType.Workshop=>T("Workshop","ورشة عمل"),ActivityType.TrainingProgram=>T("Training","تدريب"),ActivityType.Course=>T("Course","دورة"),ActivityType.Activity=>T("Activity","نشاط"),_=>t.ToString()};
+ var singleClub = clubs.FirstOrDefault(x => x.Id == Model.OrganizationId) ?? clubs.FirstOrDefault();
+ ViewData["Title"]=T("Complete Agenda Activity","استكمال بيانات النشاط");
+}
+<h1 class="mb-1">@ViewData["Title"]</h1>
+<p class="text-muted">@T("Record the actual delivery details: final date, lecturer, real number of participants and supporting media, then submit for Council review.","سجّل بيانات التنفيذ الفعلي: التاريخ النهائي والمحاضر والعدد الفعلي للمشاركين والوسائط الداعمة، ثم أرسلها لمراجعة المجلس.")</p>
+
+@if (Model.Status == AgendaEntryStatus.Draft)
+{
+    <div class="required-action-banner"><i class="bi bi-info-circle me-2"></i>@T("This entry is a draft. It is not counted as a delivered activity until you submit it.","هذا النشاط في حالة مسودة ولا يُحتسب كنشاط منفّذ حتى يتم إرساله.")</div>
+}
+
+<form method="post" enctype="multipart/form-data" class="card shadow-sm border-0 rounded-4 p-4">@Html.AntiForgeryToken()
+<input type="hidden" asp-for="Id" />
+<div class="row g-3">
+<div class="col-md-4"><label class="form-label">@T("Sports Season","الموسم الرياضي")</label><select class="form-select" asp-for="SeasonId">@foreach(var s in seasons){<option value="@s.Id">@(ar?s.TitleAr:s.TitleEn)</option>}</select></div>
+
+<div class="col-md-4"><label class="form-label">@T("Club","النادي")</label>
+@if(clubs.Count<=1)
+{
+    <div class="booking-readonly-value">@N(singleClub)</div>
+}
+else
+{
+    <select class="form-select" asp-for="OrganizationId">@foreach(var c in clubs){<option value="@c.Id">@N(c)</option>}</select>
+    <span asp-validation-for="OrganizationId" class="text-danger"></span>
+}
+</div>
+
+<div class="col-md-4"><label class="form-label">@T("Activity Type","نوع النشاط")</label><select class="form-select" asp-for="ActivityType">@foreach(ActivityType t in Enum.GetValues(typeof(ActivityType))){<option value="@t">@TypeText(t)</option>}</select></div>
+<div class="col-md-6"><label class="form-label">@T("Subject (English)","الموضوع بالإنجليزية")</label><input class="form-control" asp-for="SubjectEn" /><span asp-validation-for="SubjectEn" class="text-danger"></span></div>
+<div class="col-md-6"><label class="form-label">@T("Subject (Arabic)","الموضوع بالعربية")</label><input class="form-control" asp-for="SubjectAr" /><span asp-validation-for="SubjectAr" class="text-danger"></span></div>
+<div class="col-md-4"><label class="form-label">@T("Actual date","التاريخ الفعلي")</label><input class="form-control" type="date" asp-for="ActivityDate" /></div>
+<div class="col-md-4"><label class="form-label">@T("Category / Target Group","الفئة المستهدفة")</label><select class="form-select" asp-for="Category" id="agendaCategory">@foreach(AgendaTargetCategory c in Enum.GetValues(typeof(AgendaTargetCategory))){<option value="@c">@CategoryText(c)</option>}</select></div>
+<div class="col-md-4" id="otherCategoryWrap"><label class="form-label">@T("Others - please specify","أخرى - يرجى التحديد")</label><input class="form-control" asp-for="OtherCategory" /><span asp-validation-for="OtherCategory" class="text-danger"></span></div>
+<div class="col-md-4"><label class="form-label">@T("Lecturer Name","اسم المحاضر")</label><input class="form-control" asp-for="LecturerName" /><span asp-validation-for="LecturerName" class="text-danger"></span></div>
+<div class="col-md-4"><label class="form-label">@T("Department / Implementing Entity","القسم / الجهة المنفذة")</label><input class="form-control" asp-for="DepartmentOrOrganization" /></div>
+<div class="col-md-4"><label class="form-label">@T("Actual number of participants","العدد الفعلي للمشاركين")</label><input class="form-control" type="number" min="0" asp-for="NumberOfParticipants" /></div>
+
+@if(existingMedia.Any())
+{
+    <div class="col-12">
+        <label class="form-label">@T("Existing media","الوسائط الحالية")</label>
+        <div class="d-flex flex-wrap gap-2">
+        @foreach(var m in existingMedia)
+        {
+            <span class="badge text-bg-light border p-2"><i class="bi @(m.MediaType==GalleryMediaType.Video?"bi-play-circle":"bi-image") me-1"></i>@(ar?(m.TitleAr??m.TitleEn):(m.TitleEn??m.TitleAr))</span>
+        }
+        </div>
+    </div>
+}
+
+<div class="col-12"><label class="form-label">@T("Add supporting media (photos / videos)","إضافة وسائط داعمة (صور / فيديو)")</label><input class="form-control" type="file" asp-for="MediaFiles" multiple accept="image/*,video/*" /><div class="form-text">@T("Uploaded media is automatically added to the Ghars gallery.","تُضاف الوسائط المرفوعة تلقائياً إلى معرض غرس.")</div><span asp-validation-for="MediaFiles" class="text-danger"></span></div>
+<div class="col-12"><label class="form-label">@T("Notes","ملاحظات")</label><textarea class="form-control" asp-for="Notes" rows="3"></textarea></div>
+<div class="col-12 d-flex gap-2"><button class="btn btn-success" name="SaveAsDraft" value="false">@T("Submit for approval","إرسال للاعتماد")</button><button class="btn btn-outline-secondary" name="SaveAsDraft" value="true">@T("Save as Draft","حفظ كمسودة")</button><a class="btn btn-outline-dark" href="/agenda">@T("Cancel","إلغاء")</a></div>
+<div asp-validation-summary="ModelOnly" class="text-danger"></div></div></form>
+
+@section Scripts{
+<partial name="_ValidationScriptsPartial" />
+<script>
+(function(){
+    var sel=document.getElementById('agendaCategory');
+    var wrap=document.getElementById('otherCategoryWrap');
+    function sync(){ if(!sel||!wrap) return; wrap.style.display = sel.value === 'Others' ? '' : 'none'; }
+    sel && sel.addEventListener('change', sync);
+    sync();
+})();
+</script>
+}

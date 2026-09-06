@@ -1,0 +1,43 @@
+# Normalise line endings for text, but never touch binary content.
+# Without the binary rules below, Git's autocrlf would rewrite LF to CRLF inside
+# files it mistakes for text — which corrupts a PDF's byte offsets and silently
+# breaks documents and media.
+
+* text=auto
+
+# Source and markup
+*.cs        text diff=csharp
+*.cshtml    text
+*.csproj    text
+*.sln       text
+*.json      text
+*.js        text
+*.css       text
+*.md        text
+*.sql       text
+*.config    text
+*.gitignore text
+*.gitattributes text
+
+# Binary — never transformed
+*.pdf   binary
+*.docx  binary
+*.doc   binary
+*.xlsx  binary
+*.pptx  binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.mp4   binary
+*.webm  binary
+*.mov   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+*.zip   binary
+*.dll   binary
+*.pdb   binary

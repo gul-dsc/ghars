@@ -1,0 +1,135 @@
+@model GharsPlatform.ViewModels.OrganizationRegistrationVm
+@{
+    ViewData["Title"] = "Organization Registration";
+}
+<div class="row justify-content-center">
+    <div class="col-xl-10">
+        <div class="card shadow-sm border-0 rounded-4">
+            <div class="card-body p-4 p-md-5">
+                <h4 class="mb-2">Club / Academy / Partner Registration</h4>
+                <p class="text-muted mb-4">
+                    Submit your organization profile. the Council team will review and approve before enabling booking and participation features.
+                </p>
+
+                <form method="post" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Organization Type</label>
+                            <select class="form-select" asp-for="OrganizationType" asp-items="Html.GetEnumSelectList<OrganizationType>()"></select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Email</label>
+                            <input class="form-control" asp-for="Email" />
+                            <span class="text-danger small" asp-validation-for="Email"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Phone</label>
+                            <input class="form-control" asp-for="Phone" />
+                            <span class="text-danger small" asp-validation-for="Phone"></span>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Name (English)</label>
+                            <input class="form-control" asp-for="NameEn" />
+                            <span class="text-danger small" asp-validation-for="NameEn"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Name (Arabic)</label>
+                            <input class="form-control" asp-for="NameAr" />
+                            <span class="text-danger small" asp-validation-for="NameAr"></span>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Trade License No (optional)</label>
+                            <input class="form-control" asp-for="TradeLicenseNo" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">City</label>
+                            <input class="form-control" asp-for="City" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Website</label>
+                            <input class="form-control" asp-for="WebsiteUrl" placeholder="https://..." />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Address (English)</label>
+                            <input class="form-control" asp-for="AddressEn" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Address (Arabic)</label>
+                            <input class="form-control" asp-for="AddressAr" />
+                        </div>
+
+                        <div class="col-12">
+                            <hr class="my-3" />
+                            <h5 class="mb-2">Primary Contact</h5>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Full Name</label>
+                            <input class="form-control" asp-for="ContactFullName" />
+                            <span class="text-danger small" asp-validation-for="ContactFullName"></span>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Position (EN)</label>
+                            <input class="form-control" asp-for="ContactPositionEn" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Position (AR)</label>
+                            <input class="form-control" asp-for="ContactPositionAr" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Contact Email</label>
+                            <input class="form-control" asp-for="ContactEmail" />
+                            <span class="text-danger small" asp-validation-for="ContactEmail"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Contact Phone</label>
+                            <input class="form-control" asp-for="ContactPhone" />
+                            <span class="text-danger small" asp-validation-for="ContactPhone"></span>
+                        </div>
+
+                        <div class="col-12">
+                            <hr class="my-3" />
+                            <h5 class="mb-2">Documents</h5>
+                            <div class="small text-muted">Accepted: PDF/JPG/PNG. Keep files under your organization approval policy limits.</div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Logo (optional)</label>
+                            <input class="form-control" type="file" asp-for="LogoFile" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Trade License / License</label>
+                            <input class="form-control" type="file" asp-for="LicenseFile" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Supporting Document (optional)</label>
+                            <input class="form-control" type="file" asp-for="SupportingFile" />
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">Notes (optional)</label>
+                            <textarea class="form-control" asp-for="Notes" rows="3"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a class="btn btn-outline-secondary" href="/">Cancel</a>
+                        <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Submit Registration</button>
+                    </div>
+
+                    <div class="text-danger small mt-3" asp-validation-summary="All"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts{
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -1,0 +1,55 @@
+@model List<GharsPlatform.Models.Core.Organization>
+@{
+    ViewData["Title"] = "Organizations";
+    ViewData["PageTitle"] = "Organizations";
+}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div class="fw-semibold">Organizations</div>
+    @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-primary super-admin-action" asp-area="Admin" asp-controller="Organizations" asp-action="Create"><i class="bi bi-plus-lg"></i> Add Organization</a> }
+    <div class="d-flex gap-2">
+        <a class="btn btn-sm btn-outline-secondary" href="/Admin/Organizations?status=Pending">Pending</a>
+        <a class="btn btn-sm btn-outline-secondary" href="/Admin/Organizations?status=Approved">Approved</a>
+        <a class="btn btn-sm btn-outline-secondary" href="/Admin/Organizations?status=Rejected">Rejected</a>
+        <a class="btn btn-sm btn-outline-secondary" href="/Admin/Organizations">All</a>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var o in Model)
+            {
+                <tr>
+                    <td>@o.Id</td>
+                    <td class="fw-semibold">@o.NameEn</td>
+                    <td>@o.OrganizationType</td>
+                    <td><span class="badge text-bg-@(o.Status == ApprovalStatus.Approved ? "success" : o.Status == ApprovalStatus.Pending ? "warning" : "danger")">@o.Status</span></td>
+                    <td>@o.CreatedAtUtc.ToString("yyyy-MM-dd")</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Organizations/Details/@o.Id">Details</a>
+                        @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Organizations" asp-action="Edit" asp-route-id="@o.Id">Edit</a> }
+                        @if (User.IsInRole("Super Admin"))
+                        {
+                            <form method="post" asp-area="Admin" asp-controller="Organizations" asp-action="Delete" asp-route-id="@o.Id" class="d-inline" onsubmit="return confirm('Delete this organization?');">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

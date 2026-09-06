@@ -1,0 +1,44 @@
+@model List<GharsPlatform.Controllers.Admin.UsersController.UserRowVm>
+@{
+    ViewData["Title"] = "Users";
+    ViewData["PageTitle"] = "Users";
+}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="fw-semibold">Users</div>
+    @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-primary super-admin-action" asp-area="Admin" asp-controller="Users" asp-action="Create"><i class="bi bi-plus-lg"></i> Create User</a> }
+</div>
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr><th>Name</th><th>Email</th><th>Roles</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var u in Model)
+            {
+                <tr>
+                    <td class="fw-semibold">@u.FullName</td>
+                    <td>@u.Email</td>
+                    <td>@u.Roles</td>
+                    <td><span class="badge text-bg-@(u.IsLocked ? "danger" : "success")">@(u.IsLocked ? "Inactive" : "Active")</span></td>
+                    <td class="text-end">
+                        @if (User.IsInRole("Super Admin"))
+                        {
+                            <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Users" asp-action="Edit" asp-route-id="@u.Id">Edit</a>
+                            <form method="post" asp-area="Admin" asp-controller="Users" asp-action="Deactivate" asp-route-id="@u.Id" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn-sm btn-outline-warning" type="submit">Deactivate</button>
+                            </form>
+                        }
+                        @if (User.IsInRole("Super Admin"))
+                        {
+                            <form method="post" asp-area="Admin" asp-controller="Users" asp-action="Delete" asp-route-id="@u.Id" class="d-inline" onsubmit="return confirm('Delete this user?');">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

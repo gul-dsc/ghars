@@ -1,0 +1,124 @@
+@model GharsPlatform.Controllers.Public.KpiController.KpiVm
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var seasons = ViewBag.Seasons as List<Season> ?? new();
+    var clubs = ViewBag.Clubs as List<Organization> ?? new();
+    var hasDerived = ViewBag.HasDerivedData is true;
+    var existingDocuments = ViewBag.ExistingDocuments as List<KpiDocument> ?? new();
+    string N(Organization? o) => ar ? (o?.NameAr ?? o?.NameEn ?? "") : (o?.NameEn ?? o?.NameAr ?? "");
+    var singleClub = clubs.FirstOrDefault(x => x.Id == Model.OrganizationId) ?? clubs.FirstOrDefault();
+    var isEdit = Model.Id > 0;
+}
+
+<div class="alert alert-success rounded-4 border-0">
+    <div class="fw-semibold mb-2">@T("Ghars KPI targets", "مستهدفات مؤشرات غرس")</div>
+    <div class="row small g-2">
+        @foreach (var kpi in GharsKpiCatalog.All)
+        {
+            <div class="col-md-6">@(ar ? kpi.NameAr : kpi.NameEn): <strong>@kpi.TargetText</strong></div>
+        }
+    </div>
+    <div class="small mt-2">@T($"{GharsKpiCatalog.BaselineYear} is the baseline year for comparison up to the {GharsKpiCatalog.TargetYear} target.", $"عام {GharsKpiCatalog.BaselineYear} هو سنة الأساس للمقارنة وصولاً إلى مستهدف {GharsKpiCatalog.TargetYear}.")</div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <label class="form-label">@T("Sports Season", "الموسم الرياضي")</label>
+        <select class="form-select" asp-for="SeasonId">@foreach (var s in seasons){<option value="@s.Id">@(ar ? s.TitleAr : s.TitleEn)</option>}</select>
+        <span asp-validation-for="SeasonId" class="text-danger"></span>
+    </div>
+
+    @* Club identity is derived from the authenticated user - never a free selection for a single-club user. *@
+    <div class="col-md-6">
+        <label class="form-label">@T("Club", "النادي")</label>
+        @if (clubs.Count <= 1)
+        {
+            <div class="booking-readonly-value">@N(singleClub)</div>
+        }
+        else
+        {
+            <select class="form-select" asp-for="OrganizationId">@foreach (var c in clubs){<option value="@c.Id">@N(c)</option>}</select>
+            <span asp-validation-for="OrganizationId" class="text-danger"></span>
+        }
+    </div>
+</div>
+
+<hr class="my-4" />
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+    <h2 class="h6 mb-0">@T("Activity indicators", "مؤشرات الأنشطة")</h2>
+    <span class="badge @(hasDerived ? "text-bg-success" : "text-bg-secondary")">
+        @(hasDerived ? T("Calculated automatically from your Agenda", "محتسبة تلقائياً من الأجندة") : T("No agenda data yet - enter manually", "لا توجد بيانات أجندة - أدخل القيم يدوياً"))
+    </span>
+</div>
+<div class="row g-3">
+    <div class="col-md-3"><label class="form-label">@T("Lectures / activities", "المحاضرات / الأنشطة")</label><input class="form-control" asp-for="NumberOfLecturesActivities" readonly="@hasDerived" /></div>
+    <div class="col-md-3"><label class="form-label">@T("Lecturers", "المحاضرون")</label><input class="form-control" asp-for="NumberOfLecturers" readonly="@hasDerived" /></div>
+    <div class="col-md-3"><label class="form-label">@T("Implementing entities", "الجهات المنفذة")</label><input class="form-control" asp-for="NumberOfImplementingEntities" readonly="@hasDerived" /></div>
+    <div class="col-md-3"><label class="form-label">@T("Participants", "المشاركون")</label><input class="form-control" asp-for="NumberOfParticipants" readonly="@hasDerived" /></div>
+</div>
+
+<hr class="my-4" />
+<h2 class="h6 mb-2">@T("Participation & conduct", "المشاركة والسلوك")</h2>
+<div class="row g-3">
+    <div class="col-md-3"><label class="form-label">@T("Player participation rate (%)", "نسبة مشاركة اللاعبين (%)")</label><input class="form-control" asp-for="PlayerParticipationRate" /><span asp-validation-for="PlayerParticipationRate" class="text-danger"></span></div>
+    @* Attendance is entered by the club and approved by DSC - the platform does not calculate it, and the
+       operational QR check-in figures shown elsewhere are a separate metric that must not replace it. *@
+    <div class="col-md-3"><label class="form-label">@T("Attendance rate (%)", "نسبة الحضور (%)")</label><input class="form-control" asp-for="AttendanceRate" /><div class="form-text">@T("Club submitted, DSC approved. Not calculated from check-in records.", "إدخال النادي واعتماد مجلس دبي الرياضي. لا تُحتسب من سجلات تسجيل الحضور.")</div><span asp-validation-for="AttendanceRate" class="text-danger"></span></div>
+    <div class="col-md-3"><label class="form-label">@T("Warnings & red cards", "الإنذارات والبطاقات الحمراء")</label><input class="form-control" asp-for="WarningsAndRedCards" /></div>
+    <div class="col-md-3"><label class="form-label">@T("Ethical values adherence (%)", "الالتزام بالقيم الأخلاقية (%)")</label><input class="form-control" asp-for="EthicalValuesAdherenceRate" /><span asp-validation-for="EthicalValuesAdherenceRate" class="text-danger"></span></div>
+</div>
+
+<hr class="my-4" />
+<h2 class="h6 mb-2">@T("Health & physical activity", "الصحة والنشاط البدني")</h2>
+<div class="row g-3">
+    <div class="col-md-3"><label class="form-label">@T("Weekly training minutes (total)", "دقائق التدريب الأسبوعية (الإجمالي)")</label><input class="form-control" asp-for="WeeklyTrainingMinutes" /></div>
+    <div class="col-md-3">
+        <label class="form-label">@T("Players achieving ≥150 min/week (%)", "نسبة اللاعبين المحققين 150 دقيقة أسبوعياً (%)")</label>
+        <input class="form-control" asp-for="PhysicalActivityComplianceRate" placeholder="@T("Leave empty if not measured", "اتركه فارغاً إذا لم يُقَس")" />
+        <div class="form-text">@T("Leave empty when not measured - it is reported as No Data, not 0%.", "اتركه فارغاً عند عدم القياس - يظهر كـ (لا توجد بيانات) وليس 0%.")</div>
+        <span asp-validation-for="PhysicalActivityComplianceRate" class="text-danger"></span>
+    </div>
+    <div class="col-md-3"><label class="form-label">@T("Healthy dietary habits (%)", "العادات الغذائية الصحية (%)")</label><input class="form-control" asp-for="HealthyDietaryHabitsRate" /><span asp-validation-for="HealthyDietaryHabitsRate" class="text-danger"></span></div>
+    <div class="col-md-3"><label class="form-label">@T("Community events", "الفعاليات المجتمعية")</label><input class="form-control" asp-for="CommunityEventsCount" /></div>
+</div>
+<div class="row g-3 mt-1">
+    <div class="col-12"><div class="text-muted small">@T("Aggregated counts of players diagnosed with lifestyle-related conditions (club medical reports). No individual records are stored.", "أعداد مجمّعة للاعبين المصابين بأمراض نمط الحياة وفق تقارير طبيب النادي. لا يتم تخزين أي سجلات فردية.")</div></div>
+    <div class="col-md-3"><label class="form-label">@T("Diabetes", "السكري")</label><input class="form-control" asp-for="DiabetesCases" /></div>
+    <div class="col-md-3"><label class="form-label">@T("Heart conditions", "أمراض القلب")</label><input class="form-control" asp-for="HeartConditionCases" /></div>
+    <div class="col-md-3"><label class="form-label">@T("Hypertension", "ارتفاع ضغط الدم")</label><input class="form-control" asp-for="HypertensionCases" /></div>
+    <div class="col-md-3"><label class="form-label">@T("Other (incl. vision)", "أخرى (تشمل النظر)")</label><input class="form-control" asp-for="OtherLifestyleConditionCases" /></div>
+</div>
+
+<hr class="my-4" />
+<h2 class="h6 mb-2">@T("Satisfaction", "الرضا")</h2>
+<div class="row g-3">
+    <div class="col-md-4">
+        <label class="form-label">@T("Satisfaction rate (%)", "نسبة الرضا (%)")</label>
+        <input class="form-control" asp-for="SatisfactionRate" />
+        <div class="form-text">@T("Taken from the Official Program Survey analysed report — not from internal Ghars activity surveys. DSC records the supporting report at review.", "مأخوذة من التقرير التحليلي للاستبيان الرسمي للبرنامج — وليس من استبيانات غرس الداخلية. يسجل مجلس دبي الرياضي التقرير الداعم عند المراجعة.")</div>
+        <span asp-validation-for="SatisfactionRate" class="text-danger"></span>
+    </div>
+</div>
+
+<hr class="my-4" />
+<h2 class="h6 mb-2">@T("Supporting documents", "المستندات الداعمة")</h2>
+@if (existingDocuments.Any())
+{
+    <div class="d-flex flex-wrap gap-2 mb-2">
+        @foreach (var doc in existingDocuments)
+        {
+            @* Evidence is served through the authorized endpoint, never by direct file path. *@
+            <a class="badge text-bg-light border p-2 text-decoration-none" href="/protected-files/kpi/@doc.Id" target="_blank" rel="noopener noreferrer"><i class="bi bi-paperclip me-1"></i>@doc.OriginalFileName</a>
+        }
+    </div>
+}
+<div class="row g-3">
+    <div class="col-12">
+        <input class="form-control" type="file" asp-for="Documents" multiple accept=".pdf,.xls,.xlsx,.csv,.doc,.docx,.png,.jpg,.jpeg" />
+        <div class="form-text">@T("Annual reports, previous tables, Excel files or approved statistics (PDF, Excel, Word, CSV, images - max 25 MB each).", "التقارير السنوية أو الجداول السابقة أو ملفات Excel أو الإحصاءات المعتمدة (PDF، Excel، Word، CSV، صور - بحد أقصى 25 ميجابايت لكل ملف).")</div>
+        <span asp-validation-for="Documents" class="text-danger"></span>
+    </div>
+</div>

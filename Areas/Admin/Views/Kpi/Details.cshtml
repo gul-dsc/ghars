@@ -1,0 +1,200 @@
+@model GharsPlatform.Models.Core.KpiSubmission
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("KPI Details", "تفاصيل مؤشرات الأداء");
+    ViewData["PageTitle"] = ViewData["Title"];
+    string N(Organization? o) => ar ? (o?.NameAr ?? o?.NameEn ?? "") : (o?.NameEn ?? o?.NameAr ?? "");
+    var previousViolations = ViewBag.PreviousViolations as int?;
+    var previousSeasonTitle = ViewBag.PreviousSeasonTitle as string;
+    var diseaseFree = GharsKpiCatalog.DiseaseFreePercent(Model);
+    var reduction = GharsKpiCatalog.ViolationsReductionPercent(previousViolations, Model.WarningsAndRedCards);
+    string NoData() => T("No Data", "لا توجد بيانات");
+    string Pct(decimal? v) => v.HasValue ? $"{v.Value:0.#}%" : NoData();
+
+    // Achieved / at-risk / not-achieved badge against the approved target.
+    string Badge(decimal? actual, KpiDefinition kpi)
+    {
+        if (!actual.HasValue || !kpi.Target.HasValue) return "text-bg-secondary";
+        var a = actual.Value; var t = kpi.Target.Value;
+        if (kpi.HigherIsBetter) return a >= t ? "text-bg-success" : (a >= t * 0.85m ? "text-bg-warning" : "text-bg-danger");
+        return a <= t ? "text-bg-success" : (a <= t * 1.15m ? "text-bg-warning" : "text-bg-danger");
+    }
+    string BadgeText(decimal? actual, KpiDefinition kpi)
+    {
+        if (!actual.HasValue || !kpi.Target.HasValue) return NoData();
+        var cls = Badge(actual, kpi);
+        return cls.Contains("success") ? T("Achieved", "محقق") : cls.Contains("warning") ? T("At risk", "معرض للخطر") : T("Not achieved", "غير محقق");
+    }
+}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+        <h1 class="h4 mb-0">@N(Model.Organization) — @(ar ? Model.Season?.TitleAr : Model.Season?.TitleEn)</h1>
+        <div class="text-muted">@T("Submitted", "تاريخ الإرسال"): @(Model.SubmittedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "-")</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="/Admin/Kpi"><i class="bi bi-arrow-left"></i> @T("Back", "رجوع")</a>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-3"><div class="stat-card"><div class="label">@T("Activities", "الأنشطة")</div><div class="value">@Model.NumberOfLecturesActivities</div><div class="hint">@T("From agenda", "من الأجندة")</div></div></div>
+    <div class="col-md-3"><div class="stat-card"><div class="label">@T("Participants", "المشاركون")</div><div class="value">@Model.NumberOfParticipants</div><div class="hint">@T("From agenda", "من الأجندة")</div></div></div>
+    <div class="col-md-3"><div class="stat-card"><div class="label">@T("Lecturers", "المحاضرون")</div><div class="value">@Model.NumberOfLecturers</div><div class="hint">@T("Distinct", "فريدون")</div></div></div>
+    <div class="col-md-3"><div class="stat-card"><div class="label">@T("Implementing entities", "الجهات المنفذة")</div><div class="value">@Model.NumberOfImplementingEntities</div><div class="hint">@T("Distinct", "فريدة")</div></div></div>
+</div>
+
+<div class="card rounded-4 border-0 shadow-sm mb-3">
+    <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-0">@T("Indicator values vs approved targets", "قيم المؤشرات مقابل المستهدفات المعتمدة")</h2></div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead class="table-light"><tr><th>@T("Indicator", "المؤشر")</th><th>@T("Target", "المستهدف")</th><th>@T("Reported", "القيمة المسجلة")</th><th>@T("Status", "الحالة")</th></tr></thead>
+            <tbody>
+                @{
+                    var rows = new (KpiDefinition Kpi, decimal? Value)[]
+                    {
+                        (GharsKpiCatalog.PlayerParticipation, Model.PlayerParticipationRate),
+                        (GharsKpiCatalog.AttendanceRate, Model.AttendanceRate),
+                        (GharsKpiCatalog.EthicalValues, Model.EthicalValuesAdherenceRate),
+                        (GharsKpiCatalog.PhysicalActivity, Model.PhysicalActivityComplianceRate),
+                        (GharsKpiCatalog.LifestyleDiseaseFree, diseaseFree),
+                        (GharsKpiCatalog.HealthyDiet, Model.HealthyDietaryHabitsRate),
+                        (GharsKpiCatalog.CommunityEvents, Model.CommunityEventsCount),
+                        (GharsKpiCatalog.Satisfaction, Model.SatisfactionRate)
+                    };
+                }
+                @foreach (var row in rows)
+                {
+                    <tr>
+                        @* The calculation line is the approved definition of the indicator; the source badge
+                           states who actually supplies the number, so a club-entered figure such as the
+                           attendance rate is never read as something the platform computed. *@
+                        <td>@(ar ? row.Kpi.NameAr : row.Kpi.NameEn)<div class="small text-muted">@(ar ? row.Kpi.CalculationAr : row.Kpi.CalculationEn)</div>
+                            <span class="badge text-bg-light border fw-normal mt-1">@GharsKpiCatalog.SourceLabel(row.Kpi.Source, ar)</span>
+                        </td>
+                        <td>@row.Kpi.TargetText</td>
+                        <td>@(row.Kpi.Unit == "%" ? Pct(row.Value) : (row.Value.HasValue ? row.Value.Value.ToString("0.#") : NoData()))</td>
+                        <td><span class="badge @Badge(row.Value, row.Kpi)">@BadgeText(row.Value, row.Kpi)</span></td>
+                    </tr>
+                }
+                <tr>
+                    <td>@(ar ? GharsKpiCatalog.ViolationsReduction.NameAr : GharsKpiCatalog.ViolationsReduction.NameEn)
+                        <div class="small text-muted">@(ar ? GharsKpiCatalog.ViolationsReduction.CalculationAr : GharsKpiCatalog.ViolationsReduction.CalculationEn)</div>
+                        <div class="small text-muted">@T("Current season violations", "مخالفات الموسم الحالي"): @Model.WarningsAndRedCards @(previousViolations.HasValue ? $"· {previousSeasonTitle}: {previousViolations}" : "")</div>
+                    </td>
+                    <td>@GharsKpiCatalog.ViolationsReduction.TargetText</td>
+                    <td>@Pct(reduction)</td>
+                    <td><span class="badge @Badge(reduction, GharsKpiCatalog.ViolationsReduction)">@BadgeText(reduction, GharsKpiCatalog.ViolationsReduction)</span></td>
+                </tr>
+                <tr>
+                    <td>@T("Weekly training minutes (total)", "دقائق التدريب الأسبوعية (الإجمالي)")</td>
+                    <td>—</td>
+                    <td>@Model.WeeklyTrainingMinutes</td>
+                    <td><span class="badge text-bg-light border">@T("Reference", "مرجعي")</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@{
+    var satisfactionKpi = GharsKpiCatalog.Satisfaction;
+    var linkedSurvey = Model.SatisfactionExternalSurvey;
+}
+@* Satisfaction is the one indicator whose approved value is meant to rest on an external instrument,
+   so the review screen states plainly which official report backs the number - or that none is cited. *@
+<div class="card rounded-4 border-0 shadow-sm mb-3">
+    <div class="card-body">
+        <h2 class="h6 mb-3">@T("Satisfaction evidence", "أدلة مؤشر الرضا")</h2>
+        <dl class="row mb-0">
+            <dt class="col-sm-4">@T("Satisfaction rate", "نسبة الرضا")</dt>
+            <dd class="col-sm-8">@Pct(Model.SatisfactionRate) <span class="text-muted small">(@T("target", "المستهدف") @satisfactionKpi.TargetText)</span></dd>
+
+            <dt class="col-sm-4">@T("Source", "المصدر")</dt>
+            <dd class="col-sm-8">@GharsKpiCatalog.SourceLabel(satisfactionKpi.Source, ar)</dd>
+
+            <dt class="col-sm-4">@T("Linked official survey", "الاستبيان الرسمي المرتبط")</dt>
+            <dd class="col-sm-8">
+                @if (linkedSurvey is null)
+                {
+                    <span class="text-warning-emphasis">@T("No linked official survey report", "لا يوجد تقرير استبيان رسمي مرتبط")</span>
+                }
+                else
+                {
+                    <div>@(ar ? linkedSurvey.TitleAr : linkedSurvey.TitleEn)</div>
+                    @if (string.IsNullOrWhiteSpace(linkedSurvey.ReportPdfPath))
+                    {
+                        <div class="small text-muted">@T("No analysed report has been uploaded for this survey yet.", "لم يتم رفع التقرير التحليلي لهذا الاستبيان بعد.")</div>
+                    }
+                    else
+                    {
+                        <a class="btn btn-sm btn-outline-primary mt-1" href="/protected-files/survey-report/@linkedSurvey.Id" target="_blank" rel="noopener noreferrer">
+                            <i class="bi bi-file-earmark-pdf"></i> @T("Open report", "فتح التقرير")
+                        </a>
+                    }
+                }
+            </dd>
+        </dl>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card rounded-4 border-0 shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h6 mb-3">@T("Supporting evidence", "المستندات الداعمة")</h2>
+                @if (Model.Documents == null || !Model.Documents.Any())
+                {
+                    <div class="text-muted">@T("No documents were attached.", "لم يتم إرفاق مستندات.")</div>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var d in Model.Documents)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span class="text-truncate">@d.OriginalFileName</span>
+                                <a class="btn btn-sm btn-outline-primary" href="/protected-files/kpi/@d.Id" target="_blank" rel="noopener noreferrer">@T("Open", "فتح")</a>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card rounded-4 border-0 shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h6 mb-3">@T("Review decision", "قرار المراجعة")</h2>
+                @if (!string.IsNullOrWhiteSpace(Model.ReviewNotes))
+                {
+                    <div class="alert alert-light border"><strong>@T("Previous notes:", "ملاحظات سابقة:")</strong> @Model.ReviewNotes</div>
+                }
+                <form asp-action="Review" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <label class="form-label">@T("Decision", "القرار")</label>
+                    <select class="form-select mb-2" name="status">
+                        <option value="Approved">@T("Approve", "اعتماد")</option>
+                        <option value="MoreInfoRequired">@T("Return for correction", "إعادة للتصحيح")</option>
+                        <option value="Rejected">@T("Reject", "رفض")</option>
+                    </select>
+                    @{ var surveyOptions = ViewBag.SatisfactionSurveys as List<ExternalSurvey> ?? new List<ExternalSurvey>(); }
+                    <label class="form-label">@T("Supporting official survey (satisfaction)", "الاستبيان الرسمي الداعم (الرضا)")</label>
+                    <select class="form-select mb-1" name="satisfactionExternalSurveyId">
+                        <option value="">@T("— None —", "— لا يوجد —")</option>
+                        @foreach (var s in surveyOptions)
+                        {
+                            <option value="@s.Id" selected="@(Model.SatisfactionExternalSurveyId == s.Id)">@(ar ? s.TitleAr : s.TitleEn)@(string.IsNullOrWhiteSpace(s.ReportPdfPath) ? T(" (no report yet)", " (بدون تقرير)") : "")</option>
+                        }
+                    </select>
+                    <div class="form-text mb-3">@T("Records which official report supports the submitted satisfaction rate. It does not change the value.", "يسجل التقرير الرسمي الداعم لنسبة الرضا المُرسلة، ولا يغيّر القيمة.")</div>
+                    <label class="form-label">@T("Notes to the club", "ملاحظات للنادي")</label>
+                    <textarea class="form-control mb-3" name="notes" rows="3">@Model.ReviewNotes</textarea>
+                    <button class="btn btn-success">@T("Submit decision", "اعتماد القرار")</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

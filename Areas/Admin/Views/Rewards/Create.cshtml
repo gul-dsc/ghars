@@ -1,0 +1,49 @@
+@model GharsPlatform.Controllers.Admin.RewardsController.RewardVm
+@{
+    ViewData["Title"] = "Create Reward";
+    ViewData["PageTitle"] = "Create Reward";
+}
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-4">
+        <form method="post" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Title (EN)</label>
+                    <input class="form-control" asp-for="TitleEn" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Title (AR)</label>
+                    <input class="form-control" asp-for="TitleAr" />
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Description (EN)</label>
+                    <textarea class="form-control" asp-for="DescriptionEn" rows="3"></textarea>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Points Required</label>
+                    <input class="form-control" asp-for="PointsRequired" />
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" asp-for="IsActive" />
+                        <label class="form-check-label">Active</label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Image (optional)</label>
+                    <input class="form-control" type="file" asp-for="Image" />
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a class="btn btn-outline-secondary" href="/Admin/Rewards">Back</a>
+                <button class="btn btn-primary" type="submit">Create</button>
+            </div>
+
+            <div class="text-danger small mt-2" asp-validation-summary="All"></div>
+        </form>
+    </div>
+</div>
+
+@section Scripts{
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -1,0 +1,41 @@
+@model GharsPlatform.Controllers.Admin.CertificatesController.IssueVm
+@{
+    ViewData["Title"] = "Issue Certificates";
+    ViewData["PageTitle"] = "Issue Certificates";
+    var sessions = ViewBag.Sessions as List<GharsPlatform.Models.Core.AttendanceSession> ?? new();
+}
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-4">
+        <form method="post">
+            @Html.AntiForgeryToken()
+            <div class="row g-3">
+                <div class="col-md-8">
+                    <label class="form-label">Attendance Session</label>
+                    <select class="form-select" asp-for="AttendanceSessionId">
+                        @foreach (var s in sessions)
+                        {
+                            <option value="@s.Id">@s.Id - @s.Activity?.TitleEn (@s.SessionStartUtc.ToString("yyyy-MM-dd"))</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Language</label>
+                    <select class="form-select" asp-for="Language">
+                        <option value="en">English</option>
+                        <option value="ar">Arabic</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a class="btn btn-outline-secondary" href="/Admin/Certificates">Back</a>
+                <button class="btn btn-primary" type="submit">Issue</button>
+            </div>
+
+            <div class="small text-muted mt-3">
+                Certificates are generated as PDF with QR code verification.
+            </div>
+            <div class="text-danger small mt-2" asp-validation-summary="All"></div>
+        </form>
+    </div>
+</div>

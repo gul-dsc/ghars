@@ -1,0 +1,210 @@
+:root { --dsc-charcoal: #353535; --dsc-teal: #51b499; --dsc-white: #ffffff; --ghars-green: #2D9B6C; --ghars-deep: #1B5E32; --ghars-sprout: #AED581; --bg: #f6f7f8; --surface: #ffffff; --border: #e6e8eb; --text: #1c1f23; --muted: #6b7280; --primary: var(--ghars-green); --primary-hover: #449e86; --dark: var(--dsc-charcoal); --focus: rgba(81,180,153,.35); --shadow: 0 10px 24px rgba(0,0,0,.06); }
+
+html, body { height: 100%; }
+
+body { background: var(--bg); color: var(--text); font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; }
+
+a { color: var(--primary); text-decoration: none; }
+
+    a:hover { color: #3e907b; }
+
+.navbar { background: #ffffff !important; border-bottom: 1px solid var(--border); box-shadow: 0 2px 10px rgba(0,0,0,.03); min-height: 88px; padding-top: 12px; padding-bottom: 12px; }
+
+.ghars-navbar-wrap { align-items: center; gap: 20px; }
+
+.ghars-dsc-brand { display: flex; align-items: center; flex: 0 0 auto; }
+
+    .ghars-dsc-brand img { height: 64px; width: auto; display: block; object-fit: contain; }
+
+.ghars-main-nav { align-items: center; gap: 4px; }
+
+    .ghars-main-nav .nav-link { color: rgba(53,53,53,.85) !important; font-weight: 600; padding: .55rem .8rem !important; line-height: 1.25; white-space: nowrap; }
+
+        .ghars-main-nav .nav-link:hover { color: var(--dark) !important; }
+
+.ghars-top-actions { flex: 0 0 auto; margin-left: auto; }
+
+.ghars-logo-right { display: flex; align-items: center; justify-content: center; margin-inline-start: 6px; }
+
+    .ghars-logo-right img { height: 78px; width: auto; display: block; object-fit: contain; }
+
+.navbar-toggler { border-color: var(--border); }
+
+.ghars-auth-link,
+.ghars-lang-btn { color: var(--dark) !important; border-color: #cfd4da !important; background-color: #ffffff !important; white-space: nowrap; }
+
+    .ghars-auth-link:hover,
+    .ghars-lang-btn:hover { color: #ffffff !important; background-color: var(--dark) !important; border-color: var(--dark) !important; }
+
+.ghars-user-name { color: var(--dark); font-weight: 600; font-size: .95rem; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
+
+.ghars-user-menu { max-width: 230px; }
+
+.ghars-user-dropdown { min-width: 240px; border-radius: 14px; border: 1px solid var(--border); box-shadow: var(--shadow); padding-top: 10px; padding-bottom: 10px; }
+
+.dropdown-item { padding: .65rem 1rem; font-weight: 500; }
+
+    .dropdown-item:hover { background: #f6f7f8; }
+
+.btn-primary { background: var(--primary) !important; border-color: var(--primary) !important; font-weight: 700; }
+
+    .btn-primary:hover { background: var(--primary-hover) !important; border-color: var(--primary-hover) !important; }
+
+.btn-outline-primary { color: var(--primary) !important; border-color: var(--primary) !important; font-weight: 700; }
+
+    .btn-outline-primary:hover { background: var(--primary) !important; color: #fff !important; border-color: var(--primary) !important; }
+
+.btn-outline-dark { color: var(--dark) !important; border-color: var(--dark) !important; font-weight: 700; }
+
+    .btn-outline-dark:hover { background: var(--dark) !important; color: #fff !important; border-color: var(--dark) !important; }
+
+.form-control:focus,
+.form-select:focus { border-color: var(--primary) !important; box-shadow: 0 0 0 .2rem var(--focus) !important; }
+
+.card,
+.shadow-sm { border: 1px solid var(--border) !important; border-radius: 16px !important; box-shadow: var(--shadow) !important; }
+
+.ghars-hero { border-radius: 22px; padding: 48px 44px; color: #fff; position: relative; overflow: hidden; box-shadow: var(--shadow); border: 1px solid rgba(255,255,255,.06); background: radial-gradient(900px 380px at 15% 20%, rgba(174,213,129,.20), transparent 55%), radial-gradient(700px 420px at 85% 30%, rgba(45,155,108,.22), transparent 60%), linear-gradient(135deg, #1f2b25 0%, #353535 40%, #2D9B6C 100%); }
+
+    .ghars-hero .chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.22); font-weight: 700; font-size: .85rem; }
+
+    .ghars-hero h1 { font-size: clamp(34px, 4vw, 58px); font-weight: 900; letter-spacing: .2px; margin-bottom: 1rem; }
+
+    .ghars-hero p { color: rgba(255,255,255,.92); font-size: 1.08rem; line-height: 1.7; max-width: 820px; }
+
+    .ghars-hero .hero-panel { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); border-radius: 18px; padding: 22px; backdrop-filter: blur(10px); }
+
+        .ghars-hero .hero-panel h5 { font-weight: 900; margin-bottom: 8px; }
+
+.section-title { font-weight: 900; color: var(--dark); }
+
+.section-subtitle { color: var(--muted); }
+
+.badge.bg-teal { background: var(--primary) !important; }
+
+.ghars-story-section { position: relative; }
+
+.ghars-story-kicker { font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--ghars-deep); background: rgba(45,155,108,.08); border: 1px solid rgba(45,155,108,.14); border-radius: 999px; padding: .45rem .7rem; }
+
+.ghars-story-feature { border-radius: 20px; overflow: hidden; background: linear-gradient(135deg, #214033 0%, #2d9b6c 100%); box-shadow: 0 20px 40px rgba(27,94,50,.18); }
+
+.ghars-story-media { min-height: 270px; display: flex; align-items: flex-end; background-size: cover; background-position: center; position: relative; }
+
+.ghars-story-media::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(18,31,24,.08) 0%, rgba(18,31,24,.86) 78%); }
+
+.ghars-story-overlay { position: relative; z-index: 1; padding: 1.35rem; color: #fff; width: 100%; }
+
+.ghars-story-label { display: inline-flex; align-items: center; border-radius: 999px; padding: .35rem .65rem; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); margin-bottom: .85rem; }
+
+.ghars-story-title { font-size: 1.3rem; font-weight: 900; line-height: 1.25; margin-bottom: .55rem; }
+
+.ghars-story-excerpt { color: rgba(255,255,255,.9); line-height: 1.65; max-width: 34rem; }
+
+.ghars-story-list { display: grid; gap: .9rem; }
+
+.ghars-story-mini { display: grid; grid-template-columns: 46px 1fr; gap: .9rem; align-items: flex-start; padding: .95rem 1rem; border-radius: 16px; border: 1px solid #e4ece7; background: linear-gradient(180deg, #ffffff 0%, #f7fbf9 100%); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+
+.ghars-story-mini:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(27,94,50,.08); border-color: rgba(45,155,108,.28); }
+
+.ghars-story-mini-icon { width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(45,155,108,.14), rgba(174,213,129,.35)); color: var(--ghars-deep); font-size: 1.05rem; }
+
+.ghars-story-mini-title { font-size: 1rem; font-weight: 800; color: var(--dark); margin: .1rem 0 .35rem; }
+
+.ghars-story-mini-excerpt { color: var(--muted); line-height: 1.55; }
+
+.booking-request-shell { max-width: 1200px; margin: 0 auto; }
+
+.booking-section-card { border-radius: 20px; }
+
+.booking-section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
+
+.booking-readonly-value { min-height: 46px; display: flex; align-items: center; padding: .8rem .95rem; border-radius: 14px; border: 1px solid #e3eae6; background: linear-gradient(180deg, #ffffff 0%, #f7fbf9 100%); font-weight: 700; color: var(--dark); }
+
+.booking-checkbox-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .85rem; }
+
+.booking-check-card { display: flex; align-items: center; gap: .7rem; padding: .9rem 1rem; border-radius: 16px; border: 1px solid #dfe8e2; background: #fff; cursor: pointer; font-weight: 700; color: var(--dark); transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+
+.booking-check-card:hover { border-color: rgba(45,155,108,.28); box-shadow: 0 10px 22px rgba(27,94,50,.08); transform: translateY(-1px); }
+
+.booking-check-card input { margin: 0; accent-color: var(--primary); }
+
+.booking-validation-summary:empty { display: none; }
+
+html[dir="rtl"] .ghars-top-actions { margin-left: 0; margin-right: auto; }
+
+html[dir="rtl"] .ghars-user-dropdown { text-align: right; }
+
+html[dir="rtl"] .booking-section-head { text-align: right; }
+
+@media (max-width: 1399.98px) {
+    .ghars-dsc-brand img { height: 56px; }
+
+    .ghars-logo-right img { height: 66px; }
+
+    .ghars-main-nav .nav-link { padding: .45rem .55rem !important; font-size: .95rem; }
+}
+
+@media (max-width: 1199.98px) {
+    .ghars-top-actions { width: 100%; justify-content: flex-start; margin-top: 1rem; flex-wrap: wrap; }
+
+    .ghars-main-nav { margin-top: 1rem; margin-bottom: 1rem; align-items: flex-start; }
+
+        .ghars-main-nav .nav-link { white-space: normal; }
+
+    .ghars-logo-right img { height: 58px; }
+}
+
+@media (max-width: 991.98px) {
+    .ghars-dsc-brand img { height: 46px; }
+
+    .ghars-logo-right img { height: 48px; }
+
+    .ghars-hero { padding: 28px 20px; }
+
+    .ghars-story-media { min-height: 235px; }
+}
+/* User dropdown button fix */
+.ghars-user-menu { background: #ffffff !important; color: #353535 !important; border: 1px solid #d0d0d0 !important; }
+
+    /* Hover state */
+    .ghars-user-menu:hover,
+    .ghars-user-menu:focus,
+    .ghars-user-menu:active { background: #f3f4f6 !important; color: #353535 !important; border-color: #c8c8c8 !important; }
+
+    /* Icon color */
+    .ghars-user-menu i { color: #353535 !important; }
+
+    /* Dropdown arrow color */
+    .ghars-user-menu::after { filter: none; }
+
+.ghars-user-dropdown .dropdown-item:hover { background: #f5f7f8; color: #353535; }
+
+
+
+
+
+
+
+
+
+
+
+html, body { max-width: 100%; overflow-x: hidden; }
+
+.navbar,
+.ghars-header,
+main,
+footer,
+.container,
+.container-fluid { max-width: 100%; }
+
+.ghars-hero,
+.card,
+.row { max-width: 100%; }
+.ghars-notification-dropdown{min-width:360px;max-width:420px;max-height:460px;overflow:auto}.ghars-notification-dropdown .dropdown-item{white-space:normal}.dashboard-hero{border-radius:18px;background:linear-gradient(135deg,#1b5e32,#67b481);color:#fff;padding:26px 28px;margin-bottom:24px}.metric-card{border:1px solid #e8ece8;border-radius:16px;background:#fff;padding:18px;box-shadow:0 14px 36px rgba(0,0,0,.06)}.metric-card .value{font-size:2rem;font-weight:800;color:#1b5e32}.metric-card .label{color:#5f6b66}.action-panel{border:1px solid #f2d27c;background:#fff9e8;border-radius:16px;padding:18px}.ghars-filter-card{border:1px solid #e8ece8;border-radius:16px;background:#fff;padding:16px;margin-bottom:18px}.status-pill{border-radius:999px;padding:.25rem .55rem;font-size:.78rem;font-weight:700}.chart-card{border:1px solid #e8ece8;border-radius:16px;background:#fff;padding:18px;box-shadow:0 14px 36px rgba(0,0,0,.05)}.empty-state{border:1px dashed #cfd8d3;border-radius:16px;padding:24px;text-align:center;color:#6c757d;background:#fafcfb}.proposal-option{border:1px solid #e6ebe7;border-radius:14px;padding:14px;margin-bottom:12px;background:#fff}.required-action-banner{background:#fff3cd;border:1px solid #ffdf7e;border-radius:16px;padding:14px 18px;margin-bottom:18px;font-weight:700}.rtl .ghars-notification-dropdown{text-align:right}
+
+/* Universal Ghars filter panel for public/member pages */
+.ghars-filter-panel{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px 16px;margin:0 0 18px 0;box-shadow:0 8px 22px rgba(15,23,42,.06)}
+.ghars-filter-panel .form-label{font-size:.78rem;font-weight:700;color:#374151;margin-bottom:.25rem}
+.ghars-filter-panel .filter-title{font-weight:800;color:#1f2937;margin-bottom:.75rem;display:flex;align-items:center;gap:.45rem}
+.ghars-filter-empty{background:#fff3cd;border:1px solid #ffe69c;border-radius:12px;padding:10px 12px;margin-top:10px;color:#664d03}

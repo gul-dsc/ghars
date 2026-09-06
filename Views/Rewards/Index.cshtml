@@ -1,0 +1,50 @@
+@model List<GharsPlatform.Models.Core.Reward>
+@{
+    ViewData["Title"] = "Rewards";
+}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <h3 class="mb-0"><i class="bi bi-gift me-2"></i>Rewards</h3>
+    <a class="btn btn-outline-secondary btn-sm" href="/">Home</a>
+</div>
+
+@if (!Model.Any())
+{
+    <div class="text-muted">No active rewards right now.</div>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var r in Model)
+        {
+            <div class="col-md-6 col-xl-4">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    @if (!string.IsNullOrWhiteSpace(r.ImagePath))
+                    {
+                        <img src="@r.ImagePath" class="card-img-top rounded-top-4" style="height: 180px; object-fit: cover;" alt="Reward image" />
+                    }
+                    <div class="card-body">
+                        <div class="fw-semibold">@r.TitleEn</div>
+                        <div class="small text-muted">@r.PointsRequired points</div>
+                        @if (!string.IsNullOrWhiteSpace(r.DescriptionEn))
+                        {
+                            <div class="small mt-2">@((r.DescriptionEn!.Length > 140) ? r.DescriptionEn.Substring(0, 140) + "..." : r.DescriptionEn)</div>
+                        }
+                    </div>
+                    <div class="card-footer bg-transparent border-0 p-3 pt-0">
+                        @if (User.Identity?.IsAuthenticated ?? false)
+                        {
+                            <form method="post" action="/rewards/redeem/@r.Id">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn-primary btn-sm w-100" type="submit">Redeem</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <a class="btn btn-outline-primary btn-sm w-100" href="/Account/Login">Login to redeem</a>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

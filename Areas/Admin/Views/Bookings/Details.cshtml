@@ -1,0 +1,37 @@
+@model GharsPlatform.Models.Core.BookingRequest
+@{
+    ViewData["Title"] = "Booking Details";
+    ViewData["PageTitle"] = "Booking Details";
+}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Bookings"><i class="bi bi-arrow-left"></i> Back</a>
+    @if (User.IsInRole("Super Admin") && Model.Status == BookingStatus.Pending)
+    {
+        <div class="d-flex gap-2">
+            <form method="post" action="/Admin/Bookings/Approve/@Model.Id">@Html.AntiForgeryToken()<button class="btn btn-sm btn-success" type="submit"><i class="bi bi-check2"></i> Approve</button></form>
+            <form method="post" action="/Admin/Bookings/Reject/@Model.Id" class="d-flex gap-2">@Html.AntiForgeryToken()<input class="form-control form-control-sm" name="reason" placeholder="Rejection reason (optional)" /><button class="btn btn-sm btn-danger" type="submit"><i class="bi bi-x"></i> Reject</button></form>
+        </div>
+    }
+</div>
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm rounded-4 mb-3"><div class="card-body">
+            <div class="d-flex align-items-center justify-content-between"><div><div class="fw-semibold">@Model.Organization?.NameEn</div><div class="text-muted small">@Model.Activity?.TitleEn</div></div><span class="badge text-bg-@(Model.Status==BookingStatus.Approved||Model.Status==BookingStatus.Confirmed?"success":Model.Status==BookingStatus.Pending||Model.Status==BookingStatus.PartnerProposedNewTime?"warning":"danger")">@Model.Status</span></div>
+            <hr />
+            <div class="row small g-2">
+                <div class="col-md-6"><strong>Club:</strong> @Model.Organization?.NameEn</div>
+                <div class="col-md-6"><strong>Partner:</strong> @(Model.PartnerOrganization?.NameEn ?? "-")</div>
+                <div class="col-md-6"><strong>Program:</strong> @Model.Activity?.TitleEn</div>
+                <div class="col-md-6"><strong>Requested Seats:</strong> @Model.RequestedSeats</div>
+                <div class="col-md-6"><strong>Original Time:</strong> @Model.Activity?.StartDateTime.ToString("g") - @Model.Activity?.EndDateTime.ToString("g")</div>
+                <div class="col-md-6"><strong>Confirmed Time:</strong> @(Model.ConfirmedStartUtc.HasValue ? $"{Model.ConfirmedStartUtc:g} - {Model.ConfirmedEndUtc:g}" : "-")</div>
+                <div class="col-md-6"><strong>Created:</strong> @Model.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</div>
+                <div class="col-md-6"><strong>Decision:</strong> @(Model.DecisionAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "-")</div>
+                <div class="col-12"><strong>Club Notes:</strong> @(Model.Notes ?? "-")</div>
+                <div class="col-12"><strong>Partner Comments:</strong> @(Model.PartnerResponseNotes ?? "-")</div>
+            </div>
+        </div></div>
+        <div class="card border-0 shadow-sm rounded-4"><div class="card-body"><h6 class="fw-semibold">Proposed Time Options</h6>@if(!Model.ProposedTimeOptions.Any()){<div class="text-muted">No proposed time options.</div>}else{foreach(var o in Model.ProposedTimeOptions.OrderBy(x=>x.ProposedStartUtc)){<div class="border rounded-3 p-2 mb-2"><div class="fw-semibold">@o.ProposedStartUtc.ToString("g") - @o.ProposedEndUtc.ToString("g")</div><div class="small text-muted">@(o.Note ?? "No note")</div><span class="badge text-bg-@(o.IsSelected?"success":o.IsActive?"warning":"secondary")">@(o.IsSelected?"Selected":o.IsActive?"Active":"Inactive")</span></div>}}</div></div>
+    </div>
+    <div class="col-lg-5"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><h6 class="fw-semibold">Audit Trail</h6>@if (Model.AuditTrail == null || !Model.AuditTrail.Any()){<div class="text-muted">No audit entries.</div>}else{<ul class="list-group list-group-flush">@foreach (var t in Model.AuditTrail.OrderByDescending(x => x.AtUtc)){<li class="list-group-item"><div class="fw-semibold">@t.Action</div><div class="small text-muted">@t.AtUtc.ToString("yyyy-MM-dd HH:mm") • @t.ByUserId</div></li>}</ul>}</div></div></div>
+</div>

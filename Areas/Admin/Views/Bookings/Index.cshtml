@@ -1,0 +1,48 @@
+@model List<GharsPlatform.Models.Core.BookingRequest>
+@{
+    ViewData["Title"] = "Bookings";
+    ViewData["PageTitle"] = "Bookings";
+}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div class="fw-semibold">Bookings</div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-sm btn-outline-secondary" href="/Admin/Bookings?status=Pending">Pending</a>
+        <a class="btn btn-sm btn-outline-secondary" href="/Admin/Bookings?status=Approved">Approved</a>
+        <a class="btn btn-sm btn-outline-secondary" href="/Admin/Bookings?status=Rejected">Rejected</a>
+        <a class="btn btn-sm btn-outline-secondary" href="/Admin/Bookings">All</a>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>ID</th>
+                <th>Organization</th>
+                <th>Activity</th>
+                <th>Seats</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var b in Model)
+            {
+                <tr>
+                    <td>@b.Id</td>
+                    <td class="fw-semibold">@b.Organization?.NameEn</td>
+                    <td>@b.Activity?.TitleEn</td>
+                    <td>@b.RequestedSeats</td>
+                    <td><span class="badge text-bg-@(b.Status==BookingStatus.Approved?"success":b.Status==BookingStatus.Pending?"warning":"danger")">@b.Status</span></td>
+                    <td>@b.CreatedAtUtc.ToString("yyyy-MM-dd")</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-primary" href="/Admin/Bookings/Details/@b.Id">Details</a>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

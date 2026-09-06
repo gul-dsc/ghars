@@ -1,0 +1,34 @@
+@model List<GharsPlatform.Models.Core.Certificate>
+@{
+    ViewData["Title"] = "Certificates Report";
+    ViewData["PageTitle"] = "Certificates Report";
+}
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>ID</th>
+                <th>Certificate No</th>
+                <th>Activity</th>
+                <th>UserId</th>
+                <th>Status</th>
+                <th>Issued</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var c in Model)
+            {
+                <tr>
+                    <td>@c.Id</td>
+                    <td class="fw-semibold">@c.CertificateNo</td>
+                    <td>@c.Activity?.TitleEn</td>
+                    <td class="text-truncate" style="max-width:220px;">@c.UserId</td>
+                    <td>@c.Status</td>
+                    <td>@c.IssuedAtUtc.ToString("yyyy-MM-dd")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

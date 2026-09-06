@@ -1,0 +1,26 @@
+@model GharsPlatform.Controllers.Admin.GalleryController.MediaItemVm
+@using GharsPlatform.Models.Core
+@{
+    var album = ViewBag.Album as MediaAlbum;
+    ViewData["Title"]="Edit Media";
+    ViewData["PageTitle"]="Edit Media";
+}
+<form method="post" enctype="multipart/form-data" class="card p-4 rounded-4 border-0 shadow-sm">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="AlbumId" />
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div><h5 class="mb-0">Edit media item</h5><div class="text-muted small">Album: @album?.TitleEn</div></div>
+        <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@Model.AlbumId">Back to Album</a>
+    </div>
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+    <div class="row g-3">
+        <div class="col-md-3"><label class="form-label">Media Type</label><select class="form-select" asp-for="MediaType"><option value="Image">Image</option><option value="Video">Video</option><option value="Pdf">PDF</option></select></div>
+        <div class="col-md-3"><label class="form-label">Sort Order</label><input class="form-control" asp-for="SortOrder" type="number" /></div>
+        <div class="col-md-6"><label class="form-label">Replace File</label><input class="form-control" type="file" asp-for="File" accept="image/*,video/*,.pdf,application/pdf" /><div class="form-text">Leave empty to keep the current uploaded file.</div></div>
+        <div class="col-12"><label class="form-label">External Link (YouTube/video/PDF URL)</label><input class="form-control" asp-for="ExternalUrl" /></div>
+        <div class="col-md-6"><label class="form-label">Caption EN</label><input class="form-control" asp-for="CaptionEn" /></div>
+        <div class="col-md-6"><label class="form-label">Caption AR</label><input class="form-control" asp-for="CaptionAr" /></div>
+        <div class="col-12 d-flex gap-2"><button class="btn btn-primary">Save Changes</button><a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@Model.AlbumId">Cancel</a></div>
+    </div>
+</form>
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-label="DCAS">
+<rect width="240" height="160" rx="28" fill="#f3faf7"/>
+<circle cx="54" cy="54" r="26" fill="#51b499" opacity=".22"/>
+<path d="M54 28c19 0 34 15 34 34S73 96 54 96 20 81 20 62 35 28 54 28zm0 17a17 17 0 100 34 17 17 0 000-34z" fill="#2d9b6c"/>
+<path d="M100 48h92v14h-92zm0 27h112v12H100zm0 25h76v12h-76z" fill="#1b5e32" opacity=".85"/>
+<text x="120" y="139" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#2d9b6c">DCAS</text>
+</svg>

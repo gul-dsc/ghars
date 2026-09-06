@@ -1,0 +1,38 @@
+@model List<GharsPlatform.Models.Core.Reward>
+@{
+    ViewData["Title"] = "Rewards";
+    ViewData["PageTitle"] = "Rewards";
+}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="fw-semibold">Rewards</div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-sm btn-outline-secondary" href="/Admin/Rewards/Redemptions">Redemptions</a>
+        <a class="btn btn-sm btn-primary" href="/Admin/Rewards/Create"><i class="bi bi-plus-lg"></i> Create</a>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Points</th>
+                <th>Active</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var r in Model)
+            {
+                <tr>
+                    <td>@r.Id</td>
+                    <td class="fw-semibold">@r.TitleEn</td>
+                    <td>@r.PointsRequired</td>
+                    <td>@(r.IsActive ? "Yes" : "No")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

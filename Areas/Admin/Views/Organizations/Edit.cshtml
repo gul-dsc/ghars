@@ -1,0 +1,29 @@
+@model GharsPlatform.Controllers.Admin.OrganizationsController.OrganizationVm
+@using GharsPlatform.Models.Core
+@{
+    var isEdit = Model.Id > 0;
+    ViewData["Title"] = isEdit ? "Edit Organization" : "Create Organization";
+    ViewData["PageTitle"] = ViewData["Title"];
+}
+<div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
+<form method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Id" />
+    <div asp-validation-summary="All" class="text-danger small"></div>
+    <div class="row g-3">
+        <div class="col-md-4"><label class="form-label">Type</label><select class="form-select" asp-for="OrganizationType" asp-items="Html.GetEnumSelectList<OrganizationType>()"></select></div>
+        <div class="col-md-4"><label class="form-label">Status</label><select class="form-select" asp-for="Status" asp-items="Html.GetEnumSelectList<ApprovalStatus>()"></select></div>
+        <div class="col-md-4"><label class="form-label">Logo Path</label><input class="form-control" asp-for="LogoPath" placeholder="/img/partners/default-partner.svg" /></div>
+        <div class="col-md-6"><label class="form-label">Name English</label><input class="form-control" asp-for="NameEn" /></div>
+        <div class="col-md-6"><label class="form-label">Name Arabic</label><input class="form-control" asp-for="NameAr" /></div>
+        <div class="col-md-6"><label class="form-label">Email</label><input class="form-control" asp-for="Email" /></div>
+        <div class="col-md-6"><label class="form-label">Phone</label><input class="form-control" asp-for="Phone" /></div>
+        <div class="col-md-6"><label class="form-label">Address English</label><input class="form-control" asp-for="AddressEn" /></div>
+        <div class="col-md-6"><label class="form-label">Address Arabic</label><input class="form-control" asp-for="AddressAr" /></div>
+        <div class="col-md-6"><label class="form-label">Website</label><input class="form-control" asp-for="WebsiteUrl" /></div>
+        <div class="col-12"><label class="form-label">Notes / Description</label><textarea class="form-control" asp-for="Notes" rows="4"></textarea></div>
+    </div>
+    <div class="mt-4"><button class="btn btn-primary" type="submit">@(isEdit ? "Save" : "Create")</button><a class="btn btn-outline-secondary" asp-action="Index">Cancel</a></div>
+</form>
+</div></div>
+@section Scripts{<partial name="_ValidationScriptsPartial" />}

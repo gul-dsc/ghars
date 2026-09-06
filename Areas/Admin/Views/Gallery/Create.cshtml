@@ -1,0 +1,25 @@
+@model GharsPlatform.Controllers.Admin.GalleryController.AlbumVm
+@using GharsPlatform.Models.Core
+@{
+    ViewData["Title"]="Create Gallery Album";
+    ViewData["PageTitle"]="Create Gallery Album";
+    var seasons=ViewBag.Seasons as List<Season>??new();
+    var orgs=ViewBag.Organizations as List<Organization>??new();
+    var acts=ViewBag.Activities as List<Activity>??new();
+}
+<form method="post" enctype="multipart/form-data" class="card p-4 rounded-4 border-0 shadow-sm">
+    @Html.AntiForgeryToken()
+    <div class="row g-3">
+        <div class="col-md-6"><label class="form-label">Title EN</label><input class="form-control" asp-for="TitleEn" /></div>
+        <div class="col-md-6"><label class="form-label">Title AR</label><input class="form-control" asp-for="TitleAr" /></div>
+        <div class="col-md-6"><label class="form-label">Description EN</label><textarea class="form-control" asp-for="DescriptionEn" rows="4"></textarea></div>
+        <div class="col-md-6"><label class="form-label">Description AR</label><textarea class="form-control" asp-for="DescriptionAr" rows="4"></textarea></div>
+        <div class="col-md-3"><label class="form-label">Season</label><select class="form-select" asp-for="SeasonId"><option value="">None</option>@foreach(var s in seasons){<option value="@s.Id">@s.TitleEn</option>}</select></div>
+        <div class="col-md-3"><label class="form-label">Club / Entity</label><select class="form-select" asp-for="OrganizationId"><option value="">General album</option>@foreach(var o in orgs){<option value="@o.Id">@o.NameEn</option>}</select></div>
+        <div class="col-md-3"><label class="form-label">Lecture / Workshop / Activity</label><select class="form-select" asp-for="ActivityId"><option value="">Not linked</option>@foreach(var a in acts){<option value="@a.Id">@a.TitleEn</option>}</select></div>
+        <div class="col-md-3"><label class="form-label">Album Date</label><input type="date" class="form-control" asp-for="AlbumDate" /></div>
+        <div class="col-md-6"><label class="form-label">Cover Image</label><input type="file" class="form-control" asp-for="CoverImage" accept="image/*" /></div>
+        <div class="col-md-6 d-flex align-items-end"><div class="form-check"><input class="form-check-input" asp-for="IsPublic" /><label class="form-check-label">Published / visible on public site</label></div></div>
+        <div class="col-12 d-flex gap-2"><button class="btn btn-primary">Create Album</button><a class="btn btn-outline-secondary" asp-action="Index">Cancel</a></div>
+    </div>
+</form>

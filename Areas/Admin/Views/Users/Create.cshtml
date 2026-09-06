@@ -1,0 +1,24 @@
+@model GharsPlatform.Controllers.Admin.UsersController.UserEditVm
+@{
+    ViewData["Title"] = "Create User";
+    ViewData["PageTitle"] = "Create User";
+    var roles = ViewBag.Roles as List<string> ?? new();
+    var orgs = ViewBag.Organizations as List<GharsPlatform.Models.Core.Organization> ?? new();
+}
+<div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
+<form method="post">
+    @Html.AntiForgeryToken()
+    <div asp-validation-summary="All" class="text-danger small"></div>
+    <div class="row g-3">
+        <div class="col-md-6"><label class="form-label">Full Name</label><input class="form-control" asp-for="FullName" /></div>
+        <div class="col-md-6"><label class="form-label">Email</label><input class="form-control" asp-for="Email" /></div>
+        <div class="col-md-6"><label class="form-label">Password</label><input class="form-control" asp-for="Password" type="password" required /></div>
+        <div class="col-md-6"><label class="form-label">Role</label><select class="form-select" asp-for="RoleName">@foreach (var r in roles){<option value="@r">@r</option>}</select></div>
+        <div class="col-md-6"><label class="form-label">Organization</label><select class="form-select" asp-for="PrimaryOrganizationId"><option value="">None</option>@foreach (var o in orgs){<option value="@o.Id">@o.NameEn (@o.OrganizationType)</option>}</select></div>
+        <div class="col-md-3"><label class="form-label">Language</label><select class="form-select" asp-for="PreferredLanguage"><option value="en">English</option><option value="ar">Arabic</option></select></div>
+        <div class="col-md-3 d-flex align-items-end"><div class="form-check"><input class="form-check-input" asp-for="IsActive" /><label class="form-check-label">Active</label></div></div>
+    </div>
+    <div class="mt-4"><button class="btn btn-primary" type="submit">Create</button><a class="btn btn-outline-secondary" asp-action="Index">Cancel</a></div>
+</form>
+</div></div>
+@section Scripts{<partial name="_ValidationScriptsPartial" />}

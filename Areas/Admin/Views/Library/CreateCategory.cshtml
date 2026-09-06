@@ -1,0 +1,37 @@
+@model GharsPlatform.Controllers.Admin.LibraryController.CategoryVm
+@{
+    ViewData["Title"] = "Create Library Category";
+    ViewData["PageTitle"] = "Create Library Category";
+}
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-4">
+        <form method="post">
+            @Html.AntiForgeryToken()
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Name (EN)</label>
+                    <input class="form-control" asp-for="NameEn" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Name (AR)</label>
+                    <input class="form-control" asp-for="NameAr" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Sort Order</label>
+                    <input class="form-control" asp-for="SortOrder" />
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a class="btn btn-outline-secondary" href="/Admin/Library/Categories">Back</a>
+                <button class="btn btn-primary" type="submit">Create</button>
+            </div>
+
+            <div class="text-danger small mt-2" asp-validation-summary="All"></div>
+        </form>
+    </div>
+</div>
+
+@section Scripts{
+    <partial name="_ValidationScriptsPartial" />
+}

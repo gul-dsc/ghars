@@ -1,0 +1,18 @@
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string en, string arabic) => ar ? arabic : en;
+    ViewData["Title"] = T("Reports", "التقارير");
+    ViewData["PageTitle"] = ViewData["Title"];
+}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>@ViewData["Title"]</h1>
+    <a class="btn btn-success" href="/Admin/Reports/Analytics"><i class="bi bi-graph-up me-1"></i>@T("Open full analytics", "فتح التحليلات الشاملة")</a>
+</div>
+<div class="row g-3">
+    <div class="col-md-6 col-xl-4"><a class="text-decoration-none" href="/Admin/Reports/Analytics"><div class="stat-card"><div class="label">@T("KPI Analytics", "تحليلات المؤشرات")</div><div class="value"><i class="bi bi-bullseye"></i></div><div class="hint">@T("Targets, actuals, status and baseline comparison", "المستهدفات والفعلي والحالة ومقارنة خط الأساس")</div></div></a></div>
+    <div class="col-md-6 col-xl-4"><a class="text-decoration-none" href="/Admin/Reports/Attendance"><div class="stat-card"><div class="label">@T("Attendance", "الحضور")</div><div class="value"><i class="bi bi-qr-code-scan"></i></div><div class="hint">@T("Sessions and check-ins", "الجلسات وتسجيل الحضور")</div></div></a></div>
+    <div class="col-md-6 col-xl-4"><a class="text-decoration-none" href="/Admin/Reports/Bookings"><div class="stat-card"><div class="label">@T("Bookings", "الحجوزات")</div><div class="value"><i class="bi bi-journal-check"></i></div><div class="hint">@T("Requests, approvals and modifications", "الطلبات والاعتمادات والتعديلات")</div></div></a></div>
+    <div class="col-md-6 col-xl-4"><a class="text-decoration-none" href="/Admin/Reports/Certificates"><div class="stat-card"><div class="label">@T("Certificates", "الشهادات")</div><div class="value"><i class="bi bi-award"></i></div><div class="hint">@T("Issued and revoked", "الصادرة والملغاة")</div></div></a></div>
+    <div class="col-md-6 col-xl-4"><a class="text-decoration-none" href="/Admin/Reports/Satisfaction"><div class="stat-card"><div class="label">@T("Satisfaction", "السعادة والرضا")</div><div class="value"><i class="bi bi-star"></i></div><div class="hint">@T("Survey analytics", "تحليلات الاستبيانات")</div></div></a></div>
+</div>

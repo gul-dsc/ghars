@@ -1,0 +1,274 @@
+@model GharsPlatform.Models.Core.BookingRequest
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    ViewData["Title"] = isAr ? "تفاصيل الحجز" : "Booking Details";
+    var isClubSide = (bool)(ViewBag.IsClubSide ?? false);
+    var isPartnerSide = (bool)(ViewBag.IsPartnerSide ?? false);
+    string T(string en, string ar) => isAr ? ar : en;
+    // Direct (entity-first) requests have no linked program: fall back to the requested subject.
+    string ProgramTitle()
+    {
+        var title = isAr ? (Model.Activity?.TitleAr ?? Model.Activity?.TitleEn) : (Model.Activity?.TitleEn ?? Model.Activity?.TitleAr);
+        if (!string.IsNullOrWhiteSpace(title)) return title!;
+        return string.IsNullOrWhiteSpace(Model.Subject)
+            ? (isAr ? "طلب مباشر" : "Direct request")
+            : Model.Subject!;
+    }
+    string OrgName(Organization? o) => isAr ? (o?.NameAr ?? o?.NameEn ?? "") : (o?.NameEn ?? o?.NameAr ?? "");
+    string ActivityTypeText(ActivityType type) => type switch
+    {
+        ActivityType.Lecture => T("Lecture", "محاضرة"),
+        ActivityType.Event => T("Event", "فعالية"),
+        ActivityType.Workshop => T("Workshop", "ورشة عمل"),
+        ActivityType.TrainingProgram => T("Training", "تدريب"),
+        ActivityType.Course => T("Course", "دورة"),
+        ActivityType.Activity => T("Activity", "نشاط"),
+        _ => type.ToString()
+    };
+    string StatusText(BookingStatus st) => st switch
+    {
+        BookingStatus.Pending => T("Pending Partner Approval", "بانتظار موافقة الشريك"),
+        BookingStatus.Approved => T("Approved", "موافق عليه"),
+        BookingStatus.Rejected => T("Rejected", "مرفوض"),
+        BookingStatus.Cancelled => T("Cancelled", "ملغي"),
+        BookingStatus.PartnerProposedNewTime => T("Awaiting club response", "بانتظار رد النادي"),
+        BookingStatus.Confirmed => T("Confirmed", "مؤكد"),
+        BookingStatus.ClubRejectedProposedTimes => T("Awaiting partner update", "بانتظار تحديث الشريك"),
+        _ => st.ToString()
+    };
+    string AudienceText(string value) => value switch
+    {
+        "Players" => T("Players", "اللاعبون"),
+        "Coaches" => T("Coaches", "المدربون"),
+        "Staff" => T("Staff", "الموظفون"),
+        "Administrators" => T("Administrators", "الإداريون"),
+        "Parents" => T("Parents", "أولياء الأمور"),
+        "Others" => T("Others", "أخرى"),
+        _ => value
+    };
+    var activeOptions = Model.ProposedTimeOptions.Where(x => x.IsActive && !x.IsSelected).OrderBy(x => x.ProposedStartUtc).ToList();
+    var targetAudiences = (Model.TargetAudienceCsv ?? string.Empty)
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .ToList();
+}
+
+@if (isClubSide && Model.Status == BookingStatus.PartnerProposedNewTime && activeOptions.Any())
+{
+    <div class="required-action-banner"><i class="bi bi-exclamation-triangle me-2"></i>@T("Partner proposed new time options. Your response is required.", "اقترح الشريك أوقاتاً جديدة. مطلوب ردكم.")</div>
+}
+
+<div class="metric-card mb-4 booking-section-card">
+    <div class="d-flex justify-content-between align-items-start gap-3 mb-3 flex-wrap">
+        <div>
+            <h1 class="h3 mb-1">@T("Booking Details", "تفاصيل الحجز")</h1>
+            <div class="text-muted">@T("Review the request details, partner actions, and booking history.", "راجع تفاصيل الطلب وإجراءات الشريك وسجل الحجز.")</div>
+        </div>
+        <div class="text-md-end">
+            <div class="small text-muted">@T("Reference number", "الرقم المرجعي")</div>
+            <div class="fw-bold">@Model.ReferenceNumber</div>
+            <span class="badge text-bg-@(Model.Status==BookingStatus.Confirmed||Model.Status==BookingStatus.Approved?"success":Model.Status==BookingStatus.Pending||Model.Status==BookingStatus.PartnerProposedNewTime?"warning":"danger") fs-6 mt-2">@StatusText(Model.Status)</span>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-6 col-xl-3"><div class="text-muted small">@T("Club", "النادي")</div><div class="fw-semibold">@OrgName(Model.Organization)</div></div>
+        <div class="col-md-6 col-xl-3"><div class="text-muted small">@T("Partner", "الشريك")</div><div class="fw-semibold">@(OrgName(Model.PartnerOrganization) == "" ? T("Not assigned", "غير محدد") : OrgName(Model.PartnerOrganization))</div></div>
+        <div class="col-md-6 col-xl-3"><div class="text-muted small">@T("Program", "البرنامج")</div><div class="fw-semibold">@ProgramTitle()</div></div>
+        <div class="col-md-6 col-xl-3"><div class="text-muted small">@T("Sports season", "الموسم الرياضي")</div><div class="fw-semibold">@(isAr ? (Model.Season?.TitleAr ?? Model.Activity?.Season?.TitleAr) : (Model.Season?.TitleEn ?? Model.Activity?.Season?.TitleEn))</div></div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="metric-card booking-section-card h-100">
+            <h4 class="h5 mb-3">@T("Program Details", "تفاصيل البرنامج")</h4>
+            <div class="row g-3">
+                <div class="col-12"><div class="text-muted small">@T("Program title", "عنوان البرنامج")</div><div class="fw-semibold">@ProgramTitle()</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Program type", "نوع البرنامج")</div><div class="fw-semibold">@(Model.Activity is null ? "" : ActivityTypeText(Model.Activity.Type))</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Original program date/time", "تاريخ / وقت البرنامج الأصلي")</div><div class="fw-semibold">@(Model.Activity is null ? T("Not available", "غير متاح") : $"{Model.Activity.StartDateTime:g} - {Model.Activity.EndDateTime:g}")</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Requested activity type", "نوع النشاط المطلوب")</div><div class="fw-semibold">@ActivityTypeText(Model.RequestedActivityType)</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Subject", "الموضوع")</div><div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.Subject) ? T("Not provided", "غير متوفر") : Model.Subject)</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Requested date/time", "التاريخ / الوقت المطلوب")</div><div class="fw-semibold">@(Model.ProposedStartDateTime.HasValue ? $"{Model.ProposedStartDateTime:g} - {Model.ProposedEndDateTime:g}" : T("Not provided", "غير متوفر"))</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Confirmed time", "الوقت المؤكد")</div><div class="fw-semibold">@(Model.ConfirmedStartUtc.HasValue ? $"{Model.ConfirmedStartUtc:g} - {Model.ConfirmedEndUtc:g}" : T("Not confirmed yet", "لم يتم التأكيد بعد"))</div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="metric-card booking-section-card h-100">
+            <h4 class="h5 mb-3">@T("Target Audience & Attendance", "الفئة المستهدفة والحضور")</h4>
+            <div class="row g-3">
+                <div class="col-12">
+                    <div class="text-muted small">@T("Target audience", "الفئة المستهدفة")</div>
+                    <div class="d-flex flex-wrap gap-2 mt-1">
+                        @if (targetAudiences.Any())
+                        {
+                            @foreach (var audience in targetAudiences)
+                            {
+                                <span class="badge rounded-pill text-bg-light border">@AudienceText(audience)</span>
+                            }
+                        }
+                        else
+                        {
+                            <span>@T("Not provided", "غير متوفر")</span>
+                        }
+                    </div>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(Model.OtherTargetAudience))
+                {
+                    <div class="col-12"><div class="text-muted small">@T("Other target audience", "فئة مستهدفة أخرى")</div><div class="fw-semibold">@Model.OtherTargetAudience</div></div>
+                }
+                <div class="col-md-6"><div class="text-muted small">@T("Expected participants", "عدد المشاركين المتوقع")</div><div class="fw-semibold">@Model.RequestedSeats</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Attendee category details", "تفاصيل الفئات المشاركة")</div><div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.AudienceDetails) ? T("No additional details", "لا توجد تفاصيل إضافية") : Model.AudienceDetails)</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="metric-card booking-section-card h-100">
+            <h4 class="h5 mb-3">@T("Contact & Logistics", "التواصل والترتيبات")</h4>
+            <div class="row g-3">
+                <div class="col-md-6"><div class="text-muted small">@T("Contact person", "الشخص المسؤول")</div><div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.ContactPersonName) ? T("Not provided", "غير متوفر") : Model.ContactPersonName)</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Contact mobile", "هاتف التواصل")</div><div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.ContactPhone) ? T("Not provided", "غير متوفر") : Model.ContactPhone)</div></div>
+                <div class="col-12"><div class="text-muted small">@T("Contact email", "البريد الإلكتروني للتواصل")</div><div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.ContactEmail) ? T("Not provided", "غير متوفر") : Model.ContactEmail)</div></div>
+                <div class="col-12"><div class="text-muted small">@T("Special requirements / logistics", "المتطلبات الخاصة / الترتيبات اللوجستية")</div><div>@(string.IsNullOrWhiteSpace(Model.SpecialRequirements) ? T("No special requirements", "لا توجد متطلبات خاصة") : Model.SpecialRequirements)</div></div>
+                <div class="col-12"><div class="text-muted small">@T("Additional notes", "ملاحظات إضافية")</div><div>@(string.IsNullOrWhiteSpace(Model.Notes) ? T("No additional notes", "لا توجد ملاحظات إضافية") : Model.Notes)</div></div>
+                <div class="col-12"><div class="text-muted small">@T("Logistical requirements / partner comments", "المتطلبات اللوجستية / تعليقات الشريك")</div><div>@(string.IsNullOrWhiteSpace(Model.PartnerResponseNotes) ? T("No partner comments", "لا توجد تعليقات من الشريك") : Model.PartnerResponseNotes)</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Assigned lecturer", "المحاضر المكلّف")</div><div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.LecturerName) ? T("Not assigned yet", "لم يتم التكليف بعد") : Model.LecturerName)</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Lecturer contact", "رقم التواصل مع المحاضر")</div><div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.LecturerContact) ? T("Not provided", "غير متوفر") : Model.LecturerContact)</div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="metric-card booking-section-card h-100">
+            <h4 class="h5 mb-3">@T("Workflow Summary", "ملخص سير العمل")</h4>
+            <div class="row g-3">
+                <div class="col-md-6"><div class="text-muted small">@T("Submitted on", "تاريخ الإرسال")</div><div class="fw-semibold">@Model.CreatedAtUtc.ToString("g")</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Decision date", "تاريخ القرار")</div><div class="fw-semibold">@(Model.DecisionAtUtc.HasValue ? Model.DecisionAtUtc.Value.ToString("g") : T("Pending", "قيد الانتظار"))</div></div>
+                <div class="col-12"><div class="text-muted small">@T("Current status", "الحالة الحالية")</div><div class="fw-semibold">@StatusText(Model.Status)</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (isPartnerSide && (Model.Status == BookingStatus.Pending || Model.Status == BookingStatus.ClubRejectedProposedTimes))
+{
+    <div class="row g-3 mb-4">
+        <div class="col-lg-8">
+            <form method="post" action="/partner/bookings/approve" class="metric-card booking-section-card h-100">
+                @Html.AntiForgeryToken()<input type="hidden" name="id" value="@Model.Id" />
+                <h5 class="mb-1">@T("Confirm booking", "تأكيد الحجز")</h5>
+                <div class="text-muted small mb-3">@T("Provide the assigned lecturer, contact details and any logistical requirements.", "زوّد النادي باسم المحاضر المكلّف وبيانات التواصل وأي متطلبات لوجستية.")</div>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label">@T("Lecturer name", "اسم المحاضر") <span class="text-danger">*</span></label>
+                        <input class="form-control" name="lecturerName" value="@Model.LecturerName" required />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">@T("Contact details", "رقم التواصل")</label>
+                        <input class="form-control" name="lecturerContact" value="@Model.LecturerContact" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@T("Logistical requirements / notes", "المتطلبات اللوجستية / ملاحظات")</label>
+                        <textarea class="form-control" name="logistics" rows="2"></textarea>
+                    </div>
+                </div>
+                <button class="btn btn-success w-100 mt-3" type="submit">@T("Confirm booking", "تأكيد الحجز")</button>
+            </form>
+        </div>
+        <div class="col-lg-4">
+            <form method="post" action="/partner/bookings/reject" class="metric-card booking-section-card h-100">
+                @Html.AntiForgeryToken()<input type="hidden" name="id" value="@Model.Id" />
+                <h5>@T("Reject booking", "رفض الحجز")</h5>
+                <input class="form-control mb-2" name="reason" placeholder="@T("Reason", "السبب")" />
+                <button class="btn btn-outline-danger w-100" type="submit">@T("Reject", "رفض")</button>
+                <hr />
+                <div class="text-muted small">@T("Or propose alternative times / subject using the form below.", "أو اقترح أوقاتاً أو موضوعاً بديلاً باستخدام النموذج أدناه.")</div>
+            </form>
+        </div>
+    </div>
+}
+
+@if (isClubSide && !string.IsNullOrWhiteSpace(Model.ProposedSubject))
+{
+    <div class="required-action-banner">
+        <i class="bi bi-pencil-square me-2"></i>
+        @T("The implementing entity proposed a new subject:", "اقترحت الجهة المنفذة موضوعاً جديداً:")
+        <strong>@Model.ProposedSubject</strong>
+        <div class="small fw-normal mt-1">@T("Accepting a proposed time will also apply this subject.", "قبول أحد الأوقات المقترحة سيطبّق هذا الموضوع أيضاً.")</div>
+    </div>
+}
+
+@if (isPartnerSide)
+{
+    <form method="post" action="/partner/bookings/propose-times" class="metric-card booking-section-card mb-4" id="proposalForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="bookingId" value="@Model.Id" />
+        <h4 class="h5 mb-3">@T("Propose modification (date / time / subject)", "اقتراح تعديل (التاريخ / التوقيت / الموضوع)")</h4>
+        <div class="mb-3">
+            <label class="form-label">@T("Proposed subject (optional)", "الموضوع المقترح (اختياري)")</label>
+            <input class="form-control" name="proposedSubject" value="@Model.ProposedSubject" placeholder="@T("Leave empty to keep the requested subject", "اتركه فارغاً للإبقاء على الموضوع المطلوب")" />
+        </div>
+        <textarea name="partnerComments" class="form-control mb-3" rows="2" placeholder="@T("Optional partner comments", "تعليقات اختيارية من الشريك")"></textarea>
+        <div id="proposalRows">
+            <div class="proposal-option row g-2 align-items-end">
+                <div class="col-md-4"><label class="form-label">@T("Start", "البداية")</label><input class="form-control" type="datetime-local" name="starts" required /></div>
+                <div class="col-md-4"><label class="form-label">@T("End", "النهاية")</label><input class="form-control" type="datetime-local" name="ends" required /></div>
+                <div class="col-md-4"><label class="form-label">@T("Note", "ملاحظة")</label><input class="form-control" name="notes" /></div>
+            </div>
+        </div>
+        <div class="d-flex gap-2 mt-3"><button type="button" class="btn btn-outline-secondary" id="addProposal"><i class="bi bi-plus-circle me-1"></i>@T("Add another option", "إضافة خيار آخر")</button><button class="btn btn-primary" type="submit">@T("Send proposed options", "إرسال الخيارات")</button></div>
+    </form>
+}
+
+<div class="metric-card booking-section-card mb-4">
+    <h4 class="h5 mb-3">@T("Proposed time options", "الأوقات المقترحة")</h4>
+    @if (!Model.ProposedTimeOptions.Any())
+    {
+        <div class="empty-state">@T("No proposed time options yet.", "لا توجد أوقات مقترحة حتى الآن.")</div>
+    }
+    else
+    {
+        foreach (var option in Model.ProposedTimeOptions.OrderBy(x => x.ProposedStartUtc))
+        {
+            <div class="proposal-option d-flex flex-column flex-lg-row justify-content-between gap-3">
+                <div>
+                    <div class="fw-semibold">@option.ProposedStartUtc.ToString("g") - @option.ProposedEndUtc.ToString("g")</div>
+                    <div class="text-muted small">@(string.IsNullOrWhiteSpace(option.Note) ? T("No note", "لا توجد ملاحظة") : option.Note)</div>
+                    <span class="badge text-bg-@(option.IsSelected?"success":option.IsActive?"warning":"secondary")">@(option.IsSelected ? T("Selected", "تم الاختيار") : option.IsActive ? T("Available", "متاح") : T("Inactive", "غير نشط"))</span>
+                </div>
+                @if (isClubSide && Model.Status == BookingStatus.PartnerProposedNewTime && option.IsActive && !option.IsSelected)
+                {
+                    <div class="d-flex gap-2 align-items-start">
+                        <form method="post" action="/bookings/accept-proposed-time">@Html.AntiForgeryToken()<input type="hidden" name="bookingId" value="@Model.Id" /><input type="hidden" name="optionId" value="@option.Id" /><button class="btn btn-success btn-sm" type="submit">@T("Accept this option", "قبول هذا الخيار")</button></form>
+                    </div>
+                }
+            </div>
+        }
+        @if (isClubSide && Model.Status == BookingStatus.PartnerProposedNewTime && activeOptions.Any())
+        {
+            <form method="post" action="/bookings/reject-proposed-times" class="mt-3 d-flex gap-2 flex-column flex-md-row">
+                @Html.AntiForgeryToken()<input type="hidden" name="bookingId" value="@Model.Id" />
+                <input class="form-control" name="reason" placeholder="@T("Reason for rejecting all options", "سبب رفض جميع الخيارات")" />
+                <button class="btn btn-outline-danger" type="submit">@T("Reject all options", "رفض جميع الخيارات")</button>
+            </form>
+        }
+    }
+</div>
+
+<div class="metric-card booking-section-card">
+    <h4 class="h5 mb-3">@T("Booking history", "سجل الحجز")</h4>
+    <div class="table-responsive"><table class="table align-middle"><thead><tr><th>@T("Action", "الإجراء")</th><th>@T("Date", "التاريخ")</th></tr></thead><tbody>@foreach (var h in Model.AuditTrail.OrderByDescending(x => x.AtUtc)){<tr><td>@h.Action</td><td>@h.AtUtc.ToString("g")</td></tr>}@if(!Model.AuditTrail.Any()){<tr><td colspan="2"><div class="text-muted">@T("No history yet.", "لا يوجد سجل حتى الآن.")</div></td></tr>}</tbody></table></div>
+</div>
+
+@section Scripts{
+<script>
+const addBtn=document.getElementById('addProposal');
+addBtn?.addEventListener('click',()=>{const wrap=document.getElementById('proposalRows');const first=wrap.querySelector('.proposal-option');const row=first.cloneNode(true);row.querySelectorAll('input').forEach(i=>i.value='');wrap.appendChild(row);});
+</script>
+}

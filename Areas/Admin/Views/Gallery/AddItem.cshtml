@@ -1,0 +1,21 @@
+@model GharsPlatform.Controllers.Admin.GalleryController.MediaItemVm
+@using GharsPlatform.Models.Core
+@{
+    var album = ViewBag.Album as MediaAlbum;
+    ViewData["Title"]="Add Media";
+    ViewData["PageTitle"]="Add Media";
+}
+<form method="post" enctype="multipart/form-data" class="card p-4 rounded-4 border-0 shadow-sm">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="AlbumId" />
+    <h5 class="mb-3">Add media to: @album?.TitleEn</h5>
+    <div class="row g-3">
+        <div class="col-md-3"><label class="form-label">Media Type</label><select class="form-select" asp-for="MediaType"><option value="Image">Image</option><option value="Video">Video</option><option value="Pdf">PDF</option></select></div>
+        <div class="col-md-3"><label class="form-label">Sort Order</label><input class="form-control" asp-for="SortOrder" type="number" /></div>
+        <div class="col-md-6"><label class="form-label">File Upload</label><input class="form-control" type="file" asp-for="File" accept="image/*,video/*,.pdf,application/pdf" /></div>
+        <div class="col-12"><label class="form-label">External Link (YouTube/video/PDF URL)</label><input class="form-control" asp-for="ExternalUrl" /></div>
+        <div class="col-md-6"><label class="form-label">Caption EN</label><input class="form-control" asp-for="CaptionEn" /></div>
+        <div class="col-md-6"><label class="form-label">Caption AR</label><input class="form-control" asp-for="CaptionAr" /></div>
+        <div class="col-12 d-flex gap-2"><button class="btn btn-primary">Add Media</button><a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@Model.AlbumId">Cancel</a></div>
+    </div>
+</form>

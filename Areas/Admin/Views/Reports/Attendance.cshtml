@@ -1,0 +1,32 @@
+@model List<GharsPlatform.Models.Core.AttendanceSession>
+@{
+    ViewData["Title"] = "Attendance Report";
+    ViewData["PageTitle"] = "Attendance Report";
+}
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>Session</th>
+                <th>Activity</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Attendees</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var s in Model)
+            {
+                <tr>
+                    <td>@s.Id</td>
+                    <td class="fw-semibold">@s.Activity?.TitleEn</td>
+                    <td>@s.SessionStartUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>@(s.SessionEndUtc?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+                    <td>@(s.AttendanceRecords?.Count ?? 0)</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

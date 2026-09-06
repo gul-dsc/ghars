@@ -1,0 +1,33 @@
+.admin-shell{ height:100vh; display:flex; overflow:hidden; background:#f5f7fb; }
+.sidebar{ width:280px; display:flex; flex-direction:column; }
+.sidebar .nav-link{ border-radius:10px; padding:.55rem .75rem; margin:.1rem .5rem; }
+.sidebar .nav-link:hover{ background: rgba(255,255,255,.08); }
+.sidebar .brand .logo-circle{ width:38px; height:38px; border-radius:12px; background: rgba(255,255,255,.12); display:flex; align-items:center; justify-content:center; }
+.main{ flex:1; display:flex; flex-direction:column; min-width:0; }
+.topbar{ position:sticky; top:0; z-index:20; }
+.content{ overflow:auto; }
+.stat-card{ background:white; border-radius:18px; padding:18px; box-shadow:0 8px 24px rgba(15,23,42,.08); }
+.stat-card .label{ color:#6b7280; font-size:.85rem; }
+.stat-card .value{ font-size:2rem; font-weight:700; }
+.stat-card .hint{ color:#6b7280; font-size:.85rem; }
+@media (max-width: 768px){
+    .sidebar{ position:fixed; left:-300px; top:0; bottom:0; transition:left .2s ease; z-index:50; }
+    .sidebar.open{ left:0; }
+    .main{ margin-left:0; }
+}
+
+/* Action button visibility override */
+.admin-page .btn-primary, .admin-page .super-admin-action {
+  background:#2D9B6C !important;
+  border-color:#2D9B6C !important;
+  color:#fff !important;
+  opacity:1 !important;
+  pointer-events:auto !important;
+}
+.admin-page .btn-outline-primary { color:#2D9B6C !important; border-color:#2D9B6C !important; }
+
+/* Universal Ghars filter panel for admin list/report pages */
+.ghars-filter-panel{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px 16px;margin:0 0 18px 0;box-shadow:0 8px 22px rgba(15,23,42,.06)}
+.ghars-filter-panel .form-label{font-size:.78rem;font-weight:700;color:#374151;margin-bottom:.25rem}
+.ghars-filter-panel .filter-title{font-weight:800;color:#1f2937;margin-bottom:.75rem;display:flex;align-items:center;gap:.45rem}
+.ghars-filter-empty{background:#fff3cd;border:1px solid #ffe69c;border-radius:12px;padding:10px 12px;margin-top:10px;color:#664d03}

@@ -1,0 +1,5 @@
+.ghars-hero{
+    background: radial-gradient(circle at 20% 10%, rgba(255,255,255,.18), transparent 40%),
+                linear-gradient(120deg, #0d6efd, #0b5ed7 40%, #20c997);
+}
+.news-ticker a:hover{ opacity:.9; }

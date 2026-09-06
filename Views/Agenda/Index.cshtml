@@ -1,0 +1,63 @@
+@model List<GharsPlatform.Models.Core.AgendaEntry>
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+ var ar=CultureInfo.CurrentUICulture.TwoLetterISOLanguageName=="ar"; string T(string e,string a)=>ar?a:e;
+ string N(Organization? o)=>ar?(o?.NameAr??o?.NameEn??""):(o?.NameEn??o?.NameAr??"");
+ string TypeText(ActivityType t)=>t switch{ActivityType.Lecture=>T("Lecture","محاضرة"),ActivityType.Event=>T("Event","فعالية"),ActivityType.Workshop=>T("Workshop","ورشة عمل"),ActivityType.TrainingProgram=>T("Training","تدريب"),ActivityType.Course=>T("Course","دورة"),ActivityType.Activity=>T("Activity","نشاط"),_=>t.ToString()};
+ string CategoryText(AgendaTargetCategory c)=>c switch{AgendaTargetCategory.Players=>T("Players","لاعبون"),AgendaTargetCategory.Coaches=>T("Coaches","مدربون"),AgendaTargetCategory.Administrators=>T("Administrators","إداريون"),AgendaTargetCategory.Parents=>T("Parents","أولياء أمور"),AgendaTargetCategory.Others=>T("Others","أخرى"),_=>c.ToString()};
+ string StatusText(AgendaEntryStatus s)=>s switch{AgendaEntryStatus.Draft=>T("Draft","مسودة"),AgendaEntryStatus.Submitted=>T("Submitted","تم الإرسال"),AgendaEntryStatus.Approved=>T("Approved","معتمد"),AgendaEntryStatus.Rejected=>T("Rejected","مرفوض"),_=>s.ToString()};
+ string StatusClass(AgendaEntryStatus s)=>s switch{AgendaEntryStatus.Approved=>"text-bg-success",AgendaEntryStatus.Submitted=>"text-bg-primary",AgendaEntryStatus.Rejected=>"text-bg-danger",_=>"text-bg-secondary"};
+ var seasons=ViewBag.Seasons as List<Season>??new();
+ var selectedSeasonId=ViewBag.SelectedSeasonId as int?;
+ var selectedStatus=ViewBag.SelectedStatus as AgendaEntryStatus?;
+ var drafts=Model.Count(x=>x.Status==AgendaEntryStatus.Draft);
+ ViewData["Title"]=T("Agenda","الأجندة");
+}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+        <h1 class="mb-1">@T("Club Agenda","أجندة النادي")</h1>
+        <div class="text-muted">@T("Lectures and events actually delivered under the Ghars Program during the season.","المحاضرات والفعاليات المنفذة فعلياً ضمن برنامج غرس خلال الموسم.")</div>
+    </div>
+    <a class="btn btn-success" href="/agenda/create"><i class="bi bi-plus-lg me-1"></i>@T("Add New Activity","إضافة نشاط جديد")</a>
+</div>
+
+@if(drafts>0)
+{
+    <div class="required-action-banner"><i class="bi bi-pencil-square me-2"></i>@T($"You have {drafts} draft activity record(s) awaiting completion and submission.", $"لديكم {drafts} نشاط في حالة مسودة بانتظار الاستكمال والإرسال.")</div>
+}
+
+<form method="get" class="ghars-filter-card row g-2 align-items-end">
+    <div class="col-md-4"><label class="form-label">@T("Sports season","الموسم الرياضي")</label><select class="form-select" name="seasonId"><option value="">@T("All","الكل")</option>@foreach(var s in seasons){<option value="@s.Id" selected="@(selectedSeasonId==s.Id)">@(ar?s.TitleAr:s.TitleEn)</option>}</select></div>
+    <div class="col-md-4"><label class="form-label">@T("Status","الحالة")</label><select class="form-select" name="status"><option value="">@T("All","الكل")</option>@foreach(AgendaEntryStatus s in Enum.GetValues(typeof(AgendaEntryStatus))){<option value="@s" selected="@(selectedStatus==s)">@StatusText(s)</option>}</select></div>
+    <div class="col-md-4 d-flex gap-2"><button class="btn btn-primary">@T("Filter","تصفية")</button><a class="btn btn-outline-secondary" href="/agenda">@T("Reset","إعادة تعيين")</a></div>
+</form>
+
+<div class="card shadow-sm border-0 rounded-4"><div class="table-responsive"><table class="table align-middle mb-0">
+<thead><tr><th>@T("Season","الموسم")</th><th>@T("Club","النادي")</th><th>@T("Type","النوع")</th><th>@T("Subject","الموضوع")</th><th>@T("Date","التاريخ")</th><th>@T("Category","الفئة")</th><th>@T("Participants","المشاركون")</th><th>@T("Media","الوسائط")</th><th>@T("Status","الحالة")</th><th></th></tr></thead>
+<tbody>
+@foreach(var x in Model)
+{
+    <tr>
+        <td>@(ar?x.Season?.TitleAr:x.Season?.TitleEn)</td>
+        <td>@N(x.Organization)</td>
+        <td>@TypeText(x.ActivityType)</td>
+        <td>@(ar?x.SubjectAr:x.SubjectEn)</td>
+        <td>@x.ActivityDate.ToString("yyyy-MM-dd")</td>
+        <td>@(x.Category==AgendaTargetCategory.Others && !string.IsNullOrWhiteSpace(x.OtherCategory) ? x.OtherCategory : CategoryText(x.Category))</td>
+        <td>@x.NumberOfParticipants</td>
+        <td>@(x.Media?.Count ?? 0)</td>
+        <td><span class="badge @StatusClass(x.Status)">@StatusText(x.Status)</span></td>
+        <td class="text-end">
+            @if(x.Status != AgendaEntryStatus.Approved)
+            {
+                <a class="btn btn-sm btn-outline-primary" href="/agenda/edit/@x.Id">@(x.Status==AgendaEntryStatus.Draft?T("Complete & submit","استكمال وإرسال"):T("Edit","تعديل"))</a>
+            }
+        </td>
+    </tr>
+}
+@if(!Model.Any())
+{
+    <tr><td colspan="10"><div class="empty-state">@T("No agenda entries yet.","لا توجد إدخالات أجندة.")</div></td></tr>
+}
+</tbody></table></div></div>

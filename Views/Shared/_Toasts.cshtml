@@ -1,0 +1,26 @@
+@{
+    var success = TempData["ToastSuccess"] as string;
+    var warn = TempData["ToastWarning"] as string;
+    var info = TempData["ToastInfo"] as string;
+}
+@if (!string.IsNullOrWhiteSpace(success))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle me-1"></i>@success
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (!string.IsNullOrWhiteSpace(warn))
+{
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle me-1"></i>@warn
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (!string.IsNullOrWhiteSpace(info))
+{
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        <i class="bi bi-info-circle me-1"></i>@info
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}

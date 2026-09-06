@@ -1,0 +1,39 @@
+@model List<GharsPlatform.Models.Core.LibraryCategory>
+@{
+    ViewData["Title"] = "Library Categories";
+    ViewData["PageTitle"] = "Library Categories";
+}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="fw-semibold">Library</div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-sm btn-outline-secondary" href="/Admin/Library/Items">Items</a>
+        <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Library/CreateItem"><i class="bi bi-plus-lg"></i> Create Item</a>
+        <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Library/CreateCategory"><i class="bi bi-plus-lg"></i> Create Category</a>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Sort</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var c in Model)
+            {
+                <tr>
+                    <td>@c.Id</td>
+                    <td class="fw-semibold">@c.NameEn</td>
+                    <td>@c.SortOrder</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="mt-3"><a class="btn btn-primary super-admin-action" href="/Admin/Library/CreateCategory"><i class="bi bi-plus-lg"></i> Create first category</a></div>

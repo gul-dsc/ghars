@@ -1,0 +1,92 @@
+@model GharsPlatform.Controllers.Admin.ActivitiesController.ActivityVm
+@{
+    ViewData["Title"] = "Edit Activity";
+    ViewData["PageTitle"] = "Edit Activity";
+    var seasons = ViewBag.Seasons as List<GharsPlatform.Models.Core.Season> ?? new();
+}
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-4">
+        <form method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="Id" />
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Season</label>
+                    <select class="form-select" asp-for="SeasonId" asp-items="@(new SelectList(seasons, "Id", "TitleEn"))"></select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Type</label>
+                    <select class="form-select" asp-for="Type" asp-items="Html.GetEnumSelectList<ActivityType>()"></select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" asp-for="Status" asp-items="Html.GetEnumSelectList<ActivityStatus>()"></select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Title (EN)</label>
+                    <input class="form-control" asp-for="TitleEn" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Title (AR)</label>
+                    <input class="form-control" asp-for="TitleAr" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Start</label>
+                    <input class="form-control" asp-for="StartDateTime" type="datetime-local" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">End</label>
+                    <input class="form-control" asp-for="EndDateTime" type="datetime-local" />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Location (EN)</label>
+                    <input class="form-control" asp-for="LocationEn" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Location (AR)</label>
+                    <input class="form-control" asp-for="LocationAr" />
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Capacity</label>
+                    <input class="form-control" asp-for="Capacity" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Walk-ins</label>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" asp-for="AllowWalkIn" />
+                        <label class="form-check-label">Allow</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Category (EN)</label>
+                    <input class="form-control" asp-for="CategoryEn" />
+                </div>
+
+                <div class="col-md-12">
+                    <label class="form-label">Description (EN)</label>
+                    <textarea class="form-control" asp-for="DescriptionEn" rows="3"></textarea>
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label">Description (AR)</label>
+                    <textarea class="form-control" asp-for="DescriptionAr" rows="3"></textarea>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a class="btn btn-outline-secondary" href="/Admin/Activities">Back</a>
+                <button class="btn btn-primary" type="submit">Save</button>
+            </div>
+
+            <div class="text-danger small mt-3" asp-validation-summary="All"></div>
+        </form>
+    </div>
+</div>
+
+@section Scripts{
+    <partial name="_ValidationScriptsPartial" />
+}

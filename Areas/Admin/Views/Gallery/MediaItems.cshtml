@@ -1,0 +1,93 @@
+@model List<GharsPlatform.Models.Core.GalleryItem>
+@using GharsPlatform.Models.Core
+@using GharsPlatform.Models.Identity
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Activity & Press Media", "وسائط الأنشطة والتغطيات");
+    ViewData["PageTitle"] = ViewData["Title"];
+    var seasons = ViewBag.Seasons as List<Season> ?? new();
+    var orgs = ViewBag.Organizations as List<Organization> ?? new();
+    var selectedSeasonId = ViewBag.SelectedSeasonId as int?;
+    var selectedOrganizationId = ViewBag.SelectedOrganizationId as int?;
+    var selectedMediaType = ViewBag.SelectedMediaType as GalleryMediaType?;
+    var selectedSource = ViewBag.SelectedSource as string;
+    string N(Organization? o) => ar ? (o?.NameAr ?? o?.NameEn ?? "-") : (o?.NameEn ?? o?.NameAr ?? "-");
+    string SourceLabel(GalleryItem g) => g.AgendaEntryId.HasValue ? T("Agenda", "الأجندة")
+        : (g.MediaType == GalleryMediaType.PressCoverage || g.MediaType == GalleryMediaType.NewspaperCoverage ? T("Press", "تغطية صحفية") : T("DSC", "المجلس"));
+    string SourceClass(GalleryItem g) => g.AgendaEntryId.HasValue ? "text-bg-success"
+        : (g.MediaType == GalleryMediaType.PressCoverage || g.MediaType == GalleryMediaType.NewspaperCoverage ? "text-bg-warning" : "text-bg-primary");
+}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+        <h1 class="h4 mb-0">@ViewData["Title"]</h1>
+        <div class="text-muted">@T("Club media arrives automatically from agenda entries. Council staff can add official photos, videos and press coverage.", "تصل وسائط الأندية تلقائياً من إدخالات الأجندة. ويمكن لموظفي المجلس إضافة الصور والفيديوهات الرسمية والتغطيات الصحفية.")</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" asp-area="Admin" asp-controller="Gallery" asp-action="Index">@T("Albums", "الألبومات")</a>
+        @if (User.IsInRole(RoleNames.SuperAdmin))
+        {
+            <a class="btn btn-primary super-admin-action" asp-area="Admin" asp-controller="Gallery" asp-action="CreateMediaItem"><i class="bi bi-plus-lg"></i> @T("Add media", "إضافة وسائط")</a>
+        }
+    </div>
+</div>
+
+<form method="get" class="card p-3 rounded-4 border-0 shadow-sm mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-3"><label class="form-label">@T("Season", "الموسم")</label><select class="form-select" name="seasonId"><option value="">@T("All", "الكل")</option>@foreach (var s in seasons){<option value="@s.Id" selected="@(selectedSeasonId==s.Id)">@(ar?s.TitleAr:s.TitleEn)</option>}</select></div>
+        <div class="col-md-3"><label class="form-label">@T("Club / entity", "النادي / الجهة")</label><select class="form-select" name="organizationId"><option value="">@T("All", "الكل")</option>@foreach (var o in orgs){<option value="@o.Id" selected="@(selectedOrganizationId==o.Id)">@N(o)</option>}</select></div>
+        <div class="col-md-3"><label class="form-label">@T("Media type", "نوع الوسائط")</label><select class="form-select" name="mediaType"><option value="">@T("All", "الكل")</option>@foreach (GalleryMediaType t in Enum.GetValues(typeof(GalleryMediaType))){<option value="@t" selected="@(selectedMediaType==t)">@t</option>}</select></div>
+        <div class="col-md-2"><label class="form-label">@T("Source", "المصدر")</label><select class="form-select" name="source"><option value="">@T("All", "الكل")</option><option value="agenda" selected="@(selectedSource=="agenda")">@T("Agenda", "الأجندة")</option><option value="dsc" selected="@(selectedSource=="dsc")">@T("DSC / Press", "المجلس / صحفي")</option></select></div>
+        <div class="col-md-1"><button class="btn btn-outline-primary w-100">@T("Filter", "تصفية")</button></div>
+    </div>
+</form>
+
+<div class="card rounded-4 border-0 shadow-sm overflow-hidden">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead class="table-light"><tr><th style="width:90px">@T("Preview", "معاينة")</th><th>@T("Title", "العنوان")</th><th>@T("Source", "المصدر")</th><th>@T("Type", "النوع")</th><th>@T("Club / entity", "النادي / الجهة")</th><th>@T("Date", "التاريخ")</th><th>@T("Status", "الحالة")</th><th class="text-end">@T("Actions", "إجراءات")</th></tr></thead>
+            <tbody>
+            @foreach (var item in Model)
+            {
+                <tr>
+                    <td>
+                        @if (!string.IsNullOrWhiteSpace(item.FilePath) && item.MediaType != GalleryMediaType.Video && item.MediaType != GalleryMediaType.OfficialVideo)
+                        {
+                            @* Served through the authorized endpoint so hidden media stays hidden outside DSC. *@
+                            <img src="/protected-files/gallery/@item.Id" class="rounded" style="width:70px;height:52px;object-fit:cover" alt="@item.TitleEn" />
+                        }
+                        else
+                        {
+                            <div class="rounded bg-light d-flex align-items-center justify-content-center" style="width:70px;height:52px"><i class="bi bi-play-circle fs-5"></i></div>
+                        }
+                    </td>
+                    <td><strong>@item.TitleEn</strong><div class="text-muted small">@item.TitleAr</div></td>
+                    <td><span class="badge @SourceClass(item)">@SourceLabel(item)</span></td>
+                    <td>@item.MediaType</td>
+                    <td>@N(item.Organization)</td>
+                    <td>@item.MediaDate.ToString("yyyy-MM-dd")</td>
+                    <td><span class="badge @(item.IsPublished ? "text-bg-success" : "text-bg-secondary")">@(item.IsPublished ? T("Published", "منشور") : T("Hidden", "مخفي"))</span></td>
+                    <td class="text-end">
+                        @if (User.IsInRole(RoleNames.SuperAdmin))
+                        {
+                            <form method="post" asp-area="Admin" asp-controller="Gallery" asp-action="ToggleMediaItem" asp-route-id="@item.Id" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn-sm btn-outline-secondary">@(item.IsPublished ? T("Hide", "إخفاء") : T("Publish", "نشر"))</button>
+                            </form>
+                            <form method="post" asp-area="Admin" asp-controller="Gallery" asp-action="DeleteMediaItem" asp-route-id="@item.Id" class="d-inline" onsubmit="return confirm('@T("Remove this media item from the gallery?", "إزالة هذه الوسائط من المعرض؟")');">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn-sm btn-outline-danger">@T("Remove", "إزالة")</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+            @if (!Model.Any())
+            {
+                <tr><td colspan="8" class="text-center text-muted py-4">@T("No media found for the selected filters.", "لا توجد وسائط وفق خيارات التصفية المحددة.")</td></tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

@@ -1,0 +1,28 @@
+@model List<GharsPlatform.Models.Core.UserPointsWallet>
+@{
+    ViewData["Title"] = "Points & Rewards Report";
+    ViewData["PageTitle"] = "Points & Rewards";
+}
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>UserId</th>
+                <th>Balance</th>
+                <th>Updated</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var w in Model)
+            {
+                <tr>
+                    <td class="text-truncate" style="max-width:320px;">@w.UserId</td>
+                    <td class="fw-semibold">@w.Balance</td>
+                    <td>@(w.UpdatedAtUtc?.ToString("yyyy-MM-dd") ?? "-")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

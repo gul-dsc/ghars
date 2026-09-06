@@ -1,0 +1,98 @@
+@model List<GharsPlatform.Models.Core.KpiSubmission>
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    string N(Organization? o) => ar ? (o?.NameAr ?? o?.NameEn ?? "") : (o?.NameEn ?? o?.NameAr ?? "");
+    // MoreInfoRequired is surfaced to clubs as "Returned for correction" (enum value is not renamed:
+    // dashboards, reports and filters depend on the existing status semantics).
+    string StatusText(KpiSubmissionStatus s) => s switch
+    {
+        KpiSubmissionStatus.Draft => T("Draft", "مسودة"),
+        KpiSubmissionStatus.Submitted => T("Submitted - under review", "تم الإرسال - قيد المراجعة"),
+        KpiSubmissionStatus.Approved => T("Approved", "معتمد"),
+        KpiSubmissionStatus.Rejected => T("Rejected", "مرفوض"),
+        KpiSubmissionStatus.MoreInfoRequired => T("Returned for correction", "مُعاد للتصحيح"),
+        _ => s.ToString()
+    };
+    string StatusClass(KpiSubmissionStatus s) => s switch
+    {
+        KpiSubmissionStatus.Approved => "text-bg-success",
+        KpiSubmissionStatus.Submitted => "text-bg-primary",
+        KpiSubmissionStatus.Rejected => "text-bg-danger",
+        KpiSubmissionStatus.MoreInfoRequired => "text-bg-warning",
+        _ => "text-bg-secondary"
+    };
+    bool IsEditable(KpiSubmissionStatus s) => s is KpiSubmissionStatus.Draft or KpiSubmissionStatus.MoreInfoRequired or KpiSubmissionStatus.Rejected;
+    string Pct(decimal v) => $"{v:0.#}%";
+    var actionable = Model.Count(x => IsEditable(x.Status));
+    ViewData["Title"] = T("Reports & Statistics", "التقارير والإحصاءات");
+}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+        <h1 class="mb-1">@ViewData["Title"]</h1>
+        <div class="text-muted">@T("Ghars data entry per sports season: draft, submit, and track Council approval.", "إدخال بيانات غرس لكل موسم رياضي: مسودة، إرسال، ومتابعة اعتماد المجلس.")</div>
+    </div>
+    <a class="btn btn-success" href="/kpi/create"><i class="bi bi-plus-lg me-1"></i>@T("New KPI Entry", "إدخال مؤشر جديد")</a>
+</div>
+
+<div class="alert alert-info rounded-4 border-0">@T($"{GharsKpiCatalog.BaselineYear} is treated as the baseline year for comparison with subsequent seasons up to the {GharsKpiCatalog.TargetYear} target.", $"يُعامل عام {GharsKpiCatalog.BaselineYear} كسنة أساس للمقارنة مع المواسم اللاحقة وصولاً إلى مستهدف {GharsKpiCatalog.TargetYear}.")</div>
+
+@if (actionable > 0)
+{
+    <div class="required-action-banner"><i class="bi bi-pencil-square me-2"></i>@T($"You have {actionable} submission(s) awaiting completion or correction.", $"لديكم {actionable} إرسال بانتظار الاستكمال أو التصحيح.")</div>
+}
+
+<div class="card rounded-4 border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>@T("Season", "الموسم")</th>
+                    <th>@T("Club", "النادي")</th>
+                    <th>@T("Activities", "الأنشطة")</th>
+                    <th>@T("Participants", "المشاركون")</th>
+                    <th>@T("Player participation", "مشاركة اللاعبين")</th>
+                    <th>@T("Attendance", "الحضور")</th>
+                    <th>@T("Satisfaction", "الرضا")</th>
+                    <th>@T("Evidence", "المستندات")</th>
+                    <th>@T("Status", "الحالة")</th>
+                    <th class="text-end"></th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var x in Model)
+            {
+                <tr>
+                    <td>@(ar ? x.Season?.TitleAr : x.Season?.TitleEn)</td>
+                    <td>@N(x.Organization)</td>
+                    <td>@x.NumberOfLecturesActivities</td>
+                    <td>@x.NumberOfParticipants</td>
+                    <td>@Pct(x.PlayerParticipationRate)</td>
+                    <td>@Pct(x.AttendanceRate)</td>
+                    <td>@Pct(x.SatisfactionRate)</td>
+                    <td>@(x.Documents?.Count ?? 0)</td>
+                    <td>
+                        <span class="badge @StatusClass(x.Status)">@StatusText(x.Status)</span>
+                        @if (!string.IsNullOrWhiteSpace(x.ReviewNotes))
+                        {
+                            <div class="small text-muted mt-1">@x.ReviewNotes</div>
+                        }
+                    </td>
+                    <td class="text-end">
+                        @if (IsEditable(x.Status))
+                        {
+                            <a class="btn btn-sm btn-outline-primary" href="/kpi/edit/@x.Id">@(x.Status == KpiSubmissionStatus.Draft ? T("Continue", "متابعة") : T("Correct & resubmit", "تصحيح وإعادة إرسال"))</a>
+                        }
+                    </td>
+                </tr>
+            }
+            @if (!Model.Any())
+            {
+                <tr><td colspan="10"><div class="empty-state">@T("No KPI entries yet.", "لا توجد بيانات مؤشرات أداء.")</div></td></tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

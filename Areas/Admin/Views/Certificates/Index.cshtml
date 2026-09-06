@@ -1,0 +1,51 @@
+@model List<GharsPlatform.Models.Core.Certificate>
+@{
+    ViewData["Title"] = "Certificates";
+    ViewData["PageTitle"] = "Certificates";
+}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="fw-semibold">Certificates</div>
+    @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Certificates/Issue"><i class="bi bi-plus-lg"></i> Issue</a> }
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>ID</th>
+                <th>Certificate No</th>
+                <th>Activity</th>
+                <th>UserId</th>
+                <th>Status</th>
+                <th>Issued</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var c in Model)
+            {
+                <tr>
+                    <td>@c.Id</td>
+                    <td class="fw-semibold">@c.CertificateNo</td>
+                    <td>@c.Activity?.TitleEn</td>
+                    <td class="text-truncate" style="max-width:220px;">@c.UserId</td>
+                    <td><span class="badge text-bg-@(c.Status==CertificateStatus.Issued?"success":"danger")">@c.Status</span></td>
+                    <td>@c.IssuedAtUtc.ToString("yyyy-MM-dd")</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" href="/Admin/Certificates/Download/@c.Id">PDF</a>
+                        @if (User.IsInRole("Super Admin") && c.Status == CertificateStatus.Issued)
+                        {
+                            <form method="post" action="/Admin/Certificates/Revoke/@c.Id" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="reason" value="Administrative revoke" />
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Revoke</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

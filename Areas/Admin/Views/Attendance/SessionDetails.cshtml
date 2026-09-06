@@ -1,0 +1,79 @@
+@model GharsPlatform.Models.Core.AttendanceSession
+@{
+    ViewData["Title"] = "Session Details";
+    ViewData["PageTitle"] = "Session Details";
+    var scanUrl = ViewBag.ScanUrl as string ?? "";
+}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Attendance/Sessions"><i class="bi bi-arrow-left"></i> Back</a>
+    <div class="d-flex gap-2 align-items-center">
+        @if (Model.SessionEndUtc == null)
+        {
+            <form method="post" action="/Admin/Attendance/CloseSession/@Model.Id">
+                @Html.AntiForgeryToken()
+                <button class="btn btn-sm btn-danger" type="submit">Close Session</button>
+            </form>
+        }
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-body">
+                <div class="fw-semibold">@Model.Activity?.TitleEn</div>
+                <div class="small text-muted">@Model.SessionStartUtc.ToString("yyyy-MM-dd HH:mm")</div>
+
+                <hr />
+                <div class="small mb-3">
+                    <div><strong>Session ID:</strong> @Model.Id</div>
+                    <div><strong>QR Token:</strong> @Model.QrToken</div>
+                    <div><strong>Scan URL:</strong> <a href="@scanUrl" target="_blank">@scanUrl</a></div>
+                </div>
+                @if (User.IsInRole("Super Admin"))
+                {
+                    <form method="post" action="/Admin/Attendance/AddRecord/@Model.Id" class="border rounded-3 p-3 bg-light">
+                        @Html.AntiForgeryToken()
+                        <label class="form-label small fw-semibold">Add attendee by email</label>
+                        <div class="input-group input-group-sm">
+                            <input class="form-control" type="email" name="email" placeholder="club user email" required />
+                            <button class="btn btn-primary" type="submit">Add</button>
+                        </div>
+                    </form>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-body">
+                <h6 class="fw-semibold mb-2"><i class="bi bi-people me-2"></i>Attendees (@(Model.AttendanceRecords?.Count ?? 0))</h6>
+                @if (Model.AttendanceRecords == null || !Model.AttendanceRecords.Any())
+                {
+                    <div class="text-muted">No attendees yet.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr><th>UserId</th><th>Check-in</th><th>Method</th></tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var r in Model.AttendanceRecords.OrderByDescending(x => x.CheckInUtc))
+                            {
+                                <tr>
+                                    <td class="text-truncate" style="max-width: 260px;">@r.UserId</td>
+                                    <td>@r.CheckInUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td>@r.Method</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,307 @@
+@model GharsPlatform.ViewModels.BookingCreateVm
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string en, string ar) => isAr ? ar : en;
+    string ActivityTypeText(ActivityType type) => type switch
+    {
+        ActivityType.Lecture => T("Lecture", "محاضرة"),
+        ActivityType.Event => T("Event", "فعالية"),
+        ActivityType.Workshop => T("Workshop", "ورشة عمل"),
+        ActivityType.TrainingProgram => T("Training", "تدريب"),
+        ActivityType.Course => T("Course", "دورة"),
+        ActivityType.Activity => T("Activity", "نشاط"),
+        _ => type.ToString()
+    };
+    string NameOf(Organization? org) => isAr ? (org?.NameAr ?? org?.NameEn ?? "") : (org?.NameEn ?? org?.NameAr ?? "");
+    string TitleOf(Activity? activity) => isAr ? (activity?.TitleAr ?? activity?.TitleEn ?? "") : (activity?.TitleEn ?? activity?.TitleAr ?? "");
+    var activity = ViewBag.Activity as Activity;
+    var orgs = ViewBag.Organizations as List<Organization> ?? [];
+    var partner = ViewBag.PartnerOrganization as Organization;
+    var entities = ViewBag.Entities as List<Organization> ?? [];
+    var seasons = ViewBag.Seasons as List<Season> ?? [];
+    var selectedClub = orgs.FirstOrDefault(x => x.Id == Model.OrganizationId) ?? orgs.FirstOrDefault();
+    var isDirectRequest = activity is null;
+    var seasonTitle = activity?.Season is null ? T("Not assigned", "غير محدد") : (isAr ? activity.Season.TitleAr : activity.Season.TitleEn);
+    var audiences = new[]
+    {
+        ("Players", T("Players", "اللاعبون")),
+        ("Coaches", T("Coaches", "المدربون")),
+        ("Staff", T("Staff", "الموظفون")),
+        ("Administrators", T("Administrators", "الإداريون")),
+        ("Parents", T("Parents", "أولياء الأمور")),
+        ("Others", T("Others", "أخرى"))
+    };
+    ViewData["Title"] = T("Submit booking request", "إرسال طلب حجز");
+}
+
+<div class="booking-request-shell">
+    <div class="dashboard-hero mb-4">
+        <h1 class="h3 mb-2">@T("Submit booking request", "إرسال طلب حجز")</h1>
+        <p class="mb-0 opacity-75">@T("Provide the requested activity details so the implementing partner can review, approve, reject, or propose another time.", "أدخل تفاصيل النشاط المطلوب ليتمكن الشريك المنفذ من المراجعة والموافقة أو الرفض أو اقتراح وقت آخر.")</p>
+    </div>
+
+    <form method="post" action="/bookings/create" class="row g-4">
+        @Html.AntiForgeryToken()
+        @if (!isDirectRequest)
+        {
+            <input type="hidden" asp-for="ActivityId" />
+        }
+
+        <div class="col-12">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger booking-validation-summary"></div>
+        </div>
+
+        <div class="col-12">
+            <div class="metric-card booking-section-card">
+                <div class="booking-section-head">
+                    <div>
+                        <h2 class="h5 mb-1">@(isDirectRequest ? T("Request Context", "بيانات الطلب") : T("Program Details", "تفاصيل البرنامج"))</h2>
+                        <div class="text-muted small">
+                            @(isDirectRequest
+                                ? T("Select the sports season and the implementing entity that should deliver this activity.", "اختر الموسم الرياضي والجهة المنفذة التي ستنفذ هذا النشاط.")
+                                : T("These details are preloaded from the selected Ghars learning program.", "تم تحميل هذه البيانات تلقائياً من البرنامج المختار في غرس."))
+                        </div>
+                    </div>
+                    @if (!isDirectRequest)
+                    {
+                        <span class="ghars-story-kicker">@T("Read only", "للقراءة فقط")</span>
+                    }
+                </div>
+
+                <div class="row g-3">
+                    @* Club is always derived from the authenticated user's organization membership.
+                       Single-club users never see a selector; the server ignores any posted club id. *@
+                    <div class="col-md-6 col-xl-4">
+                        <label class="form-label">@T("Club name", "اسم النادي")</label>
+                        @if (orgs.Count <= 1)
+                        {
+                            <div class="booking-readonly-value">@NameOf(selectedClub)</div>
+                        }
+                        else
+                        {
+                            <select asp-for="OrganizationId" class="form-select">
+                                <option value="">@T("Select club", "اختر النادي")</option>
+                                @foreach (var org in orgs)
+                                {
+                                    <option value="@org.Id">@NameOf(org)</option>
+                                }
+                            </select>
+                            <span asp-validation-for="OrganizationId" class="text-danger"></span>
+                        }
+                    </div>
+
+                    <div class="col-md-6 col-xl-4">
+                        <label class="form-label">@T("Sports season", "الموسم الرياضي")</label>
+                        @if (isDirectRequest)
+                        {
+                            <select asp-for="SeasonId" class="form-select">
+                                @foreach (var season in seasons)
+                                {
+                                    <option value="@season.Id">@(isAr ? season.TitleAr : season.TitleEn)</option>
+                                }
+                            </select>
+                            <span asp-validation-for="SeasonId" class="text-danger"></span>
+                        }
+                        else
+                        {
+                            <div class="booking-readonly-value">@seasonTitle</div>
+                        }
+                    </div>
+
+                    <div class="col-md-6 col-xl-4">
+                        <label class="form-label">@T("Partner / Implementing Entity", "الشريك / الجهة المنفذة")</label>
+                        @if (isDirectRequest)
+                        {
+                            <select asp-for="PartnerOrganizationId" class="form-select">
+                                <option value="">@T("Select implementing entity", "اختر الجهة المنفذة")</option>
+                                @foreach (var entity in entities)
+                                {
+                                    <option value="@entity.Id">@NameOf(entity)</option>
+                                }
+                            </select>
+                            <span asp-validation-for="PartnerOrganizationId" class="text-danger"></span>
+                        }
+                        else
+                        {
+                            <div class="booking-readonly-value">@((NameOf(partner) == "" ? T("Not assigned", "غير محدد") : NameOf(partner)))</div>
+                        }
+                    </div>
+
+                    @if (!isDirectRequest)
+                    {
+                        <div class="col-md-6 col-xl-4">
+                            <label class="form-label">@T("Program title", "عنوان البرنامج")</label>
+                            <div class="booking-readonly-value">@TitleOf(activity)</div>
+                        </div>
+                        <div class="col-md-6 col-xl-4">
+                            <label class="form-label">@T("Program type", "نوع البرنامج")</label>
+                            <div class="booking-readonly-value">@(activity is null ? "" : ActivityTypeText(activity.Type))</div>
+                        </div>
+                        <div class="col-md-6 col-xl-4">
+                            <label class="form-label">@T("Original program date/time", "تاريخ / وقت البرنامج الأصلي")</label>
+                            <div class="booking-readonly-value">@(activity is null ? T("Not available", "غير متاح") : $"{activity.StartDateTime:g} - {activity.EndDateTime:g}")</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="metric-card booking-section-card">
+                <div class="booking-section-head">
+                    <div>
+                        <h2 class="h5 mb-1">@T("Activity Details", "تفاصيل النشاط")</h2>
+                        <div class="text-muted small">@T("Describe the session your club wants to book under this program.", "حدّد تفاصيل الجلسة التي يرغب النادي في حجزها ضمن هذا البرنامج.")</div>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="RequestedActivityType" class="form-label">@T("Activity type", "نوع النشاط")</label>
+                        <select asp-for="RequestedActivityType" class="form-select">
+                            <option value="@ActivityType.Lecture">@T("Lecture", "محاضرة")</option>
+                            <option value="@ActivityType.Event">@T("Event", "فعالية")</option>
+                            <option value="@ActivityType.Workshop">@T("Workshop", "ورشة عمل")</option>
+                            <option value="@ActivityType.TrainingProgram">@T("Training", "تدريب")</option>
+                            <option value="@ActivityType.Course">@T("Course", "دورة")</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="Subject" class="form-label">@T("Subject", "الموضوع")</label>
+                        <input asp-for="Subject" class="form-control" />
+                        <span asp-validation-for="Subject" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="ProposedDate" class="form-label">@T("Proposed date", "التاريخ المقترح")</label>
+                        <input asp-for="ProposedDate" type="date" class="form-control" value="@(Model.ProposedDate?.ToString("yyyy-MM-dd"))" />
+                        <span asp-validation-for="ProposedDate" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="ProposedStartTime" class="form-label">@T("Proposed start time", "وقت البدء المقترح")</label>
+                        <input asp-for="ProposedStartTime" type="time" class="form-control" value="@(Model.ProposedStartTime?.ToString("HH\\:mm"))" />
+                        <span asp-validation-for="ProposedStartTime" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="ProposedEndTime" class="form-label">@T("Proposed end time", "وقت الانتهاء المقترح")</label>
+                        <input asp-for="ProposedEndTime" type="time" class="form-control" value="@(Model.ProposedEndTime?.ToString("HH\\:mm"))" />
+                        <span asp-validation-for="ProposedEndTime" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="metric-card booking-section-card">
+                <div class="booking-section-head">
+                    <div>
+                        <h2 class="h5 mb-1">@T("Target Audience", "الفئة المستهدفة")</h2>
+                        <div class="text-muted small">@T("Identify who should attend this activity and how many participants are expected.", "حدّد الفئة المستهدفة لهذا النشاط وعدد المشاركين المتوقع.")</div>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label">@T("Target audience", "الفئة المستهدفة")</label>
+                        <div class="booking-checkbox-grid">
+                            @foreach (var audience in audiences)
+                            {
+                                var isChecked = Model.TargetAudiences.Contains(audience.Item1);
+                                <label class="booking-check-card">
+                                    <input type="checkbox" name="TargetAudiences" value="@audience.Item1" @(isChecked ? "checked" : null) />
+                                    <span>@audience.Item2</span>
+                                </label>
+                            }
+                        </div>
+                        <span asp-validation-for="TargetAudiences" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-6 booking-other-audience" id="otherAudienceWrap">
+                        <label asp-for="OtherTargetAudience" class="form-label">@T("Specify other target audience", "حدد الفئة المستهدفة الأخرى")</label>
+                        <input asp-for="OtherTargetAudience" class="form-control" />
+                        <span asp-validation-for="OtherTargetAudience" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="ExpectedParticipants" class="form-label">@T("Expected number of participants", "العدد المتوقع للمشاركين")</label>
+                        <input asp-for="ExpectedParticipants" class="form-control" type="number" min="1" />
+                        <span asp-validation-for="ExpectedParticipants" class="text-danger"></span>
+                    </div>
+                    <div class="col-12">
+                        <label asp-for="AudienceDetails" class="form-label">@T("Attendee category details / notes", "تفاصيل / ملاحظات الفئات المشاركة")</label>
+                        <textarea asp-for="AudienceDetails" rows="3" class="form-control"></textarea>
+                        <span asp-validation-for="AudienceDetails" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="metric-card booking-section-card">
+                <div class="booking-section-head">
+                    <div>
+                        <h2 class="h5 mb-1">@T("Contact & Notes", "التواصل والملاحظات")</h2>
+                        <div class="text-muted small">@T("Add the club contact person, logistics, and any guidance the partner should review.", "أدخل بيانات مسؤول التواصل والمتطلبات اللوجستية وأي ملاحظات يجب أن يراجعها الشريك.")</div>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="ContactPersonName" class="form-label">@T("Contact person name", "اسم الشخص المسؤول")</label>
+                        <input asp-for="ContactPersonName" class="form-control" />
+                        <span asp-validation-for="ContactPersonName" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-3">
+                        <label asp-for="ContactPhone" class="form-label">@T("Contact mobile", "هاتف التواصل")</label>
+                        <input asp-for="ContactPhone" class="form-control" />
+                        <span asp-validation-for="ContactPhone" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-3">
+                        <label asp-for="ContactEmail" class="form-label">@T("Contact email", "البريد الإلكتروني للتواصل")</label>
+                        <input asp-for="ContactEmail" class="form-control" />
+                        <span asp-validation-for="ContactEmail" class="text-danger"></span>
+                    </div>
+                    <div class="col-12">
+                        <label asp-for="SpecialRequirements" class="form-label">@T("Special requirements / logistics", "المتطلبات الخاصة / الترتيبات اللوجستية")</label>
+                        <textarea asp-for="SpecialRequirements" rows="3" class="form-control"></textarea>
+                        <span asp-validation-for="SpecialRequirements" class="text-danger"></span>
+                    </div>
+                    <div class="col-12">
+                        <label asp-for="Notes" class="form-label">@T("Additional notes", "ملاحظات إضافية")</label>
+                        <textarea asp-for="Notes" rows="4" class="form-control"></textarea>
+                        <span asp-validation-for="Notes" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="d-flex flex-column flex-md-row gap-2 justify-content-end">
+                <a class="btn btn-outline-secondary" href="/club">@T("Cancel", "إلغاء")</a>
+                <button class="btn btn-primary" type="submit">@T("Submit booking request", "إرسال طلب الحجز")</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts{
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+    (function () {
+        const otherCheckbox = document.querySelector('input[name="TargetAudiences"][value="Others"]');
+        const wrap = document.getElementById('otherAudienceWrap');
+        const input = document.getElementById('OtherTargetAudience');
+
+        function syncOtherAudience() {
+            const show = !!otherCheckbox?.checked;
+            wrap?.classList.toggle('d-none', !show);
+            if (input) input.required = show;
+        }
+
+        document.querySelectorAll('input[name="TargetAudiences"]').forEach(function (el) {
+            el.addEventListener('change', syncOtherAudience);
+        });
+
+        syncOtherAudience();
+    })();
+    </script>
+}

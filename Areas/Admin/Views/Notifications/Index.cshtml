@@ -1,0 +1,37 @@
+@model List<GharsPlatform.Models.Core.Notification>
+@{
+    ViewData["Title"] = "Notifications";
+    ViewData["PageTitle"] = "Notifications";
+}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="fw-semibold">Notifications</div>
+    <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Notifications/Create"><i class="bi bi-plus-lg"></i> Create</a>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Target</th>
+                <th>Type</th>
+                <th>Created</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var n in Model)
+            {
+                <tr>
+                    <td>@n.Id</td>
+                    <td class="fw-semibold">@n.TitleEn</td>
+                    <td>@n.TargetType</td>
+                    <td>@n.Type</td>
+                    <td>@n.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

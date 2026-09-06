@@ -1,0 +1,209 @@
+@using System.Globalization
+@{
+    var culture = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    var isRtl = culture == "ar";
+    var dir = isRtl ? "rtl" : "ltr";
+    var pageTitle = (ViewData["PageTitle"] as string) ?? (ViewData["Title"] as string) ?? "Dashboard";
+}
+<!doctype html>
+<html lang="@culture" dir="@dir">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"] - Ghars Admin</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="~/css/admin.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/ghars-theme.css" asp-append-version="true" />
+
+    @if (isRtl)
+    {
+        <link rel="stylesheet" href="~/css/admin.rtl.css" asp-append-version="true" />
+    }
+
+    @RenderSection("Head", required: false)
+</head>
+<body class="admin-shell">
+
+    <aside class="admin-sidebar" id="adminSidebar">
+        <div class="brand">
+            <a href="/" class="d-block text-decoration-none">
+                <img src="~/img/brand/ghars-logo.png" alt="Ghars" />
+            </a>
+
+            <div class="mt-2">
+                <div class="fw-semibold text-white">@(isRtl ? "منصة غرس" : "Ghars Platform")</div>
+                <div class="small" style="color: rgba(255,255,255,.70);">@(isRtl ? "لوحة الإدارة" : "Admin Console")</div>
+            </div>
+        </div>
+
+        @{
+            string ctrl = (ViewContext.RouteData.Values["controller"]?.ToString() ?? "");
+            string area = (ViewContext.RouteData.Values["area"]?.ToString() ?? "");
+            bool isAdminArea = string.Equals(area, "Admin", StringComparison.OrdinalIgnoreCase);
+
+            string ActiveIf(string controllerName, string? actionName = null)
+            {
+                var action = (ViewContext.RouteData.Values["action"]?.ToString() ?? "");
+                if (!isAdminArea) return "";
+                if (!string.Equals(ctrl, controllerName, StringComparison.OrdinalIgnoreCase)) return "";
+                if (actionName != null && !string.Equals(action, actionName, StringComparison.OrdinalIgnoreCase)) return "";
+                return "active";
+            }
+        }
+
+        <div class="nav-section-title">Navigation</div>
+
+        <nav class="nav flex-column px-2 pb-3">
+            <a class="nav-link @ActiveIf("Dashboard")" asp-area="Admin" asp-controller="Dashboard" asp-action="Index">
+                <i class="bi bi-speedometer2"></i> <span>@(isRtl ? "لوحة التحكم" : "Dashboard")</span>
+            </a>
+
+            <a class="nav-link @ActiveIf("Organizations")" asp-area="Admin" asp-controller="Organizations" asp-action="Index">
+                <i class="bi bi-building"></i> <span>@(isRtl ? "الجهات" : "Organizations")</span>
+            </a>
+
+            @if (User.IsInRole("Super Admin"))
+            {
+                <a class="nav-link @ActiveIf("Users")" asp-area="Admin" asp-controller="Users" asp-action="Index">
+                    <i class="bi bi-people"></i> <span>@(isRtl ? "المستخدمون" : "Users")</span>
+                </a>
+            }
+
+            <a class="nav-link @ActiveIf("Activities")" asp-area="Admin" asp-controller="Activities" asp-action="Index">
+                <i class="bi bi-calendar2-event"></i> <span>@(isRtl ? "البرامج" : "Activities")</span>
+            </a>
+
+            <a class="nav-link @ActiveIf("Bookings")" asp-area="Admin" asp-controller="Bookings" asp-action="Index">
+                <i class="bi bi-journal-check"></i> <span>@(isRtl ? "الحجوزات" : "Bookings")</span>
+            </a>
+
+            <a class="nav-link @ActiveIf("Attendance")" asp-area="Admin" asp-controller="Attendance" asp-action="Sessions">
+                <i class="bi bi-qr-code-scan"></i> <span>@(isRtl ? "الحضور" : "Attendance")</span>
+            </a>
+
+            <a class="nav-link @ActiveIf("Certificates")" asp-area="Admin" asp-controller="Certificates" asp-action="Index">
+                <i class="bi bi-award"></i> <span>@(isRtl ? "الشهادات" : "Certificates")</span>
+            </a>
+
+            <a class="nav-link @ActiveIf("Surveys")" asp-area="Admin" asp-controller="Surveys" asp-action="Index">
+                <i class="bi bi-star"></i> <span>@(isRtl ? "استبيانات الأنشطة" : "Activity Surveys")</span>
+            </a>
+
+            <a class="nav-link @ActiveIf("ExternalSurveys")" asp-area="Admin" asp-controller="ExternalSurveys" asp-action="Index">
+                <i class="bi bi-clipboard-check"></i> <span>@(isRtl ? "الاستبيانات الرسمية" : "Official Surveys")</span>
+            </a>
+
+            <a class="nav-link @ActiveIf("Library")" asp-area="Admin" asp-controller="Library" asp-action="Categories">
+                <i class="bi bi-journal-bookmark"></i> <span>@(isRtl ? "المكتبة" : "Library")</span>
+            </a>
+
+            <a class="nav-link @ActiveIf("Gallery", "Index")" asp-area="Admin" asp-controller="Gallery" asp-action="Index">
+                <i class="bi bi-images"></i> <span>@(isRtl ? "المعرض" : "Gallery")</span>
+            </a>
+
+            <a class="nav-link @ActiveIf("Gallery", "MediaItems")" asp-area="Admin" asp-controller="Gallery" asp-action="MediaItems">
+                <i class="bi bi-camera"></i> <span>@(isRtl ? "وسائط الأنشطة" : "Activity Media")</span>
+            </a>
+
+            <a class="nav-link @ActiveIf("Kpi")" asp-area="Admin" asp-controller="Kpi" asp-action="Index">
+                <i class="bi bi-bullseye"></i> <span>@(isRtl ? "مراجعة المؤشرات" : "KPI Review")</span>
+            </a>
+
+
+            <a class="nav-link @ActiveIf("News")" asp-area="Admin" asp-controller="News" asp-action="Index">
+                <i class="bi bi-megaphone"></i> <span>@(isRtl ? "الأخبار" : "News Ticker")</span>
+            </a>
+
+            <a class="nav-link @ActiveIf("Notifications")" asp-area="Admin" asp-controller="Notifications" asp-action="Index">
+                <i class="bi bi-bell"></i> <span>@(isRtl ? "الإشعارات" : "Notifications")</span>
+            </a>
+
+            <a class="nav-link @ActiveIf("Reports")" asp-area="Admin" asp-controller="Reports" asp-action="Analytics">
+                <i class="bi bi-graph-up"></i> <span>@(isRtl ? "التقارير" : "Reports")</span>
+            </a>
+        </nav>
+
+        <div class="mt-auto p-3" style="border-top: 1px solid rgba(255,255,255,.10);">
+            <div class="small" style="color: rgba(255,255,255,.70);">Signed in</div>
+            <div class="d-flex align-items-center justify-content-between gap-2">
+                <div class="text-truncate text-white">@User.Identity?.Name</div>
+
+                <form asp-area="" asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button class="btn btn-sm btn-outline-light" type="submit" title="Logout">
+                        <i class="bi bi-box-arrow-right"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </aside>
+
+    <main class="admin-content">
+        <header class="admin-topbar">
+            <div class="d-flex align-items-center justify-content-between gap-3">
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-outline-secondary d-lg-none" id="btnToggleSidebar" type="button" aria-label="Toggle sidebar">
+                        <i class="bi bi-list"></i>
+                    </button>
+                    <div>
+                        <div class="fw-semibold">@pageTitle</div>
+                        <div class="small text-muted">@(isRtl ? "إدارة منصة غرس" : "Ghars Administration")</div>
+                    </div>
+                </div>
+
+                <div class="d-flex align-items-center gap-2">
+                    <form asp-area="" asp-controller="Culture" asp-action="Set" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
+                        <input type="hidden" name="culture" value="@(isRtl ? "en" : "ar")" />
+                        <button class="btn btn-outline-secondary btn-sm" type="submit">
+                            @(isRtl ? "English" : "العربية")
+                        </button>
+                    </form>
+
+                    <a class="btn btn-outline-secondary btn-sm position-relative"
+                       asp-area=""
+                       asp-controller="Notifications"
+                       asp-action="Inbox"
+                       title="Notifications">
+                        <i class="bi bi-bell"></i>
+                        <span id="notifDot"
+                              class="position-absolute top-0 start-100 translate-middle p-1 bg-danger border border-light rounded-circle d-none"></span>
+                    </a>
+
+                    <a class="btn btn-primary btn-sm" href="/">@(isRtl ? "الموقع العام" : "Public Site")</a>
+                </div>
+            </div>
+
+            <div id="notifToastHost" class="pt-2"></div>
+        </header>
+
+        <section class="admin-page">
+            @await Html.PartialAsync("~/Views/Shared/_Toasts.cshtml")
+            @RenderBody()
+        </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/%40microsoft/signalr@8.0.8/dist/browser/signalr.min.js"></script>
+    <script src="~/js/admin.js" asp-append-version="true"></script>
+
+    <script>
+        (function () {
+            const btn = document.getElementById('btnToggleSidebar');
+            const sidebar = document.getElementById('adminSidebar');
+            if (!btn || !sidebar) return;
+
+            btn.addEventListener('click', function () {
+                sidebar.classList.toggle('open');
+            });
+        })();
+    </script>
+
+    @RenderSection("Scripts", required: false)
+</body>
+</html>

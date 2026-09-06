@@ -1,0 +1,39 @@
+@model List<GharsPlatform.Models.Core.Survey>
+@{
+    ViewData["Title"] = "Surveys";
+    ViewData["PageTitle"] = "Surveys";
+}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="fw-semibold">Surveys</div>
+    <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Surveys/Create"><i class="bi bi-plus-lg"></i> Create</a>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>ID</th>
+                <th>Activity</th>
+                <th>Title</th>
+                <th>Active</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var s in Model)
+            {
+                <tr>
+                    <td>@s.Id</td>
+                    <td>@s.Activity?.TitleEn</td>
+                    <td class="fw-semibold">@s.TitleEn</td>
+                    <td>@(s.IsActive ? "Yes" : "No")</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" href="/Admin/Surveys/Results/@s.Id">Results</a>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

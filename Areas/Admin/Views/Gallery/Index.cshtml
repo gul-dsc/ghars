@@ -1,0 +1,62 @@
+@model List<GharsPlatform.Models.Core.MediaAlbum>
+@using GharsPlatform.Models.Core
+@{
+    ViewData["Title"] = "Gallery Albums";
+    ViewData["PageTitle"] = "Gallery Albums";
+    var seasons = ViewBag.Seasons as List<Season> ?? new();
+    var orgs = ViewBag.Organizations as List<Organization> ?? new();
+    var acts = ViewBag.Activities as List<Activity> ?? new();
+    var keywordValue = Context.Request.Query["keyword"].ToString();
+}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div><h1 class="h4 mb-0">Gallery Albums</h1><div class="text-muted">Create albums and attach photos, videos, and PDFs.</div></div>
+    @if (User.IsInRole(RoleNames.SuperAdmin))
+    {
+        <a class="btn btn-primary" asp-area="Admin" asp-controller="Gallery" asp-action="Create"><i class="bi bi-plus-lg"></i> Create Album</a>
+    }
+</div>
+<form method="get" class="card p-3 rounded-4 border-0 shadow-sm mb-3">
+    <div class="row g-2">
+        <div class="col-md-3"><input class="form-control" name="keyword" value="@keywordValue" placeholder="Search albums" /></div>
+        <div class="col-md-2"><select class="form-select" name="seasonId"><option value="">All seasons</option>@foreach(var s in seasons){<option value="@s.Id">@s.TitleEn</option>}</select></div>
+        <div class="col-md-3"><select class="form-select" name="organizationId"><option value="">All clubs/entities</option>@foreach(var o in orgs){<option value="@o.Id">@o.NameEn</option>}</select></div>
+        <div class="col-md-2"><select class="form-select" name="isPublic"><option value="">All status</option><option value="true">Published</option><option value="false">Hidden</option></select></div>
+        <div class="col-md-2"><button class="btn btn-outline-primary w-100">Filter</button></div>
+    </div>
+</form>
+<div class="card rounded-4 border-0 shadow-sm overflow-hidden">
+    <table class="table align-middle mb-0">
+        <thead><tr><th>Album</th><th>Linked To</th><th>Date</th><th>Items</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+        <tbody>
+        @foreach(var x in Model)
+        {
+            <tr>
+                <td><strong>@x.TitleEn</strong><div class="text-muted small">@x.TitleAr</div></td>
+                <td>@(x.Activity?.TitleEn ?? x.Organization?.NameEn ?? "General album")</td>
+                <td>@x.AlbumDate.ToString("yyyy-MM-dd")</td>
+                <td>@(x.Items?.Count ?? 0)</td>
+                @{ var badgeClass = x.IsPublic ? "text-bg-success" : "text-bg-secondary"; var statusText = x.IsPublic ? "Published" : "Hidden"; }
+                <td><span class="badge @badgeClass">@statusText</span></td>
+                <td class="text-end">
+                    <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Gallery" asp-action="Details" asp-route-id="@x.Id"><i class="bi bi-collection-play"></i> Manage Items</a>
+                        @if (User.IsInRole(RoleNames.SuperAdmin))
+                        {
+                            <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@x.Id">Edit Album</a>
+                        }
+                    @if (User.IsInRole(RoleNames.SuperAdmin))
+                    {
+                        <form method="post" asp-action="Delete" asp-route-id="@x.Id" class="d-inline" onsubmit="return confirm('Delete this album and all media?');">
+                            @Html.AntiForgeryToken()
+                            <button class="btn btn-sm btn-outline-danger">Delete</button>
+                        </form>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>
+@if(!Model.Any())
+{
+    <div class="alert alert-light border mt-3">No albums found. Super Admin can create the first album.</div>
+}

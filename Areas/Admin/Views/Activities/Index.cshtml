@@ -1,0 +1,62 @@
+@model List<GharsPlatform.Models.Core.Activity>
+@{
+    ViewData["Title"] = "Activities";
+    ViewData["PageTitle"] = "Activities";
+}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="fw-semibold">Activities</div>
+    @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Activities/Create"><i class="bi bi-plus-lg"></i> Create</a> }
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Start</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var a in Model)
+            {
+                <tr>
+                    <td>@a.Id</td>
+                    <td class="fw-semibold">@a.TitleEn</td>
+                    <td>@a.Type</td>
+                    <td>@a.StartDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+	                    <td>
+	                        <span class="badge text-bg-@(
+	                            a.Status == ActivityStatus.Published ? "success" :
+	                            a.Status == ActivityStatus.Closed ? "secondary" :
+	                            a.Status == ActivityStatus.Cancelled ? "danger" :
+	                            "warning")">@a.Status</span>
+	                    </td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Activities/Details/@a.Id">Details</a>
+                        @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-outline-primary" href="/Admin/Activities/Edit/@a.Id">Edit</a> }
+                        @if (User.IsInRole("Super Admin") && a.Status != ActivityStatus.Published)
+                        {
+                            <form method="post" action="/Admin/Activities/Publish/@a.Id" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn-sm btn-success" type="submit">Publish</button>
+                            </form>
+                        }
+                        @if (User.IsInRole("Super Admin"))
+                        {
+                            <form method="post" action="/Admin/Activities/Delete/@a.Id" class="d-inline" onsubmit="return confirm('Delete this activity?');">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

@@ -1,0 +1,45 @@
+@model GharsPlatform.Controllers.Admin.GalleryController.GalleryItemVm
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Add Official / Press Media", "إضافة وسائط رسمية / تغطية صحفية");
+    ViewData["PageTitle"] = ViewData["Title"];
+    var seasons = ViewBag.Seasons as List<Season> ?? new();
+    var orgs = ViewBag.Organizations as List<Organization> ?? new();
+    string N(Organization? o) => ar ? (o?.NameAr ?? o?.NameEn ?? "") : (o?.NameEn ?? o?.NameAr ?? "");
+    string MediaTypeText(GalleryMediaType t) => t switch
+    {
+        GalleryMediaType.Photo => T("Photo", "صورة"),
+        GalleryMediaType.Video => T("Video", "فيديو"),
+        GalleryMediaType.PressCoverage => T("Press coverage", "تغطية صحفية"),
+        GalleryMediaType.NewspaperCoverage => T("Newspaper coverage", "تغطية في الصحف"),
+        GalleryMediaType.OfficialPhoto => T("Official photo", "صورة رسمية"),
+        GalleryMediaType.OfficialVideo => T("Official video", "فيديو رسمي"),
+        _ => t.ToString()
+    };
+}
+<form method="post" enctype="multipart/form-data" class="card p-4 rounded-4 border-0 shadow-sm">
+    @Html.AntiForgeryToken()
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+    <div class="row g-3">
+        <div class="col-md-6"><label class="form-label">@T("Title (English)", "العنوان بالإنجليزية")</label><input class="form-control" asp-for="TitleEn" /><span asp-validation-for="TitleEn" class="text-danger"></span></div>
+        <div class="col-md-6"><label class="form-label">@T("Title (Arabic)", "العنوان بالعربية")</label><input class="form-control" asp-for="TitleAr" /><span asp-validation-for="TitleAr" class="text-danger"></span></div>
+        <div class="col-md-6"><label class="form-label">@T("Description (English)", "الوصف بالإنجليزية")</label><textarea class="form-control" asp-for="DescriptionEn" rows="3"></textarea></div>
+        <div class="col-md-6"><label class="form-label">@T("Description (Arabic)", "الوصف بالعربية")</label><textarea class="form-control" asp-for="DescriptionAr" rows="3"></textarea></div>
+        <div class="col-md-3"><label class="form-label">@T("Media type", "نوع الوسائط")</label><select class="form-select" asp-for="MediaType">@foreach (GalleryMediaType t in Enum.GetValues(typeof(GalleryMediaType))){<option value="@t">@MediaTypeText(t)</option>}</select></div>
+        <div class="col-md-3"><label class="form-label">@T("Season", "الموسم")</label><select class="form-select" asp-for="SeasonId">@foreach (var s in seasons){<option value="@s.Id">@(ar?s.TitleAr:s.TitleEn)</option>}</select><span asp-validation-for="SeasonId" class="text-danger"></span></div>
+        <div class="col-md-3"><label class="form-label">@T("Related club / entity", "النادي / الجهة المرتبطة")</label><select class="form-select" asp-for="OrganizationId"><option value="">@T("Not linked", "غير مرتبط")</option>@foreach (var o in orgs){<option value="@o.Id">@N(o)</option>}</select></div>
+        <div class="col-md-3"><label class="form-label">@T("Media date", "تاريخ الوسائط")</label><input class="form-control" type="date" asp-for="MediaDate" /></div>
+        <div class="col-md-6"><label class="form-label">@T("Upload file (photo / video)", "رفع ملف (صورة / فيديو)")</label><input class="form-control" type="file" asp-for="File" accept="image/*,video/*" /><span asp-validation-for="File" class="text-danger"></span></div>
+        <div class="col-md-6"><label class="form-label">@T("Or external link (http/https)", "أو رابط خارجي (http/https)")</label><input class="form-control" asp-for="ExternalUrl" placeholder="https://..." /><span asp-validation-for="ExternalUrl" class="text-danger"></span></div>
+        <div class="col-12"><div class="form-check"><input class="form-check-input" asp-for="IsPublished" /><label class="form-check-label">@T("Published / visible in the public gallery", "منشور / ظاهر في المعرض العام")</label></div></div>
+        <div class="col-12 d-flex gap-2">
+            <button class="btn btn-primary">@T("Add media", "إضافة الوسائط")</button>
+            <a class="btn btn-outline-secondary" asp-action="MediaItems">@T("Cancel", "إلغاء")</a>
+        </div>
+    </div>
+</form>
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

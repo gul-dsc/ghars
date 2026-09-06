@@ -1,0 +1,91 @@
+# ---------------------------------------------------------------------------
+# Ghars Platform — source control exclusions
+#
+# Two rules drive this file:
+#   1. Build output and IDE state are reproducible, so they are never committed.
+#   2. Runtime data (uploaded evidence, generated certificates, protected
+#      documents) is operational business data. It is backed up and restored
+#      through the procedures in GHARS_PRODUCTION_OPERATIONS.md, NOT through Git.
+# ---------------------------------------------------------------------------
+
+# --- Build output ----------------------------------------------------------
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.dll
+*.pdb
+
+# --- IDE / editor state ----------------------------------------------------
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.csproj.user
+
+# --- Local configuration and secrets --------------------------------------
+# appsettings.json itself IS committed: it holds only a Windows-authentication
+# development connection string with no credentials. Real credentials belong in
+# environment variables or .NET User Secrets — see the README.
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Local.json
+appsettings.*.local.json
+secrets.json
+.env
+.env.*
+!.env.example
+
+# --- Protected runtime uploads --------------------------------------------
+# KPI evidence, organization licences and official survey reports. Deliberately
+# stored outside wwwroot and served only through ProtectedFilesController.
+# This is live business data and must never enter source control.
+protected-uploads/
+
+# --- Public runtime uploads ------------------------------------------------
+# wwwroot/uploads holds user- and admin-uploaded content: generated certificate
+# PDFs (which carry participant names), library files, gallery and agenda media,
+# organization logos and reward images. All of it is runtime data.
+#
+# The one exception is the sample library PDF that DbSeeder references by a fixed
+# path, so a freshly seeded database is not left with a broken link.
+/wwwroot/uploads/*
+!/wwwroot/uploads/library/
+/wwwroot/uploads/library/*
+!/wwwroot/uploads/library/sample-ghars-values.pdf
+
+# --- Databases and backups -------------------------------------------------
+*.mdf
+*.ldf
+*.ndf
+*.bak
+*.trn
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# --- Logs and temporary files ---------------------------------------------
+*.log
+logs/
+*.tmp
+*.temp
+*.bak.*
+*~
+
+# --- Agent / tooling session state ----------------------------------------
+# Local assistant working memory and transcripts; machine-specific, not project source.
+.remember/
+.claude/
+
+# --- OS noise --------------------------------------------------------------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store

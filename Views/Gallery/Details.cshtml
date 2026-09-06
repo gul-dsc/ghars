@@ -1,0 +1,104 @@
+@model GharsPlatform.Models.Core.MediaAlbum
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e,string a)=>ar?a:e;
+    string title = ar ? Model.TitleAr : Model.TitleEn;
+    string? desc = ar ? Model.DescriptionAr : Model.DescriptionEn;
+    string Caption(MediaItem i)=> ar ? (i.CaptionAr ?? i.CaptionEn ?? title) : (i.CaptionEn ?? i.CaptionAr ?? title);
+    ViewData["Title"] = title;
+}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div><h1 class="mb-1">@title</h1><div class="text-muted">@Model.AlbumDate.ToString("yyyy-MM-dd")</div></div>
+    <div class="d-flex gap-2">
+        @if (User.IsInRole(GharsPlatform.Models.Identity.RoleNames.SuperAdmin))
+        {
+            <a class="btn btn-success" asp-area="Admin" asp-controller="Gallery" asp-action="Details" asp-route-id="@Model.Id"><i class="bi bi-pencil-square"></i> @T("Manage Album Items","إدارة عناصر الألبوم")</a>
+        }
+        <a class="btn btn-outline-secondary" asp-controller="Gallery" asp-action="Index">@T("Back to Gallery","العودة للمعرض")</a>
+    </div>
+</div>
+@if(!string.IsNullOrWhiteSpace(desc))
+{
+    <div class="card p-4 rounded-4 border-0 shadow-sm mb-4"><p class="mb-0">@desc</p></div>
+}
+<div class="row g-4">
+@foreach(var item in Model.Items.OrderBy(x=>x.SortOrder))
+{
+    var cap = Caption(item);
+    var src = item.FilePath ?? item.VideoUrl ?? "";
+    <div class="col-md-4">
+        <div class="card h-100 rounded-4 shadow-sm border-0 overflow-hidden">
+            @if(item.MediaType == MediaType.Image)
+            {
+                <button type="button" class="btn p-0 border-0 text-start gallery-open-image" data-title="@cap" data-src="@src">
+                    <img src="@src" alt="@cap" style="width:100%;height:230px;object-fit:cover" />
+                </button>
+            }
+            else if(item.MediaType == MediaType.Video)
+            {
+                <button type="button" class="btn p-0 border-0 text-start gallery-open-video" data-title="@cap" data-src="@src">
+                    <div class="bg-dark d-flex align-items-center justify-content-center" style="height:230px;"><i class="bi bi-play-circle-fill text-white" style="font-size:4rem"></i></div>
+                </button>
+            }
+            else
+            {
+                <button type="button" class="btn p-0 border-0 text-start gallery-open-pdf" data-title="@cap" data-src="@src">
+                    <div class="bg-light d-flex align-items-center justify-content-center" style="height:230px;"><i class="bi bi-file-earmark-pdf" style="font-size:4rem"></i></div>
+                </button>
+            }
+            <div class="card-body"><span class="badge text-bg-success">@item.MediaType</span><h5 class="mt-2">@cap</h5></div>
+        </div>
+    </div>
+}
+@if(!Model.Items.Any())
+{
+    <div class="col-12"><div class="p-5 bg-light rounded-4 text-muted">@T("No media has been added to this album yet.","لم تتم إضافة وسائط إلى هذا الألبوم بعد.")</div></div>
+}
+</div>
+
+<div class="modal fade" id="galleryMediaModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered"><div class="modal-content rounded-4">
+        <div class="modal-header"><h5 class="modal-title" id="galleryMediaTitle">@T("Media","وسائط")</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+        <div class="modal-body" id="galleryMediaBody"></div>
+    </div></div>
+</div>
+
+@section Scripts {
+<script>
+(function(){
+    const modalEl = document.getElementById('galleryMediaModal');
+    const titleEl = document.getElementById('galleryMediaTitle');
+    const body = document.getElementById('galleryMediaBody');
+    if(!modalEl || !body || !window.bootstrap) return;
+    const modal = new bootstrap.Modal(modalEl);
+    function youtubeEmbed(src){
+        let url = src;
+        if(src.includes('youtu.be/')) url = 'https://www.youtube.com/embed/' + src.split('youtu.be/')[1].split(/[?&]/)[0];
+        if(src.includes('watch?v=')) url = src.replace('watch?v=', 'embed/');
+        return url;
+    }
+    function openMedia(title, html, dark){
+        titleEl.textContent = title || 'Media';
+        body.className = dark ? 'modal-body bg-dark' : 'modal-body';
+        body.innerHTML = html;
+        modal.show();
+    }
+    document.querySelectorAll('.gallery-open-image').forEach(btn=>btn.addEventListener('click',function(){
+        const src=this.dataset.src||''; const title=this.dataset.title||'';
+        openMedia(title, `<img src="${src}" alt="${title}" style="width:100%;max-height:78vh;object-fit:contain" />`, false);
+    }));
+    document.querySelectorAll('.gallery-open-video').forEach(btn=>btn.addEventListener('click',function(){
+        const src=this.dataset.src||''; const title=this.dataset.title||'';
+        if(src.includes('youtube.com') || src.includes('youtu.be')) openMedia(title, `<div class="ratio ratio-16x9"><iframe src="${youtubeEmbed(src)}" title="${title}" allowfullscreen></iframe></div>`, true);
+        else openMedia(title, `<video src="${src}" controls autoplay style="width:100%;max-height:78vh;background:#000"></video>`, true);
+    }));
+    document.querySelectorAll('.gallery-open-pdf').forEach(btn=>btn.addEventListener('click',function(){
+        const src=this.dataset.src||''; const title=this.dataset.title||'';
+        openMedia(title, `<iframe src="${src}" title="${title}" style="width:100%;height:78vh;border:0"></iframe>`, false);
+    }));
+    modalEl.addEventListener('hidden.bs.modal', function(){ body.innerHTML=''; });
+})();
+</script>
+}

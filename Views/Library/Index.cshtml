@@ -1,0 +1,188 @@
+@model IEnumerable<GharsPlatform.Models.Core.LibraryItem>
+@using System.Globalization
+
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Digital Library", "المكتبة الرقمية");
+    var categories = ViewBag.Categories as List<GharsPlatform.Models.Core.LibraryCategory> ?? new();
+    int? selectedCategoryId = ViewBag.SelectedCategoryId as int?;
+    var currentPage = (int)(ViewBag.Page ?? 1);
+    var totalPages = (int)(ViewBag.TotalPages ?? 1);
+    string ContentTypeText(GharsPlatform.Models.Core.LibraryContentType t) => t switch
+    {
+        GharsPlatform.Models.Core.LibraryContentType.Lecture => T("Lecture", "محاضرة"),
+        GharsPlatform.Models.Core.LibraryContentType.AwarenessVideo => T("Awareness video", "فيديو توعوي"),
+        GharsPlatform.Models.Core.LibraryContentType.EducationalBooklet => T("Educational booklet", "كتيب تعليمي"),
+        _ => t.ToString()
+    };
+}
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h1 class="section-title mb-0">
+        <i class="bi bi-journal-bookmark me-2"></i> @T("Digital Library", "المكتبة الرقمية")
+    </h1>
+
+    <a asp-controller="Home" asp-action="Index" class="btn btn-outline-secondary">
+        @T("Home", "الرئيسية")
+    </a>
+</div>
+
+<p class="text-muted mb-4">@T("Awareness lectures, videos and educational booklets related to the Ghars Program, published by the Council in coordination with partner entities.", "محاضرات وفيديوهات توعوية وكتيبات تعليمية مرتبطة ببرنامج غرس، ينشرها المجلس بالتنسيق مع الجهات المتعاونة.")</p>
+
+<div class="row g-4">
+    <div class="col-lg-3">
+        <div class="card">
+            <div class="card-body">
+                <h4 class="h5 fw-bold mb-3">@T("Categories", "التصنيفات")</h4>
+
+                <div class="list-group">
+                    <a asp-action="Index"
+                       class="list-group-item list-group-item-action @(selectedCategoryId == null ? "active" : "")">
+                        @T("All", "الكل")
+                    </a>
+
+                    @foreach (var category in categories)
+                    {
+                        <a asp-action="Index"
+                           asp-route-categoryId="@category.Id"
+                           class="list-group-item list-group-item-action @(selectedCategoryId == category.Id ? "active" : "")">
+                            @(ar ? category.NameAr : category.NameEn)
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-9">
+        <div class="row g-4">
+            @if (!Model.Any())
+            {
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <p class="text-muted mb-0">@T("No library items found.", "لا توجد مواد في المكتبة.")</p>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                @foreach (var item in Model)
+                {
+                    var extension = System.IO.Path.GetExtension(item.FilePath ?? string.Empty).ToLowerInvariant();
+                    var isPdf = extension == ".pdf";
+                    var isVideo = extension == ".mp4" || extension == ".webm" || extension == ".ogg";
+                    var title = ar ? item.TitleAr : item.TitleEn;
+                    var description = ar ? item.DescriptionAr : item.DescriptionEn;
+                    var publisher = ar ? (item.PublishingEntityAr ?? item.PublishingEntityEn) : (item.PublishingEntityEn ?? item.PublishingEntityAr);
+                    var categoryName = ar ? item.LibraryCategory?.NameAr : item.LibraryCategory?.NameEn;
+
+                    <div class="col-md-6 col-xl-6">
+                        <div class="card h-100 library-item-card">
+                            <div class="card-body d-flex flex-column">
+                                <div class="text-muted small mb-2">
+                                    @(categoryName ?? T("Uncategorized", "غير مصنف")) · @ContentTypeText(item.ContentType)
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(item.CoverImagePath)) { <img src="@item.CoverImagePath" class="rounded-3 mb-3" style="height:150px;object-fit:cover" alt="@title" /> }
+                                <h5 class="fw-bold mb-2">@title</h5>
+                                <div class="text-muted mb-3">
+                                    @(publisher ?? T("Ghars Program", "برنامج غرس")) · @(item.PublicationDate?.ToString("yyyy-MM-dd") ?? "")
+                                </div>
+
+                                <p class="mb-4">
+                                    @(string.IsNullOrWhiteSpace(description) ? T("No description available.", "لا يوجد وصف متاح.") : description)
+                                </p>
+
+                                <div class="mt-auto">
+                                    @if (isPdf)
+                                    {
+                                        <button type="button"
+                                                class="btn btn-primary w-100 btn-open-library-viewer"
+                                                data-item-id="@item.Id">
+                                            <i class="bi bi-file-earmark-pdf me-2"></i>@T("View PDF", "عرض الملف")
+                                        </button>
+                                    }
+                                    else if (isVideo)
+                                    {
+                                        <button type="button"
+                                                class="btn btn-primary w-100 btn-open-library-viewer"
+                                                data-item-id="@item.Id">
+                                            <i class="bi bi-play-circle me-2"></i>@T("Watch Video", "مشاهدة الفيديو")
+                                        </button>
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(item.ExternalUrl))
+                                    {
+                                        <a class="btn btn-outline-primary w-100" href="@item.ExternalUrl" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right me-2"></i>@T("Open External Link", "فتح الرابط الخارجي")</a>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-outline-secondary w-100" disabled>
+                                            <i class="bi bi-file-earmark me-2"></i>@T("Preview Not Available", "المعاينة غير متاحة")
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+@if (totalPages > 1) {<nav class="mt-4"><ul class="pagination justify-content-center"><li class="page-item @(currentPage <= 1 ? "disabled" : "")"><a class="page-link" href="?page=@(currentPage - 1)@(selectedCategoryId.HasValue ? $"&categoryId={selectedCategoryId}" : "")">@T("Previous", "السابق")</a></li><li class="page-item disabled"><span class="page-link">@currentPage / @totalPages</span></li><li class="page-item @(currentPage >= totalPages ? "disabled" : "")"><a class="page-link" href="?page=@(currentPage + 1)@(selectedCategoryId.HasValue ? $"&categoryId={selectedCategoryId}" : "")">@T("Next", "التالي")</a></li></ul></nav>}
+
+<div class="modal fade" id="libraryViewerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content" id="libraryViewerModalContent">
+            <div class="modal-body p-5 text-center">
+                <div class="spinner-border text-success" role="status"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const modalElement = document.getElementById('libraryViewerModal');
+            const modalContent = document.getElementById('libraryViewerModalContent');
+            const bsModal = new bootstrap.Modal(modalElement);
+
+            document.querySelectorAll('.btn-open-library-viewer').forEach(btn => {
+                btn.addEventListener('click', async function () {
+                    const itemId = this.getAttribute('data-item-id');
+
+                    modalContent.innerHTML = `
+                        <div class="modal-body p-5 text-center">
+                            <div class="spinner-border text-success" role="status"></div>
+                        </div>`;
+
+                    bsModal.show();
+
+                    try {
+                        const response = await fetch(`/Library/Viewer/${itemId}`);
+                        const html = await response.text();
+                        modalContent.innerHTML = html;
+                    } catch (e) {
+                        modalContent.innerHTML = `
+                            <div class="modal-header">
+                                <h5 class="modal-title">Error</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="alert alert-danger mb-0">
+                                    Unable to load the viewer.
+                                </div>
+                            </div>`;
+                    }
+                });
+            });
+
+            modalElement.addEventListener('hidden.bs.modal', function () {
+                modalContent.innerHTML = '';
+            });
+        })();
+    </script>
+}

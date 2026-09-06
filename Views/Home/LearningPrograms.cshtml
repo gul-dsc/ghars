@@ -1,0 +1,49 @@
+@model List<GharsPlatform.Models.Core.Activity>
+@using GharsPlatform.Models.Core
+@using GharsPlatform.Models.Identity
+@using System.Globalization
+@{
+    var partner = ViewBag.Partner as PartnerProfile;
+    var org = partner?.Organization;
+    var partnerId = org?.Id ?? 0;
+    var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string en, string ar) => isAr ? ar : en;
+    string ProgramType(ActivityType t) => t switch { ActivityType.Course => T("Course", "دورة"), ActivityType.TrainingProgram => T("Training", "تدريب"), ActivityType.Workshop => T("Workshop", "ورشة عمل"), ActivityType.Lecture => T("Lecture", "محاضرة"), _ => T("Activity", "نشاط") };
+    string Title(Activity a) => isAr && !string.IsNullOrWhiteSpace(a.TitleAr) ? a.TitleAr : a.TitleEn;
+    string Desc(Activity a) => isAr && !string.IsNullOrWhiteSpace(a.DescriptionAr) ? a.DescriptionAr! : (a.DescriptionEn ?? "");
+    string PartnerName() => org == null ? "" : (isAr && !string.IsNullOrWhiteSpace(org.NameAr) ? org.NameAr : org.NameEn);
+    ViewData["Title"] = T("Learning Programs", "البرامج التعليمية");
+}
+@section Head{<style>.program-hero{background:linear-gradient(135deg,#1b5e32,#51b499);border-radius:24px;color:#fff;padding:30px;margin-bottom:22px}.program-card{border:1px solid #e4ebe8;border-radius:22px;background:#fff;padding:22px;box-shadow:0 14px 38px rgba(53,53,53,.08)}.program-meta{display:flex;flex-wrap:wrap;gap:8px}.program-meta span{background:#f3faf7;border:1px solid #dceee7;border-radius:999px;padding:.35rem .7rem;color:#1b5e32;font-size:.86rem}.program-type{background:#2d9b6c;color:white;border-radius:999px;padding:.35rem .75rem;font-weight:700;font-size:.85rem}</style>}
+<div class="program-hero d-flex flex-column flex-md-row justify-content-between gap-3">
+    <div><h1 class="h2 fw-bold mb-1">@T("Learning Programs", "البرامج التعليمية")</h1><div class="opacity-75">@PartnerName()</div></div>
+    <a class="btn btn-light" href="/partners/@partnerId">@T("Partner Details", "تفاصيل الشريك")</a>
+</div>
+<div class="d-flex flex-wrap gap-2 mb-3">
+    <a class="btn btn-sm btn-outline-success" href="/partners/@partnerId/learning-programs">@T("All", "الكل")</a>
+    <a class="btn btn-sm btn-outline-success" href="/partners/@partnerId/learning-programs?type=Course">@T("Courses", "الدورات")</a>
+    <a class="btn btn-sm btn-outline-success" href="/partners/@partnerId/learning-programs?type=TrainingProgram">@T("Trainings", "التدريبات")</a>
+    <a class="btn btn-sm btn-outline-success" href="/partners/@partnerId/learning-programs?type=Workshop">@T("Workshops", "ورش العمل")</a>
+    <a class="btn btn-sm btn-outline-success" href="/partners/@partnerId/learning-programs?type=Lecture">@T("Lectures", "المحاضرات")</a>
+</div>
+@if(Model.Count == 0){<div class="empty-state">@T("No learning programs are currently available for this partner.", "لا توجد برامج تعليمية متاحة حالياً لهذا الشريك.")</div>}
+else{
+    <div class="row g-3">
+        @foreach(var p in Model){
+            var booked = p.BookingRequests.Where(b => b.Status == BookingStatus.Confirmed || b.Status == BookingStatus.Approved || b.Status == BookingStatus.Pending || b.Status == BookingStatus.PartnerProposedNewTime).Sum(b => b.RequestedSeats);
+            var available = Math.Max(0, p.Capacity - booked);
+            <div class="col-lg-6">
+                <article class="program-card h-100">
+                    <div class="d-flex justify-content-between gap-3 mb-2"><h2 class="h5 fw-bold mb-0">@Title(p)</h2><span class="program-type">@ProgramType(p.Type)</span></div>
+                    <p class="text-muted">@(!string.IsNullOrWhiteSpace(Desc(p)) ? Desc(p) : T("Learning program provided by the partner.", "برنامج تعليمي مقدم من الشريك."))</p>
+                    <div class="program-meta mb-3"><span>@T("Start", "البداية"): @p.StartDateTime.ToString("g")</span><span>@T("End", "النهاية"): @p.EndDateTime.ToString("g")</span><span>@T("Capacity", "السعة"): @p.Capacity</span><span>@T("Available seats", "المقاعد المتاحة"): @available</span></div>
+                    @if(User.IsInRole(RoleNames.ClubAdmin)){
+                        <a class="btn btn-success" href="/bookings/create?activityId=@p.Id"><i class="bi bi-calendar-check me-1"></i>@T("Book", "احجز")</a>
+                    }else if(!(User.Identity?.IsAuthenticated ?? false)){
+                        <a class="btn btn-outline-success" asp-controller="Account" asp-action="Login">@T("Login to book", "تسجيل الدخول للحجز")</a>
+                    }
+                </article>
+            </div>
+        }
+    </div>
+}

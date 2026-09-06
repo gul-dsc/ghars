@@ -1,0 +1,74 @@
+@model GharsPlatform.Controllers.Admin.NotificationsController.NotificationVm
+@{
+    ViewData["Title"] = "Create Notification";
+    ViewData["PageTitle"] = "Create Notification";
+    var orgs = ViewBag.Organizations as List<GharsPlatform.Models.Core.Organization> ?? new();
+}
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-4">
+        <form method="post">
+            @Html.AntiForgeryToken()
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Title (EN)</label>
+                    <input class="form-control" asp-for="TitleEn" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Title (AR)</label>
+                    <input class="form-control" asp-for="TitleAr" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Message (EN)</label>
+                    <textarea class="form-control" asp-for="MessageEn" rows="3"></textarea>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Message (AR)</label>
+                    <textarea class="form-control" asp-for="MessageAr" rows="3"></textarea>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Type</label>
+                    <select class="form-select" asp-for="Type" asp-items="Html.GetEnumSelectList<NotificationType>()"></select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Target</label>
+                    <select class="form-select" asp-for="TargetType" asp-items="Html.GetEnumSelectList<NotificationTargetType>()"></select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Link (optional)</label>
+                    <input class="form-control" asp-for="LinkUrl" placeholder="/Admin/..." />
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Target Organization (if Organization target)</label>
+                    <select class="form-select" asp-for="TargetOrganizationId">
+                        <option value="">-- select --</option>
+                        @foreach (var o in orgs)
+                        {
+                            <option value="@o.Id">@o.NameEn</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Target Role (if Role target)</label>
+                    <input class="form-control" asp-for="TargetRoleName" placeholder="DscAdmin / OrgAdmin" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Target UserId (if User target)</label>
+                    <input class="form-control" asp-for="TargetUserId" />
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a class="btn btn-outline-secondary" href="/Admin/Notifications">Back</a>
+                <button class="btn btn-primary" type="submit">Send</button>
+            </div>
+
+            <div class="text-danger small mt-2" asp-validation-summary="All"></div>
+        </form>
+    </div>
+</div>
+
+@section Scripts{
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -1,0 +1,32 @@
+@model List<GharsPlatform.Models.Core.Organization>
+@using System.Globalization
+@{ var isAdmin = User.IsInRole("Super Admin") || User.IsInRole("DSC Admin"); var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar"; string T(string en,string ar)=>isAr?ar:en; ViewData["Title"] = T("My Organizations", "جهاتي"); }
+<div class="card"><div class="card-body p-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="section-title h3 mb-0">@T("My Organizations", "جهاتي")</h1>
+        @if (isAdmin) { <a class="btn btn-primary" asp-controller="Organization" asp-action="Create">@T("Register Organization", "تسجيل جهة")</a> }
+    </div>
+    @if (Model.Count == 0)
+    {
+        <p class="text-muted mb-0">@T("You do not have linked organizations yet.", "لا توجد جهات مرتبطة بحسابك حتى الآن.")</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead><tr><th>@T("Name", "الاسم")</th><th>@T("Type", "النوع")</th><th>@T("Status", "الحالة")</th><th>@T("Email", "البريد الإلكتروني")</th></tr></thead>
+                <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td>@item.NameEn</td>
+                        <td>@item.OrganizationType</td>
+                        <td>@item.Status</td>
+                        <td>@item.Email</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div></div>

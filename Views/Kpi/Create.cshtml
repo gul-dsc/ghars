@@ -1,0 +1,24 @@
+@model GharsPlatform.Controllers.Public.KpiController.KpiVm
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("KPI Data Entry", "إدخال مؤشرات الأداء");
+}
+<h1 class="mb-1">@ViewData["Title"]</h1>
+<p class="text-muted">@T("Enter the Ghars reports and statistics for your club and season, attach supporting evidence, then save as draft or submit for Council approval.", "أدخل تقارير وإحصاءات غرس الخاصة بناديك والموسم، وأرفق المستندات الداعمة، ثم احفظ كمسودة أو أرسل لاعتماد المجلس.")</p>
+
+<form method="post" enctype="multipart/form-data" class="card rounded-4 border-0 shadow-sm p-4">
+    @Html.AntiForgeryToken()
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+
+    <partial name="_KpiForm" model="Model" />
+
+    <div class="d-flex gap-2 mt-4">
+        <button class="btn btn-success" name="SaveAsDraft" value="false">@T("Submit for Approval", "إرسال للاعتماد")</button>
+        <button class="btn btn-outline-secondary" name="SaveAsDraft" value="true">@T("Save as Draft", "حفظ كمسودة")</button>
+        <a class="btn btn-outline-dark" href="/kpi">@T("Cancel", "إلغاء")</a>
+    </div>
+</form>
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

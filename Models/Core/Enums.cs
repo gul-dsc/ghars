@@ -1,0 +1,180 @@
+namespace GharsPlatform.Models.Core;
+
+public enum OrganizationType : byte
+{
+    Club = 1,
+    PrivateAcademy = 2,
+    GovernmentAuthority = 3,
+    OtherPartner = 4,
+    // Legacy aliases kept for backward compatibility in code paths
+    Academy = PrivateAcademy,
+    Partner = OtherPartner
+}
+
+public enum ApprovalStatus : byte
+{
+    Pending = 1,
+    PendingPartnerApproval = 1,
+    Approved = 2,
+    Rejected = 3,
+    Suspended = 4
+}
+
+public enum ActivityType : byte
+{
+    Lecture = 1,
+    Workshop = 2,
+    TrainingProgram = 3,
+    Course = 4,
+    Event = 5,
+    Activity = 10
+}
+
+public enum ActivityStatus : byte
+{
+    Draft = 1,
+    Published = 2,
+    Closed = 3,
+    Cancelled = 4
+}
+
+public enum BookingStatus : byte
+{
+    Pending = 1,
+    PendingPartnerApproval = 1,
+    Approved = 2,
+    Rejected = 3,
+    Cancelled = 4,
+    PartnerProposedNewTime = 5,
+    Confirmed = 6,
+    ClubRejectedProposedTimes = 7
+}
+
+public enum AttendanceMethod : byte
+{
+    Manual = 1,
+    Qr = 2,
+    Import = 3
+}
+
+public enum CertificateStatus : byte
+{
+    Issued = 1,
+    Revoked = 2
+}
+
+public enum SurveyQuestionType : byte
+{
+    Stars = 1,
+    YesNo = 2,
+    Text = 3,
+    Mcq = 4
+}
+
+public enum MediaType : byte
+{
+    Image = 1,
+    Video = 2,
+    Pdf = 3
+}
+
+public enum PointsTransactionType : byte
+{
+    Earn = 1,
+    Spend = 2,
+    AdminAdjust = 3
+}
+
+public enum PointsReferenceType : byte
+{
+    LibraryDownload = 1,
+    Attendance = 2,
+    Survey = 3,
+    RewardRedemption = 4,
+    Other = 10
+}
+
+public enum RedemptionStatus : byte
+{
+    Requested = 1,
+    Approved = 2,
+    Rejected = 3,
+    Delivered = 4
+}
+
+public enum NotificationType : byte
+{
+    Info = 1,
+    Success = 2,
+    Warning = 3,
+    Danger = 4,
+    System = 10
+}
+
+public enum NotificationTargetType : byte
+{
+    All = 1,
+    Role = 2,
+    Organization = 3,
+    User = 4
+}
+
+public enum CalendarEventType : byte
+{
+    Lecture = 1,
+    Activity = 2,
+    Booking = 3,
+    Other = 10
+}
+
+public enum OrganizationDocumentType : byte
+{
+    License = 1,
+    ApprovalLetter = 2,
+    Mou = 3,
+    Other = 10
+}
+
+
+public enum LibraryContentType : byte
+{
+    Lecture = 1,
+    AwarenessVideo = 2,
+    EducationalBooklet = 3
+}
+
+public enum AgendaEntryStatus : byte
+{
+    Draft = 1,
+    Submitted = 2,
+    Approved = 3,
+    Rejected = 4
+}
+
+public enum AgendaTargetCategory : byte
+{
+    Players = 1,
+    Coaches = 2,
+    Administrators = 3,
+    Parents = 4,
+    Others = 10
+}
+
+public enum KpiSubmissionStatus : byte
+{
+    Draft = 1,
+    Submitted = 2,
+    Approved = 3,
+    Rejected = 4,
+    MoreInfoRequired = 5
+}
+
+public enum GalleryMediaType : byte
+{
+    Photo = 1,
+    Video = 2,
+    PressCoverage = 3,
+    NewspaperCoverage = 4,
+    OfficialPhoto = 5,
+    OfficialVideo = 6
+}

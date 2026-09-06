@@ -1,0 +1,250 @@
+@using GharsPlatform.Models.Core
+@using GharsPlatform.Controllers.Admin
+@using System.Globalization
+@using System.Text.Json
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string en, string arabic) => ar ? arabic : en;
+    string OrgName(Organization? o) => ar ? (o?.NameAr ?? o?.NameEn ?? "") : (o?.NameEn ?? o?.NameAr ?? "");
+    string SeasonName(Season? s) => ar ? (s?.TitleAr ?? s?.TitleEn ?? "") : (s?.TitleEn ?? s?.TitleAr ?? "");
+
+    ViewData["Title"] = T("Ghars Reports & Analytics", "تقارير وتحليلات غرس");
+    ViewData["PageTitle"] = ViewData["Title"];
+
+    var bookings = ViewBag.Bookings as List<BookingRequest> ?? new();
+    var agenda = ViewBag.Agenda as List<AgendaEntry> ?? new();
+    var kpis = ViewBag.Kpis as List<KpiSubmission> ?? new();
+    var gallery = ViewBag.Gallery as List<GalleryItem> ?? new();
+    var library = ViewBag.Library as List<LibraryItem> ?? new();
+    var seasons = ViewBag.Seasons as List<Season> ?? new();
+    var clubs = ViewBag.Clubs as List<Organization> ?? new();
+    var entities = ViewBag.Entities as List<Organization> ?? new();
+    var clubsNotCovered = ViewBag.ClubsNotCovered as List<Organization> ?? new();
+
+    int? selectedSeasonId = ViewBag.SelectedSeasonId as int?;
+    int? selectedClubId = ViewBag.SelectedClubId as int?;
+    int? selectedEntityId = ViewBag.SelectedEntityId as int?;
+    ActivityType? selectedActivityType = ViewBag.SelectedActivityType is ActivityType sat ? sat : null;
+    AgendaTargetCategory? selectedCategory = ViewBag.SelectedCategory is AgendaTargetCategory sc ? sc : null;
+    KpiIndicator? selectedKpiIndicator = ViewBag.SelectedKpiIndicator is KpiIndicator sk ? sk : null;
+    KpiSubmissionStatus? selectedKpiStatus = ViewBag.SelectedKpiStatus is KpiSubmissionStatus ss ? ss : null;
+    BookingStatus? selectedBookingStatus = ViewBag.SelectedBookingStatus is BookingStatus sb ? sb : null;
+
+    decimal? Avg(IEnumerable<decimal> values) => values.Any() ? Math.Round(values.Average(), 1) : (decimal?)null;
+    // Aggregated, never fabricated: null denominator => No Data (not 0% and not 100%).
+    decimal? DiseaseFree(KpiSubmission r) => GharsKpiCatalog.DiseaseFreePercent(r);
+    var previousViolations = ViewBag.PreviousViolations as Dictionary<int, int?> ?? new();
+    var progression = ViewBag.Progression as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+    var seasonSummary = ViewBag.SeasonSummary as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+
+    string NoData() => T("No Data", "لا توجد بيانات");
+    string StatusClass(decimal? actual, decimal target, bool higherIsBetter = true)
+    {
+        if (!actual.HasValue) return "text-bg-secondary";
+        var a = actual.Value;
+        if (higherIsBetter && a >= target) return "text-bg-success";
+        if (!higherIsBetter && a <= target) return "text-bg-success";
+        if (higherIsBetter && a >= target * .85m) return "text-bg-warning";
+        if (!higherIsBetter && a <= target * 1.15m) return "text-bg-warning";
+        return "text-bg-danger";
+    }
+    string StatusText(decimal? actual, decimal target, bool higherIsBetter = true)
+    {
+        if (!actual.HasValue) return NoData();
+        var cls = StatusClass(actual, target, higherIsBetter);
+        if (cls.Contains("success")) return T("Achieved", "محقق");
+        if (cls.Contains("warning")) return T("At Risk", "معرض للخطر");
+        return T("Not Achieved", "غير محقق");
+    }
+    string Pct(decimal? v) => v.HasValue ? $"{v.Value:0.#}%" : NoData();
+
+    var statusLabels = Enum.GetValues(typeof(BookingStatus)).Cast<BookingStatus>().Select(x => x.ToString()).ToList();
+    var statusData = Enum.GetValues(typeof(BookingStatus)).Cast<BookingStatus>().Select(s => bookings.Count(b => b.Status == s)).ToList();
+    var clubLabels = clubs.Select(OrgName).Take(20).ToList();
+    var clubKpiScore = clubs.Select(c => {
+        var rows = kpis.Where(k => k.OrganizationId == c.Id).ToList();
+        if (!rows.Any()) return 0m;
+        return Math.Round(rows.Average(k => (k.PlayerParticipationRate + k.AttendanceRate + k.EthicalValuesAdherenceRate + k.HealthyDietaryHabitsRate + k.SatisfactionRate + (DiseaseFree(k) ?? 0m)) / 6m), 1);
+    }).Take(20).ToList();
+    var agendaByClubLabels = agenda.GroupBy(a => OrgName(a.Organization)).Select(g => g.Key).Take(20).ToList();
+    var agendaByClubData = agenda.GroupBy(a => OrgName(a.Organization)).Select(g => g.Count()).Take(20).ToList();
+    var monthlyLabels = bookings.GroupBy(b => b.CreatedAtUtc.ToString("yyyy-MM")).OrderBy(g => g.Key).Select(g => g.Key).ToList();
+    var monthlyData = bookings.GroupBy(b => b.CreatedAtUtc.ToString("yyyy-MM")).OrderBy(g => g.Key).Select(g => g.Count()).ToList();
+    var categoryLabels = Enum.GetValues(typeof(AgendaTargetCategory)).Cast<AgendaTargetCategory>().Select(x => x.ToString()).ToList();
+    var categoryData = Enum.GetValues(typeof(AgendaTargetCategory)).Cast<AgendaTargetCategory>().Select(c => agenda.Count(a => a.Category == c)).ToList();
+    var baseline = kpis.Where(k => k.Season != null && k.Season.StartDate.Year == 2026).ToList();
+    var future = kpis.Where(k => k.Season != null && k.Season.StartDate.Year > 2026).ToList();
+    var baselineCurrentLabels = new List<string>{ T("Baseline 2026", "خط الأساس 2026"), T("Future seasons", "المواسم اللاحقة") };
+    var baselineCurrentData = new List<decimal>{ Avg(baseline.Select(x => x.SatisfactionRate)) ?? 0m, Avg(future.Select(x => x.SatisfactionRate)) ?? 0m };
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h1 class="mb-1">@ViewData["Title"]</h1>
+        <div class="text-muted">@T("Strong analytics across KPI, clubs, coverage, attendance, bookings, agenda, gallery and digital library.", "تحليلات شاملة لمؤشرات الأداء والأندية والتغطية والحضور والحجوزات والأجندة والمعرض والمكتبة الرقمية.")</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-danger" href="/Admin/Reports/ExportAnalyticsPdf?seasonId=@selectedSeasonId&clubId=@selectedClubId"><i class="bi bi-filetype-pdf me-1"></i>@T("Export PDF", "تصدير PDF")</a>
+        <a class="btn btn-outline-success" href="/Admin/Reports/ExportAnalyticsCsv?seasonId=@selectedSeasonId&clubId=@selectedClubId"><i class="bi bi-file-earmark-spreadsheet me-1"></i>@T("Export Excel/CSV", "تصدير Excel/CSV")</a>
+    </div>
+</div>
+
+<form method="get" class="card border-0 rounded-4 shadow-sm p-3 mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-2"><label class="form-label">@T("Sports season", "الموسم الرياضي")</label><select name="seasonId" class="form-select"><option value="">@T("All", "الكل")</option>@foreach(var s in seasons){<option value="@s.Id" selected="@(selectedSeasonId == s.Id ? "selected" : null)">@SeasonName(s)</option>}</select></div>
+        <div class="col-md-2"><label class="form-label">@T("Club", "النادي")</label><select name="clubId" class="form-select"><option value="">@T("All", "الكل")</option>@foreach(var c in clubs){<option value="@c.Id" selected="@(selectedClubId == c.Id ? "selected" : null)">@OrgName(c)</option>}</select></div>
+        <div class="col-md-2"><label class="form-label">@T("Partner/entity", "الشريك/الجهة")</label><select name="entityId" class="form-select"><option value="">@T("All", "الكل")</option>@foreach(var e in entities){<option value="@e.Id" selected="@(selectedEntityId == e.Id ? "selected" : null)">@OrgName(e)</option>}</select></div>
+        <div class="col-md-2"><label class="form-label">@T("Activity type", "نوع النشاط")</label><select name="activityType" class="form-select"><option value="">@T("All", "الكل")</option>@foreach(ActivityType t in Enum.GetValues(typeof(ActivityType))){<option value="@t" selected="@(selectedActivityType == t ? "selected" : null)">@t</option>}</select></div>
+        <div class="col-md-2"><label class="form-label">@T("Target category", "الفئة المستهدفة")</label><select name="category" class="form-select"><option value="">@T("All", "الكل")</option>@foreach(AgendaTargetCategory c in Enum.GetValues(typeof(AgendaTargetCategory))){<option value="@c" selected="@(selectedCategory == c ? "selected" : null)">@c</option>}</select></div>
+        <div class="col-md-2"><label class="form-label">@T("Booking status", "حالة الحجز")</label><select name="bookingStatus" class="form-select"><option value="">@T("All", "الكل")</option>@foreach(BookingStatus s in Enum.GetValues(typeof(BookingStatus))){<option value="@s" selected="@(selectedBookingStatus == s ? "selected" : null)">@s</option>}</select></div>
+        <div class="col-md-2"><label class="form-label">@T("KPI indicator", "مؤشر الأداء")</label><select name="kpiIndicator" class="form-select"><option value="">@T("All", "الكل")</option>@foreach(KpiIndicator k in Enum.GetValues(typeof(KpiIndicator))){<option value="@k" selected="@(selectedKpiIndicator == k ? "selected" : null)">@k</option>}</select></div>
+        <div class="col-md-2"><label class="form-label">@T("KPI status", "حالة المؤشر")</label><select name="kpiStatus" class="form-select"><option value="">@T("All", "الكل")</option>@foreach(KpiSubmissionStatus s in Enum.GetValues(typeof(KpiSubmissionStatus))){<option value="@s" selected="@(selectedKpiStatus == s ? "selected" : null)">@s</option>}</select></div>
+        <div class="col-md-2"><label class="form-label">@T("From", "من")</label><input name="dateFrom" type="date" class="form-control" value="@ViewBag.DateFrom" /></div>
+        <div class="col-md-2"><label class="form-label">@T("To", "إلى")</label><input name="dateTo" type="date" class="form-control" value="@ViewBag.DateTo" /></div>
+        <div class="col-md-2"><button class="btn btn-success w-100"><i class="bi bi-funnel me-1"></i>@T("Apply Filters", "تطبيق الفلاتر")</button></div>
+        <div class="col-md-2"><a class="btn btn-outline-secondary w-100" href="/Admin/Reports/Analytics">@T("Reset", "إعادة ضبط")</a></div>
+    </div>
+</form>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="metric-card"><div class="label">@T("Program coverage", "تغطية البرنامج")</div><div class="value">@ViewBag.CoveragePercent%</div><div class="hint">@ViewBag.CoveredClubs / @ViewBag.TotalClubs @T("clubs", "أندية")</div></div></div>
+    <div class="col-md-3"><div class="metric-card"><div class="label">@T("Average attendance", "متوسط الحضور")</div><div class="value">@Pct(Avg(kpis.Select(x => x.AttendanceRate)))</div><div class="hint">@T("Target", "المستهدف"): @GharsKpiCatalog.AttendanceRate.TargetText</div></div></div>
+    <div class="col-md-3"><div class="metric-card"><div class="label">@T("Bookings", "الحجوزات")</div><div class="value">@bookings.Count</div><div class="hint">@T("Confirmed", "مؤكد"): @bookings.Count(x => x.Status == BookingStatus.Confirmed || x.Status == BookingStatus.Approved)</div></div></div>
+    <div class="col-md-3"><div class="metric-card"><div class="label">@T("Library / Gallery", "المكتبة / المعرض")</div><div class="value">@(library.Count + gallery.Count)</div><div class="hint">@library.Count @T("library", "مكتبة") • @gallery.Count @T("media", "وسائط")</div></div></div>
+</div>
+
+<div class="alert alert-info rounded-4 border-0"><i class="bi bi-info-circle me-1"></i>@T($"{GharsKpiCatalog.BaselineYear} is treated as the KPI baseline year for all future season comparisons, tracking progress towards the {GharsKpiCatalog.TargetYear} targets.", $"يُعامل عام {GharsKpiCatalog.BaselineYear} كسنة أساس لجميع مقارنات المواسم المستقبلية لتتبع التقدم نحو مستهدفات {GharsKpiCatalog.TargetYear}.")</div>
+
+<div class="card border-0 rounded-4 shadow-sm mb-4">
+    <div class="card-header bg-white border-0 pt-4 px-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h2 class="h5 mb-0">@T("Season Summary by Club (delivered activities)", "ملخص الموسم حسب النادي (الأنشطة المنفذة)")</h2>
+        <span class="badge text-bg-light border">@ViewBag.SummarySeasonTitle</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead><tr><th>@T("Club", "النادي")</th><th>@T("Lectures / activities", "المحاضرات / الأنشطة")</th><th>@T("Participants", "المشاركون")</th><th>@T("Lecturers", "المحاضرون")</th><th>@T("Implementing entities", "الجهات المنفذة")</th><th>@T("Target categories", "الفئات المستهدفة")</th></tr></thead>
+            <tbody>
+            @foreach (var row in seasonSummary)
+            {
+                <tr>
+                    <td>@(ar ? row.ClubAr : row.ClubEn)</td>
+                    <td>@row.Activities</td>
+                    <td>@row.Participants</td>
+                    <td>@row.Lecturers</td>
+                    <td>@row.Entities</td>
+                    <td>@row.Categories</td>
+                </tr>
+            }
+            @if (!seasonSummary.Any()) { <tr><td colspan="6" class="p-4 text-muted">@T("No delivered activities recorded for this season yet.", "لا توجد أنشطة منفذة مسجلة لهذا الموسم حتى الآن.")</td></tr> }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card border-0 rounded-4 shadow-sm mb-4">
+    <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-0">@T($"KPI progression {GharsKpiCatalog.BaselineYear} (baseline) → {GharsKpiCatalog.TargetYear} (target)", $"تطور المؤشرات {GharsKpiCatalog.BaselineYear} (خط الأساس) ← {GharsKpiCatalog.TargetYear} (المستهدف)")</h2></div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead><tr>
+                <th>@T("Season", "الموسم")</th>
+                <th>@T("Clubs covered", "الأندية المغطاة")</th>
+                <th>@T("Activities", "الأنشطة")</th>
+                <th>@T("Participants", "المشاركون")</th>
+                <th>@T("Participation", "المشاركة")</th>
+                <th>@T("Attendance", "الحضور")</th>
+                <th>@T("Ethics", "القيم")</th>
+                <th>@T("Physical activity", "النشاط البدني")</th>
+                <th>@T("Diet", "التغذية")</th>
+                <th>@T("Satisfaction", "الرضا")</th>
+            </tr></thead>
+            <tbody>
+            @foreach (var p in progression)
+            {
+                <tr>
+                    <td>@(ar ? p.TitleAr : p.TitleEn) @if (p.Year == GharsKpiCatalog.BaselineYear) { <span class="badge text-bg-info">@T("Baseline", "خط الأساس")</span> }</td>
+                    <td>@p.Clubs</td>
+                    <td>@p.Activities</td>
+                    <td>@p.Participants</td>
+                    <td>@Pct((decimal?)p.Participation)</td>
+                    <td>@Pct((decimal?)p.Attendance)</td>
+                    <td>@Pct((decimal?)p.Ethics)</td>
+                    <td>@Pct((decimal?)p.PhysicalActivity)</td>
+                    <td>@Pct((decimal?)p.Diet)</td>
+                    <td>@Pct((decimal?)p.Satisfaction)</td>
+                </tr>
+            }
+            @if (!progression.Any()) { <tr><td colspan="10" class="p-4 text-muted">@T("No seasons configured.", "لا توجد مواسم معرفة.")</td></tr> }
+            </tbody>
+        </table>
+    </div>
+    <div class="px-4 pb-3 small text-muted">@T("Values are averages of approved club submissions per season. Empty cells mean no approved data was submitted (not zero).", "القيم متوسطات إرسالات الأندية المعتمدة لكل موسم. الخلايا الفارغة تعني عدم وجود بيانات معتمدة (وليست صفراً).")</div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-xl-4"><div class="chart-card"><h3 class="h6">@T("Booking status", "حالات الحجز")</h3><canvas id="bookingStatusChart"></canvas></div></div>
+    <div class="col-xl-4"><div class="chart-card"><h3 class="h6">@T("Club KPI comparison", "مقارنة مؤشرات الأندية")</h3><canvas id="clubKpiChart"></canvas></div></div>
+    <div class="col-xl-4"><div class="chart-card"><h3 class="h6">@T("Monthly booking trend", "اتجاه الحجوزات الشهري")</h3><canvas id="monthlyBookingChart"></canvas></div></div>
+    <div class="col-xl-4"><div class="chart-card"><h3 class="h6">@T("Agenda activities by club", "أنشطة الأجندة حسب النادي")</h3><canvas id="agendaClubChart"></canvas></div></div>
+    <div class="col-xl-4"><div class="chart-card"><h3 class="h6">@T("Participants by category", "المشاركون حسب الفئة")</h3><canvas id="categoryChart"></canvas></div></div>
+    <div class="col-xl-4"><div class="chart-card"><h3 class="h6">@T("Baseline vs future satisfaction", "السعادة: خط الأساس مقابل اللاحق")</h3><canvas id="baselineChart"></canvas></div></div>
+</div>
+
+<div class="card border-0 rounded-4 shadow-sm mb-4">
+    <div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-0">@T("KPI Target vs Actual Matrix", "مصفوفة المستهدف مقابل الفعلي للمؤشرات")</h2></div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead><tr><th>@T("Club", "النادي")</th><th>@T("Season", "الموسم")</th><th>@T("Indicator", "المؤشر")</th><th>@T("Target", "المستهدف")</th><th>@T("Actual", "الفعلي")</th><th>@T("Status", "الحالة")</th></tr></thead>
+            <tbody>
+            @foreach (var k in kpis.OrderBy(x => OrgName(x.Organization)).ThenBy(x => SeasonName(x.Season)))
+            {
+                // Annual reduction vs the club's previous approved season (never a raw count vs 15).
+                previousViolations.TryGetValue(k.Id, out var prevViolations);
+                var reduction = GharsKpiCatalog.ViolationsReductionPercent(prevViolations, k.WarningsAndRedCards);
+                var coverage = (decimal)ViewBag.CoveragePercent;
+                var indicators = new [] {
+                    new { Indicator = KpiIndicator.ProgramCoverage, Name = ar ? GharsKpiCatalog.ProgramCoverage.NameAr : GharsKpiCatalog.ProgramCoverage.NameEn, Target = GharsKpiCatalog.ProgramCoverage.TargetText, Actual = Pct(coverage), Num = (decimal?)coverage, TargetNum = GharsKpiCatalog.ProgramCoverage.Target!.Value, Higher = true },
+                    new { Indicator = KpiIndicator.PlayerParticipation, Name = ar ? GharsKpiCatalog.PlayerParticipation.NameAr : GharsKpiCatalog.PlayerParticipation.NameEn, Target = GharsKpiCatalog.PlayerParticipation.TargetText, Actual = Pct(k.PlayerParticipationRate), Num = (decimal?)k.PlayerParticipationRate, TargetNum = GharsKpiCatalog.PlayerParticipation.Target!.Value, Higher = true },
+                    new { Indicator = KpiIndicator.AttendanceRate, Name = ar ? GharsKpiCatalog.AttendanceRate.NameAr : GharsKpiCatalog.AttendanceRate.NameEn, Target = GharsKpiCatalog.AttendanceRate.TargetText, Actual = Pct(k.AttendanceRate), Num = (decimal?)k.AttendanceRate, TargetNum = GharsKpiCatalog.AttendanceRate.Target!.Value, Higher = true },
+                    new { Indicator = KpiIndicator.ViolationsReduction, Name = ar ? GharsKpiCatalog.ViolationsReduction.NameAr : GharsKpiCatalog.ViolationsReduction.NameEn, Target = GharsKpiCatalog.ViolationsReduction.TargetText, Actual = reduction.HasValue ? Pct(reduction) : $"{NoData()} ({k.WarningsAndRedCards})", Num = reduction, TargetNum = GharsKpiCatalog.ViolationsReduction.Target!.Value, Higher = true },
+                    new { Indicator = KpiIndicator.EthicalValuesAdherence, Name = ar ? GharsKpiCatalog.EthicalValues.NameAr : GharsKpiCatalog.EthicalValues.NameEn, Target = GharsKpiCatalog.EthicalValues.TargetText, Actual = Pct(k.EthicalValuesAdherenceRate), Num = (decimal?)k.EthicalValuesAdherenceRate, TargetNum = GharsKpiCatalog.EthicalValues.Target!.Value, Higher = true },
+                    new { Indicator = KpiIndicator.PhysicalActivityMinutes, Name = ar ? GharsKpiCatalog.PhysicalActivity.NameAr : GharsKpiCatalog.PhysicalActivity.NameEn, Target = GharsKpiCatalog.PhysicalActivity.TargetText, Actual = Pct(k.PhysicalActivityComplianceRate), Num = k.PhysicalActivityComplianceRate, TargetNum = GharsKpiCatalog.PhysicalActivity.Target!.Value, Higher = true },
+                    new { Indicator = KpiIndicator.LifestyleDiseaseFree, Name = ar ? GharsKpiCatalog.LifestyleDiseaseFree.NameAr : GharsKpiCatalog.LifestyleDiseaseFree.NameEn, Target = GharsKpiCatalog.LifestyleDiseaseFree.TargetText, Actual = Pct(DiseaseFree(k)), Num = DiseaseFree(k), TargetNum = GharsKpiCatalog.LifestyleDiseaseFree.Target!.Value, Higher = true },
+                    new { Indicator = KpiIndicator.HealthyDietaryHabits, Name = ar ? GharsKpiCatalog.HealthyDiet.NameAr : GharsKpiCatalog.HealthyDiet.NameEn, Target = GharsKpiCatalog.HealthyDiet.TargetText, Actual = Pct(k.HealthyDietaryHabitsRate), Num = (decimal?)k.HealthyDietaryHabitsRate, TargetNum = GharsKpiCatalog.HealthyDiet.Target!.Value, Higher = true },
+                    new { Indicator = KpiIndicator.CommunityEvents, Name = ar ? GharsKpiCatalog.CommunityEvents.NameAr : GharsKpiCatalog.CommunityEvents.NameEn, Target = GharsKpiCatalog.CommunityEvents.TargetText, Actual = k.CommunityEventsCount.ToString(), Num = (decimal?)k.CommunityEventsCount, TargetNum = GharsKpiCatalog.CommunityEvents.Target!.Value, Higher = true },
+                    new { Indicator = KpiIndicator.SatisfactionHappiness, Name = ar ? GharsKpiCatalog.Satisfaction.NameAr : GharsKpiCatalog.Satisfaction.NameEn, Target = GharsKpiCatalog.Satisfaction.TargetText, Actual = Pct(k.SatisfactionRate), Num = (decimal?)k.SatisfactionRate, TargetNum = GharsKpiCatalog.Satisfaction.Target!.Value, Higher = true }
+                };
+                foreach (var i in indicators)
+                {
+                    if (selectedKpiIndicator.HasValue && i.Indicator != selectedKpiIndicator.Value) { continue; }
+                    <tr>
+                        <td>@OrgName(k.Organization)</td>
+                        <td>@SeasonName(k.Season)</td>
+                        <td>@i.Name</td>
+                        <td>@i.Target</td>
+                        <td>@i.Actual</td>
+                        <td><span class="badge @StatusClass(i.Num, i.TargetNum, i.Higher)">@StatusText(i.Num, i.TargetNum, i.Higher)</span></td>
+                    </tr>
+                }
+            }
+            @if (!kpis.Any()) { <tr><td colspan="6"><div class="p-4 text-muted">@T("No KPI data found for the selected filters.", "لا توجد بيانات مؤشرات وفق الفلاتر المحددة.")</div></td></tr> }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6"><div class="card border-0 rounded-4 shadow-sm"><div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-0">@T("Clubs not yet covered", "الأندية غير المغطاة بعد")</h2></div><div class="card-body">@if(clubsNotCovered.Any()){<ul class="mb-0">@foreach(var c in clubsNotCovered){<li>@OrgName(c)</li>}</ul>}else{<div class="text-success">@T("All clubs are covered by approved KPI data.", "جميع الأندية مغطاة ببيانات مؤشرات معتمدة.")</div>}</div></div></div>
+    <div class="col-lg-6"><div class="card border-0 rounded-4 shadow-sm"><div class="card-header bg-white border-0 pt-4 px-4"><h2 class="h5 mb-0">@T("Implementing entity contribution", "مساهمة الجهات المنفذة")</h2></div><div class="table-responsive"><table class="table mb-0"><thead><tr><th>@T("Entity", "الجهة")</th><th>@T("Bookings", "الحجوزات")</th></tr></thead><tbody>@foreach(var g in bookings.GroupBy(b => OrgName(b.PartnerOrganization)).Where(g => !string.IsNullOrWhiteSpace(g.Key)).OrderByDescending(g => g.Count()).Take(10)){<tr><td>@g.Key</td><td>@g.Count()</td></tr>}@if(!bookings.Any(b=>b.PartnerOrganizationId.HasValue)){<tr><td colspan="2" class="text-muted p-4">@T("No entity booking data.", "لا توجد بيانات حجوزات للجهات.")</td></tr>}</tbody></table></div></div></div>
+</div>
+
+@section Scripts{
+<script>
+const opts = { responsive: true, plugins: { legend: { display: true } } };
+new Chart(document.getElementById('bookingStatusChart'),{type:'doughnut',data:{labels:@Html.Raw(JsonSerializer.Serialize(statusLabels)),datasets:[{data:@Html.Raw(JsonSerializer.Serialize(statusData))}]},options:opts});
+new Chart(document.getElementById('clubKpiChart'),{type:'bar',data:{labels:@Html.Raw(JsonSerializer.Serialize(clubLabels)),datasets:[{label:'@T("KPI achievement", "إنجاز المؤشرات")',data:@Html.Raw(JsonSerializer.Serialize(clubKpiScore))}]},options:opts});
+new Chart(document.getElementById('monthlyBookingChart'),{type:'line',data:{labels:@Html.Raw(JsonSerializer.Serialize(monthlyLabels)),datasets:[{label:'@T("Bookings", "الحجوزات")',data:@Html.Raw(JsonSerializer.Serialize(monthlyData)),tension:.25}]},options:opts});
+new Chart(document.getElementById('agendaClubChart'),{type:'bar',data:{labels:@Html.Raw(JsonSerializer.Serialize(agendaByClubLabels)),datasets:[{label:'@T("Activities", "الأنشطة")',data:@Html.Raw(JsonSerializer.Serialize(agendaByClubData))}]},options:opts});
+new Chart(document.getElementById('categoryChart'),{type:'pie',data:{labels:@Html.Raw(JsonSerializer.Serialize(categoryLabels)),datasets:[{data:@Html.Raw(JsonSerializer.Serialize(categoryData))}]},options:opts});
+new Chart(document.getElementById('baselineChart'),{type:'bar',data:{labels:@Html.Raw(JsonSerializer.Serialize(baselineCurrentLabels)),datasets:[{label:'@T("Satisfaction", "السعادة")',data:@Html.Raw(JsonSerializer.Serialize(baselineCurrentData))}]},options:opts});
+</script>
+}

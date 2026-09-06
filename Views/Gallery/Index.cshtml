@@ -1,0 +1,167 @@
+@model List<GharsPlatform.Models.Core.MediaAlbum>
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e,string a)=>ar?a:e;
+    string N(Organization? o)=>ar?(o?.NameAr??o?.NameEn??""):(o?.NameEn??o?.NameAr??"");
+    string A(Activity? a)=>ar?(a?.TitleAr??a?.TitleEn??""):(a?.TitleEn??a?.TitleAr??"");
+    var seasons = ViewBag.Seasons as List<Season> ?? new();
+    var clubs = ViewBag.Clubs as List<Organization> ?? new();
+    var mediaItems = ViewBag.MediaItems as List<GalleryItem> ?? new();
+    var selectedSeasonId = ViewBag.SelectedSeasonId as int?;
+    var selectedClubId = ViewBag.SelectedClubId as int?;
+
+    // Origin is derived from existing data - no schema change required.
+    string SourceLabel(GalleryItem g) => g.AgendaEntryId.HasValue
+        ? T("Agenda", "الأجندة")
+        : (g.MediaType == GalleryMediaType.PressCoverage || g.MediaType == GalleryMediaType.NewspaperCoverage
+            ? T("Press", "تغطية صحفية")
+            : T("DSC", "المجلس"));
+    string SourceClass(GalleryItem g) => g.AgendaEntryId.HasValue
+        ? "text-bg-success"
+        : (g.MediaType == GalleryMediaType.PressCoverage || g.MediaType == GalleryMediaType.NewspaperCoverage ? "text-bg-warning" : "text-bg-primary");
+    string MediaTypeText(GalleryMediaType t)=>t switch{
+        GalleryMediaType.Photo=>T("Photo","صورة"),
+        GalleryMediaType.Video=>T("Video","فيديو"),
+        GalleryMediaType.PressCoverage=>T("Press coverage","تغطية صحفية"),
+        GalleryMediaType.NewspaperCoverage=>T("Newspaper coverage","تغطية في الصحف"),
+        GalleryMediaType.OfficialPhoto=>T("Official photo","صورة رسمية"),
+        GalleryMediaType.OfficialVideo=>T("Official video","فيديو رسمي"),
+        _=>t.ToString()};
+    bool IsVideo(GalleryItem g) => g.MediaType == GalleryMediaType.Video || g.MediaType == GalleryMediaType.OfficialVideo;
+    ViewData["Title"] = T("Ghars Gallery","معرض غرس");
+}
+<h1 class="mb-3">@ViewData["Title"]</h1>
+<p class="text-muted mb-4">@T("Photos, videos, official media and press coverage of Ghars activities. Media uploaded by clubs through the agenda appears here automatically.","صور وفيديوهات ووسائط رسمية وتغطيات صحفية لأنشطة غرس. تظهر الوسائط التي يرفعها النادي عبر الأجندة هنا تلقائياً.")</p>
+
+<form method="get" class="card p-3 rounded-4 border-0 shadow-sm mb-4">
+    <div class="row g-2">
+        <div class="col-md-3"><label class="form-label">@T("Sports season","الموسم الرياضي")</label><select class="form-select" name="seasonId"><option value="">@T("All seasons","كل المواسم")</option>@foreach(var s in seasons){<option value="@s.Id" selected="@(selectedSeasonId==s.Id)">@(ar?s.TitleAr:s.TitleEn)</option>}</select></div>
+        <div class="col-md-3"><label class="form-label">@T("Club","النادي")</label><select class="form-select" name="clubId"><option value="">@T("All clubs","كل الأندية")</option>@foreach(var c in clubs){<option value="@c.Id" selected="@(selectedClubId==c.Id)">@N(c)</option>}</select></div>
+        <div class="col-md-2"><label class="form-label">@T("From","من")</label><input class="form-control" type="date" name="from" value="@ViewBag.From" /></div>
+        <div class="col-md-2"><label class="form-label">@T("To","إلى")</label><input class="form-control" type="date" name="to" value="@ViewBag.To" /></div>
+        <div class="col-md-2 d-flex align-items-end gap-2"><button class="btn btn-success w-100">@T("Filter","تصفية")</button></div>
+    </div>
+</form>
+
+<h2 class="h5 mb-3"><i class="bi bi-images me-2"></i>@T("Activity & Program Media","وسائط الأنشطة والبرنامج") <span class="badge text-bg-light border">@mediaItems.Count</span></h2>
+<div class="row g-4 mb-5">
+@foreach(var item in mediaItems)
+{
+    var title = ar ? item.TitleAr : item.TitleEn;
+    // Stored media is fetched by gallery record id, never by file path: the endpoint re-checks publication
+    // so hiding an item in the admin gallery actually withdraws the file too.
+    var src =!string.IsNullOrWhiteSpace(item.FilePath) ? $"/protected-files/gallery/{item.Id}" : (item.ExternalUrl ?? "");
+    <div class="col-md-4 col-lg-3">
+        <div class="card h-100 rounded-4 shadow-sm border-0 overflow-hidden">
+            @if(IsVideo(item))
+            {
+                <button type="button" class="btn p-0 border-0 text-start gallery-open-video" data-title="@title" data-src="@src">
+                    <div class="bg-dark d-flex align-items-center justify-content-center" style="height:170px;"><i class="bi bi-play-circle-fill text-white" style="font-size:3rem"></i></div>
+                </button>
+            }
+            else if(!string.IsNullOrWhiteSpace(item.FilePath))
+            {
+                <button type="button" class="btn p-0 border-0 text-start gallery-open-image" data-title="@title" data-src="@src">
+                    <img src="@src" alt="@title" style="width:100%;height:170px;object-fit:cover" />
+                </button>
+            }
+            else
+            {
+                <div class="bg-light d-flex align-items-center justify-content-center" style="height:170px;"><i class="bi bi-newspaper" style="font-size:3rem"></i></div>
+            }
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-1 mb-2">
+                    <span class="badge @SourceClass(item)">@SourceLabel(item)</span>
+                    <span class="badge text-bg-light border">@MediaTypeText(item.MediaType)</span>
+                </div>
+                <h6 class="mb-1">@title</h6>
+                <div class="small text-muted">@N(item.Organization) @if(item.Organization!=null){<span>·</span>} @item.MediaDate.ToString("yyyy-MM-dd")</div>
+                @if(string.IsNullOrWhiteSpace(item.FilePath) && !string.IsNullOrWhiteSpace(item.ExternalUrl))
+                {
+                    <a class="btn btn-sm btn-outline-success mt-2" href="@item.ExternalUrl" target="_blank" rel="noopener noreferrer">@T("Open link","فتح الرابط")</a>
+                }
+            </div>
+        </div>
+    </div>
+}
+@if(!mediaItems.Any())
+{
+    <div class="col-12"><div class="empty-state">@T("No activity media found for the selected filters.","لا توجد وسائط أنشطة وفق خيارات التصفية المحددة.")</div></div>
+}
+</div>
+
+<h2 class="h5 mb-3"><i class="bi bi-collection me-2"></i>@T("Curated Albums","الألبومات المنسّقة") <span class="badge text-bg-light border">@Model.Count</span></h2>
+<div class="row g-4">
+@foreach(var album in Model)
+{
+    var title = ar ? album.TitleAr : album.TitleEn;
+    var desc = ar ? album.DescriptionAr : album.DescriptionEn;
+    var cover = !string.IsNullOrWhiteSpace(album.CoverImagePath) ? album.CoverImagePath : album.Items.FirstOrDefault(i=>i.MediaType==MediaType.Image && !string.IsNullOrWhiteSpace(i.FilePath))?.FilePath;
+    <div class="col-md-4">
+        <div class="card h-100 rounded-4 shadow-sm border-0 overflow-hidden">
+            @if(!string.IsNullOrWhiteSpace(cover))
+            {
+                <img class="card-img-top" src="@cover" alt="@title" style="height:220px;object-fit:cover" />
+            }
+            else
+            {
+                <div class="bg-light d-flex align-items-center justify-content-center" style="height:220px;"><i class="bi bi-images" style="font-size:4rem"></i></div>
+            }
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex gap-2 mb-2"><span class="badge text-bg-success">@album.Items.Count @T("items","عنصر")</span>@if(album.Activity!=null){<span class="badge text-bg-light">@A(album.Activity)</span>}</div>
+                <h5>@title</h5>
+                <p class="text-muted flex-grow-1">@desc</p>
+                <div class="small text-muted mb-3">@(N(album.Organization)) @if(album.Organization!=null){<span> · </span>} @album.AlbumDate.ToString("yyyy-MM-dd")</div>
+                <a class="btn btn-outline-success" asp-controller="Gallery" asp-action="Details" asp-route-id="@album.Id">@T("Open Album","فتح الألبوم")</a>
+            </div>
+        </div>
+    </div>
+}
+@if(!Model.Any())
+{
+    <div class="col-12"><div class="empty-state">@T("No gallery albums found.","لا توجد ألبومات في المعرض.")</div></div>
+}
+</div>
+
+<div class="modal fade" id="galleryMediaModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered"><div class="modal-content rounded-4">
+        <div class="modal-header"><h5 class="modal-title" id="galleryMediaTitle">@T("Media","وسائط")</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="@T("Close","إغلاق")"></button></div>
+        <div class="modal-body" id="galleryMediaBody"></div>
+    </div></div>
+</div>
+
+@section Scripts {
+<script>
+(function(){
+    const modalEl = document.getElementById('galleryMediaModal');
+    const titleEl = document.getElementById('galleryMediaTitle');
+    const body = document.getElementById('galleryMediaBody');
+    if(!modalEl || !body || !window.bootstrap) return;
+    const modal = new bootstrap.Modal(modalEl);
+    function youtubeEmbed(src){
+        let url = src;
+        if(src.includes('youtu.be/')) url = 'https://www.youtube.com/embed/' + src.split('youtu.be/')[1].split(/[?&]/)[0];
+        if(src.includes('watch?v=')) url = src.replace('watch?v=', 'embed/');
+        return url;
+    }
+    function openMedia(title, html, dark){
+        titleEl.textContent = title || 'Media';
+        body.className = dark ? 'modal-body bg-dark' : 'modal-body';
+        body.innerHTML = html;
+        modal.show();
+    }
+    document.querySelectorAll('.gallery-open-image').forEach(btn=>btn.addEventListener('click',function(){
+        const src=this.dataset.src||''; const title=this.dataset.title||'';
+        openMedia(title, `<img src="${src}" alt="${title}" style="width:100%;max-height:78vh;object-fit:contain" />`, false);
+    }));
+    document.querySelectorAll('.gallery-open-video').forEach(btn=>btn.addEventListener('click',function(){
+        const src=this.dataset.src||''; const title=this.dataset.title||'';
+        if(src.includes('youtube.com') || src.includes('youtu.be')) openMedia(title, `<div class="ratio ratio-16x9"><iframe src="${youtubeEmbed(src)}" title="${title}" allowfullscreen></iframe></div>`, true);
+        else openMedia(title, `<video src="${src}" controls autoplay style="width:100%;max-height:78vh;background:#000"></video>`, true);
+    }));
+    modalEl.addEventListener('hidden.bs.modal', function(){ body.innerHTML=''; });
+})();
+</script>
+}

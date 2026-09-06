@@ -1,0 +1,59 @@
+@model GharsPlatform.Models.Core.Activity
+@{
+    ViewData["Title"] = "Activity Details";
+    ViewData["PageTitle"] = "Activity Details";
+    var bookings = Model.BookingRequests?.OrderByDescending(x => x.CreatedAtUtc).ToList() ?? new List<GharsPlatform.Models.Core.BookingRequest>();
+}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="h4 mb-1">@Model.TitleEn</h1>
+        <div class="text-muted">@Model.TitleAr</div>
+    </div>
+    <div class="d-flex gap-2">
+        @if (User.IsInRole("Super Admin"))
+        {
+            <a class="btn btn-primary" href="/Admin/Activities/Edit/@Model.Id">Edit</a>
+        }
+        <a class="btn btn-outline-secondary" href="/Admin/Activities">Back</a>
+    </div>
+</div>
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm rounded-4 mb-3"><div class="card-body">
+            <h5>Program Details</h5>
+            <dl class="row mb-0">
+                <dt class="col-sm-4">Type</dt><dd class="col-sm-8">@Model.Type</dd>
+                <dt class="col-sm-4">Status</dt><dd class="col-sm-8">@Model.Status</dd>
+                <dt class="col-sm-4">Season</dt><dd class="col-sm-8">@Model.Season?.TitleEn</dd>
+                <dt class="col-sm-4">Partner / Entity</dt><dd class="col-sm-8">@(Model.PartnerOrganization?.NameEn ?? "-")</dd>
+                <dt class="col-sm-4">Start</dt><dd class="col-sm-8">@Model.StartDateTime.ToString("yyyy-MM-dd HH:mm")</dd>
+                <dt class="col-sm-4">End</dt><dd class="col-sm-8">@Model.EndDateTime.ToString("yyyy-MM-dd HH:mm")</dd>
+                <dt class="col-sm-4">Location</dt><dd class="col-sm-8">@Model.LocationEn</dd>
+                <dt class="col-sm-4">Capacity</dt><dd class="col-sm-8">@Model.Capacity</dd>
+            </dl>
+        </div></div>
+        <div class="card border-0 shadow-sm rounded-4"><div class="card-body">
+            <h5>Description</h5>
+            <p>@Model.DescriptionEn</p>
+            <p class="text-muted">@Model.DescriptionAr</p>
+        </div></div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm rounded-4"><div class="card-body">
+            <h5>Bookings</h5>
+            @if (!bookings.Any()) { <div class="text-muted">No bookings yet.</div> }
+            else
+            {
+                <div class="list-group list-group-flush">
+                    @foreach (var b in bookings)
+                    {
+                        <a class="list-group-item list-group-item-action" href="/Admin/Bookings/Details/@b.Id">
+                            <div class="fw-semibold">@b.Organization?.NameEn</div>
+                            <div class="small text-muted">@b.Status · @b.RequestedSeats seats</div>
+                        </a>
+                    }
+                </div>
+            }
+        </div></div>
+    </div>
+</div>

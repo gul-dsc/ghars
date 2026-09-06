@@ -1,0 +1,51 @@
+@model GharsPlatform.Models.Core.Survey
+@{
+    ViewData["Title"] = "Survey Results";
+    ViewData["PageTitle"] = "Survey Results";
+    var responses = ViewBag.Responses as List<GharsPlatform.Models.Core.SurveyResponse> ?? new();
+}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Surveys"><i class="bi bi-arrow-left"></i> Back</a>
+    <div class="small text-muted">Total: @ViewBag.TotalResponses • Avg Stars: @String.Format("{0:0.0}", ViewBag.AvgStars)</div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body">
+        <h5 class="mb-1">@Model.TitleEn</h5>
+        <div class="text-muted">@Model.Activity?.TitleEn</div>
+
+        <hr />
+
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Submitted</th>
+                        <th>UserId</th>
+                        <th>Answers</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var r in responses)
+                {
+                    <tr>
+                        <td>@r.SubmittedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td class="text-truncate" style="max-width:220px;">@r.UserId</td>
+                        <td class="small">
+                            @foreach (var a in r.Answers)
+                            {
+                                <div>
+                                    <strong>@a.SurveyQuestionId:</strong>
+                                    @if (a.StarsValue != null) { @($"{a.StarsValue}★") }
+                                    else if (a.BoolValue != null) { @(a.BoolValue.Value ? "Yes" : "No") }
+                                    else { @a.TextValue }
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

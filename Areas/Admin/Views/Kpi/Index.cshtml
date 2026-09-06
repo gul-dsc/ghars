@@ -1,0 +1,83 @@
+@model List<GharsPlatform.Models.Core.KpiSubmission>
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("KPI Review", "مراجعة مؤشرات الأداء");
+    ViewData["PageTitle"] = ViewData["Title"];
+    var seasons = ViewBag.Seasons as List<Season> ?? new();
+    var clubs = ViewBag.Clubs as List<Organization> ?? new();
+    var selectedStatus = ViewBag.SelectedStatus as KpiSubmissionStatus?;
+    var selectedSeasonId = ViewBag.SelectedSeasonId as int?;
+    var selectedClubId = ViewBag.SelectedClubId as int?;
+    string N(Organization? o) => ar ? (o?.NameAr ?? o?.NameEn ?? "") : (o?.NameEn ?? o?.NameAr ?? "");
+    string StatusText(KpiSubmissionStatus s) => s switch
+    {
+        KpiSubmissionStatus.Draft => T("Draft", "مسودة"),
+        KpiSubmissionStatus.Submitted => T("Submitted", "تم الإرسال"),
+        KpiSubmissionStatus.Approved => T("Approved", "معتمد"),
+        KpiSubmissionStatus.Rejected => T("Rejected", "مرفوض"),
+        KpiSubmissionStatus.MoreInfoRequired => T("Returned for correction", "مُعاد للتصحيح"),
+        _ => s.ToString()
+    };
+    string StatusClass(KpiSubmissionStatus s) => s switch
+    {
+        KpiSubmissionStatus.Approved => "text-bg-success",
+        KpiSubmissionStatus.Submitted => "text-bg-primary",
+        KpiSubmissionStatus.Rejected => "text-bg-danger",
+        KpiSubmissionStatus.MoreInfoRequired => "text-bg-warning",
+        _ => "text-bg-secondary"
+    };
+    var pending = Model.Count(x => x.Status == KpiSubmissionStatus.Submitted);
+}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+        <h1 class="h4 mb-0">@ViewData["Title"]</h1>
+        <div class="text-muted">@T("Review club data submissions: approve, return for correction, or reject.", "مراجعة بيانات الأندية: اعتماد أو إعادة للتصحيح أو رفض.")</div>
+    </div>
+    <a class="btn btn-outline-success" href="/Admin/Reports/Analytics">@T("Reports", "التقارير")</a>
+</div>
+
+@if (pending > 0)
+{
+    <div class="alert alert-warning rounded-4 border-0"><i class="bi bi-hourglass-split me-1"></i>@T($"{pending} submission(s) awaiting review.", $"{pending} إرسال بانتظار المراجعة.")</div>
+}
+
+<form method="get" class="card p-3 rounded-4 border-0 shadow-sm mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-3"><label class="form-label">@T("Status", "الحالة")</label><select class="form-select" name="status"><option value="">@T("All", "الكل")</option>@foreach (KpiSubmissionStatus s in Enum.GetValues(typeof(KpiSubmissionStatus))){<option value="@s" selected="@(selectedStatus==s)">@StatusText(s)</option>}</select></div>
+        <div class="col-md-3"><label class="form-label">@T("Season", "الموسم")</label><select class="form-select" name="seasonId"><option value="">@T("All", "الكل")</option>@foreach (var s in seasons){<option value="@s.Id" selected="@(selectedSeasonId==s.Id)">@(ar?s.TitleAr:s.TitleEn)</option>}</select></div>
+        <div class="col-md-3"><label class="form-label">@T("Club", "النادي")</label><select class="form-select" name="clubId"><option value="">@T("All", "الكل")</option>@foreach (var c in clubs){<option value="@c.Id" selected="@(selectedClubId==c.Id)">@N(c)</option>}</select></div>
+        <div class="col-md-3 d-flex gap-2"><button class="btn btn-primary">@T("Filter", "تصفية")</button><a class="btn btn-outline-secondary" href="/Admin/Kpi">@T("Reset", "إعادة ضبط")</a></div>
+    </div>
+</form>
+
+<div class="card border-0 rounded-4 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr><th>@T("Season", "الموسم")</th><th>@T("Club", "النادي")</th><th>@T("Activities", "الأنشطة")</th><th>@T("Participants", "المشاركون")</th><th>@T("Player %", "مشاركة اللاعبين")</th><th>@T("Attendance %", "الحضور")</th><th>@T("Satisfaction %", "الرضا")</th><th>@T("Evidence", "المستندات")</th><th>@T("Status", "الحالة")</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var x in Model)
+            {
+                <tr>
+                    <td>@(ar ? x.Season?.TitleAr : x.Season?.TitleEn)</td>
+                    <td>@N(x.Organization)</td>
+                    <td>@x.NumberOfLecturesActivities</td>
+                    <td>@x.NumberOfParticipants</td>
+                    <td>@x.PlayerParticipationRate.ToString("0.#")</td>
+                    <td>@x.AttendanceRate.ToString("0.#")</td>
+                    <td>@x.SatisfactionRate.ToString("0.#")</td>
+                    <td>@(x.Documents?.Count ?? 0)</td>
+                    <td><span class="badge @StatusClass(x.Status)">@StatusText(x.Status)</span></td>
+                    <td class="text-end"><a class="btn btn-sm btn-primary" href="/Admin/Kpi/Details/@x.Id">@T("Review", "مراجعة")</a></td>
+                </tr>
+            }
+            @if (!Model.Any())
+            {
+                <tr><td colspan="10" class="p-4 text-muted text-center">@T("No KPI submissions found.", "لا توجد بيانات مؤشرات أداء.")</td></tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

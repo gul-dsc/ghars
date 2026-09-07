@@ -1851,3 +1851,238 @@ the new index present, 59 rows intact.
 and 11 system audit log rows. Every metric returned to its exact pre-test value — 59 activities all
 `Approved`, 0 with a null approval state, agenda 11, bookings 15, KPI 14, attendance 8, certificates
 8 — with no orphaned rows.
+
+---
+
+## 29. Partner Offering UX & Release Verification (2026-09-07)
+
+Sections 27 and 28 built the partner offering catalogue and the DSC approval gate. This section makes
+that lifecycle legible and verifies the result for release. **No business workflow changed.** The
+approval rule from §28 stands exactly as it was: `Approved → Unpublish → Edit → Resubmit → DSC Review
+→ Approve`, with approved content locked against direct editing. No migration was required.
+
+### 29.1 Status UX on My Programs
+
+Every program now states its lifecycle position in words, an icon and a colour — never colour alone,
+and never a raw enum name. `OfferingWorkflow` gained `Icon()` alongside the existing `Label()` and
+`BadgeClass()`, so the six states render identically wherever they appear.
+
+A compact summary strip sits above the list: **Total Programs**, **Draft**, **Awaiting DSC Approval**,
+**Approved**. The counts are computed in the controller from `ApprovalStatus` — the same field the
+badges and the filter use, so the header and the list can never disagree — in a single grouped query
+over *all* owned programs rather than the filtered page, so an outstanding item stays visible while
+the partner is looking at one slice. Each tile links to that filter.
+
+Actions are contextual and offer only what the server will accept:
+
+| State | Offered |
+| --- | --- |
+| `Draft` | View, Edit, Submit for approval |
+| `SubmittedForApproval` | View + "Awaiting DSC review" — no Edit, no Submit |
+| `ReturnedForCorrection` | View, Edit, Resubmit, reviewer notes |
+| `Approved` | View, Unpublish, request count — no Edit |
+| `Rejected` | View, Edit, Resubmit, reviewer notes |
+| `Unpublished` | View, Edit, Submit for approval |
+
+The buttons are a convenience, never the rule: `PartnerProgramsController` re-checks the same
+`OfferingWorkflow` predicates on every GET *and* every POST.
+
+### 29.2 The approved edit lock, explained rather than hidden
+
+§28's two locks were correct but silent — a missing Edit button reads as a broken screen. Both are now
+stated in the exact same words everywhere they surface, from a single `OfferingWorkflow.Explain()`:
+
+> To change an approved program, unpublish it first. After editing, it must be submitted to DSC for
+> approval again.
+>
+> لتعديل برنامج معتمد، يجب إلغاء نشره أولاً. وبعد التعديل يلزم إعادة إرساله إلى مجلس دبي الرياضي للاعتماد.
+
+`OfferingWorkflow.EditLockMessage()` now returns that same sentence, so the toast shown after a blocked
+POST and the inline guidance on the list and details pages are one string, not three that can drift.
+
+### 29.3 Workflow history and review notes
+
+A new read-only **Program Details** page (`/partner/programs/details/{id}`) shows created, last
+updated, submitted, submitted by, reviewed, reviewed by, approval status and review notes.
+
+Two things it deliberately does not show: **internal identifiers** — `SubmittedByUserId` and
+`ReviewedByUserId` are resolved to `FullName`, falling back to a role description rather than a user id
+or an email address — and **raw audit payloads**. The workflow timeline is read from the
+`SystemAuditLog` rows §28 already writes, projected through `OfferingWorkflow.AuditActionLabel()`;
+only recognised transitions are narrated and the stored JSON is never rendered. Verified: no GUID and
+no `OldValuesJson` appears in the response.
+
+Reviewer notes appear **above** the program information on a returned or rejected offering, in a
+coloured panel headed *DSC Review Notes / ملاحظات مراجعة المجلس* — verified by string position in the
+rendered page. No panel is rendered when there is nothing to say, and the note continues to be shown
+only while it is still actionable (§28.5).
+
+### 29.4 DSC review improvements
+
+Still the existing Admin Activities screen — no second module. With `pendingOnly=true` the page renders
+a dedicated **queue**, ordered oldest submission first, carrying program (EN + AR), implementing
+entity, type, season, submitted date, submitted by and status. Those eight fields are paired into five
+columns rather than eight: the admin shell already scrolls sideways on a phone and a wider table makes
+that worse for no gain (see §29.8).
+
+The Details page is now split into the three things a reviewer does in order — **Program Information**
+(including target audience, capacity and availability, which the reviewer previously could not see),
+**Submission Information** (by whom, when, current state) and **Review Decision**. Notes remain
+required for a return or a rejection and optional for an approval, enforced server-side as before;
+confirmations were added to all three decisions and to Unpublish, using the `confirm()` pattern the
+rest of the admin area already uses.
+
+Both surfaces became bilingual, following the `T()` convention already used by ten other admin views.
+Approval states there now render through `OfferingWorkflow.Label()` instead of the raw enum.
+
+### 29.5 Partner Dashboard
+
+Unchanged in purpose — it remains the booking inbox. It gained one compact strip: **My Programs**
+with Awaiting DSC Approval / Approved / Returned and a **Manage My Programs** button. The counts are
+scoped by `PartnerOrganizationId` only, the same definition My Programs uses, so the strip and the page
+it links to always agree; the dashboard's own broader activity query (which also matches by creator)
+would have over-counted.
+
+### 29.6 Club catalogue and the custom-booking fallback
+
+Grouping by implementing entity is unchanged. Cards gained capacity and a full availability window
+(from / until / both), and the entity filter now lists **only entities that actually have a bookable
+offering** — computed before the entity filter is applied, so choosing one entity does not empty its own
+dropdown. Every eligible entity remains reachable through Request Custom Booking, which keeps its own
+complete list. Empty entity sections never rendered and still do not.
+
+Custom booking is presented as a legitimate fallback rather than an error path:
+
+> Can't find the training or workshop you need? — لم تجدوا التدريب أو الورشة التي تحتاجونها؟
+
+The empty state now reads "No programs match your filters right now" instead of implying nothing
+exists, and still offers the fallback.
+
+### 29.7 Offering-based vs custom request
+
+`ActivityId` is the discriminator, and no placeholder Activity is ever created for a custom request.
+A booking with no linked program is now labelled **Custom Booking Request / طلب حجز مخصص** rather than
+falling back to a blank or to "Direct request", on the booking details page (as a badge in the summary
+strip and as an explicit *Request source* field) and in both Partner Dashboard tables — visible in the
+pending-action list, so the partner knows which kind of request they are deciding on before they open
+it. Booking details also now names the implementing entity and shows the requested type for custom
+requests, where it previously showed an empty program type.
+
+The booking history table now translates its stored action names (`ClubSubmitted` → "Club submitted the
+request" / "قدّم النادي الطلب") instead of printing them raw. No audit system was added and no JSON is
+exposed.
+
+### 29.8 Season validity — the one behavioural fix
+
+`BookableOfferings()` required an offering to have a season but not an *active* one, while a custom
+request rejects an inactive season outright. The two entry points therefore disagreed: a club could not
+name a closed season on the form, but could still reach an offering sitting in one by passing its id.
+`x.Season.IsActive` was added to the shared query and to the catalogue query.
+
+Checked against the data before changing it: all 59 published offerings belong to the single active
+season (Season 2026-2027), and the only other season holds no activities. **The gap closes without
+withdrawing anything** — the catalogue still lists 30 offerings across 29 entities, unchanged.
+
+### 29.9 Accessibility and mobile
+
+Form labels on the partner program form now carry `for`, bound to the control only when one exists (a
+locked field renders as read-only text, and a `for` pointing at nothing helps no reader). The same was
+done for the catalogue, admin activity and partner dashboard filters. Status is never conveyed by
+colour alone. Decorative icons carry `aria-hidden`. Organization logos carry the entity name as alt
+text. Heading hierarchy descends without skipping on every page checked, and each has exactly one
+`<h1>` outside the admin shell.
+
+One real defect fixed: the partner form's validation summary rendered an **empty red alert box** on a
+valid form, because the tag helper emits its container either way. It is now rendered only when there
+is something to report.
+
+Measured in Chrome at 390 × 844 in both languages, using `documentElement.scrollWidth`:
+
+| Page | Page-level horizontal overflow |
+| --- | --- |
+| Partner My Programs / Create / Edit / Details, Partner Dashboard | **0 px** |
+| Club booking catalogue | **0 px** |
+| DSC review details | 0 px (en) |
+| DSC review queue | 220 px |
+| Admin Activities list | 251 px |
+| *Admin Bookings (untouched, for comparison)* | *277 px* |
+| *Admin Organizations (untouched, for comparison)* | *189 px* |
+
+Wide tables scroll inside their own `.table-responsive` container, which is this project's pattern and
+is not page-level overflow. The residual overflow on admin pages comes from the admin shell's fixed
+sidebar and is **pre-existing** — untouched admin pages show the same thing. Both Activities pages are
+now *narrower* than the untouched Bookings page; before the column pairing they were 484 px and 430 px.
+
+Two pre-existing items were found and deliberately left alone, since fixing them means changing the
+admin shell rather than this workflow: the admin sidebar does not collapse at mobile width, and
+`wwwroot/js/admin.js` injects a client-side filter bar whose six controls have no `id`/`for` pairing —
+present identically on admin pages this pass never touched.
+
+### 29.10 Security regression
+
+Repeated in full against fixtures held in all six states.
+
+**A club cannot reach a non-approved offering**, by catalogue or by hand-typed id:
+
+| Offering state | Catalogue | `GET /bookings/create?activityId=` | `POST` with that id |
+| --- | --- | --- | --- |
+| Draft | hidden | **404** | 0 rows created |
+| SubmittedForApproval | hidden | **404** | 0 rows created |
+| ReturnedForCorrection | hidden | **404** | 0 rows created |
+| Rejected | hidden | **404** | 0 rows created |
+| Unpublished | hidden | **404** | 0 rows created |
+
+**Partner B against Partner A**: view details → 404, open edit → 404, POST edit → 404 with the title
+unchanged, submit → 404 and still Draft, unpublish an approved offering → 404 and still Approved. A's
+rows never appear in B's listing.
+
+**Club and anonymous**: every partner program route returns Access Denied for a club and the login
+redirect for an anonymous visitor; a club POST to the submit endpoint left the offering Draft.
+**DSC retains review authority**; a Partner Admin posting to `/Admin/Activities/Approve` is redirected
+to Access Denied with the state unchanged. Notes remain required — a return with empty notes and a
+reject with whitespace-only notes were both refused, leaving the offering Submitted.
+
+### 29.11 Reporting regression
+
+Eight test programs were created spanning all six states, including one that reached Approved:
+
+| Metric | Baseline | With eight programs across all states | After cleanup |
+| --- | --- | --- | --- |
+| Agenda entries Submitted/Approved (delivered) | 10 | **10** | 10 |
+| KPI submissions | 14 | **14** | 14 |
+| Booking requests | 15 | 16 (one real booking) | 15 |
+| Attendance records | 8 | 10 (Development seeder only — see below) | 8 |
+
+Creating, submitting and approving offerings moved **no** delivered-activity number and **no** KPI
+number. The distinction from §28.10 holds: offering = available, BookingRequest = requested, Agenda =
+delivered. No KPI definition was touched. The two pre-existing conflations recorded in §27.10
+(`totalCapacity` feeding the attendance-rate denominator; `completedActivities` counting catalogue
+rows) are unchanged and still not silently corrected.
+
+**Development seeder, accounted for explicitly.** `DbSeeder.cs:692` manufactures attendance data for
+any confirmed booking that has an `ActivityId`. Metrics were snapshotted *after* startup so the
+baseline already included its effect, and the one restart mid-run was measured on both sides: it added
+exactly 1 attendance session, 2 records and 2 certificates, all attached to the confirmed test booking,
+and moved delivered-agenda and KPI by 0. The seeder was not modified.
+
+### 29.12 Test data removed
+
+8 activities, 1 booking request, 1 agenda entry, 2 booking audit trails, 18 notifications, 55
+notification deliveries, 27 system audit log rows, plus the seeder's 1 attendance session, 2 records
+and 2 certificates. Rows were selected from the test activity ids and what hangs off them — never by
+date or by "recent".
+
+Every metric returned to its exact pre-test value: **59 activities, all Approved, 0 with a null
+approval state, agenda 11 (10 delivered), bookings 15, KPI 14, attendance sessions 6, records 8,
+certificates 8, notifications 14, deliveries 25, audit logs 9.** Six referential checks all returned
+zero orphans, and no QA-stamped row remains.
+
+### 29.13 Build and migration
+
+`dotnet build --no-incremental` → **0 errors, 1 warning** — the retained `CS0108` on
+`Activity.CreatedByUserId`, which is deliberate and was not suppressed. An intermediate build raised
+four `CS8714` warnings from a nullable dictionary key; those were fixed rather than left.
+
+**No migration was required.** Every change in this section is presentation or query-filter only; no
+entity, no column and no index changed. Nothing was scaffolded.
+

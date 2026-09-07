@@ -109,8 +109,19 @@ public class HomeController : Controller
                         && x.PartnerOrganizationId != null
                         && entityIds.Contains(x.PartnerOrganizationId.Value)
                         && (x.Type == ActivityType.TrainingProgram || x.Type == ActivityType.Workshop)
+                        // Same season rule the booking gate applies, so the catalogue never shows a
+                        // card that would be refused on submission.
+                        && x.Season != null && x.Season.IsActive
                         && (x.AvailableFromUtc == null || x.AvailableFromUtc <= now)
                         && (x.AvailableUntilUtc == null || x.AvailableUntilUtc >= now));
+
+        // Which entities have anything to show, computed before the entity filter narrows the list —
+        // otherwise choosing one entity would empty its own dropdown. Only these appear in the
+        // catalogue filter; every eligible entity remains reachable through Request Custom Booking.
+        var entityIdsWithOfferings = await offerings
+            .Select(x => x.PartnerOrganizationId!.Value)
+            .Distinct()
+            .ToListAsync();
 
         if (entityId.HasValue) offerings = offerings.Where(x => x.PartnerOrganizationId == entityId.Value);
         if (type is ActivityType.TrainingProgram or ActivityType.Workshop) offerings = offerings.Where(x => x.Type == type!.Value);
@@ -124,12 +135,15 @@ public class HomeController : Controller
             .OrderBy(g => entities.First(e => e.Id == g.Key).NameEn)
             .ToDictionary(g => g.Key, g => g.ToList());
         ViewBag.Seasons = await _db.Seasons.Where(x => x.IsActive).OrderByDescending(x => x.StartDate).ToListAsync();
+        ViewBag.FilterEntities = entities.Where(x => entityIdsWithOfferings.Contains(x.Id)).ToList();
         ViewBag.EntityId = entityId;
         ViewBag.Type = type;
         ViewBag.SeasonId = seasonId;
         ViewBag.Query = q;
         ViewBag.TotalOfferings = list.Count;
 
+        // The full eligible list stays the model: it resolves each group's name and logo, and it is
+        // what the custom-booking fallback offers.
         return View(entities);
     }
 

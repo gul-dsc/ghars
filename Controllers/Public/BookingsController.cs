@@ -340,7 +340,13 @@ public class BookingsController : Controller
     /// <summary>
     /// Every condition an offering must satisfy before a club may request it: it is published, its
     /// owning implementing entity is approved and is actually an implementing entity, it belongs to
-    /// a season, and today falls inside any availability window the partner set.
+    /// an <em>active</em> season, and today falls inside any availability window the partner set.
+    ///
+    /// The season must be active because that is already the rule for a custom request, which
+    /// rejects an inactive season outright. Without it the two entry points disagreed: a club could
+    /// not name a closed season on the form, but could still reach an offering sitting in one by
+    /// passing its id. Every offering published today belongs to the active season, so this closes
+    /// the gap without withdrawing anything.
     ///
     /// Type is deliberately not restricted here. The club catalogue surfaces only Training and
     /// Workshop, but 27 published Course-type and 2 Lecture-type programs are bookable today through
@@ -356,6 +362,7 @@ public class BookingsController : Controller
             .Include(x => x.PartnerOrganization)
             .Where(x => x.Status == ActivityStatus.Published
                         && x.Season != null
+                        && x.Season.IsActive
                         && (x.AvailableFromUtc == null || x.AvailableFromUtc <= now)
                         && (x.AvailableUntilUtc == null || x.AvailableUntilUtc >= now)
                         // An offering with no explicit owner is still reachable through the older

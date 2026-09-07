@@ -60,6 +60,17 @@ public class PartnerDashboardController : Controller
         var bookings = await bookingQuery.OrderByDescending(x => x.CreatedAtUtc).Take(100).ToListAsync();
         var unread = await _db.NotificationDeliveries.Include(x => x.Notification).Where(x => x.UserId == userId && x.ReadAtUtc == null).OrderByDescending(x => x.Notification!.CreatedAtUtc).Take(5).ToListAsync();
 
+        // Compact My Programs summary. Scoped by PartnerOrganizationId only — the same definition
+        // "My Programs" uses — so the numbers here and the list behind the CTA always agree. The
+        // broader activityQuery above also matches rows by creator and would over-count.
+        ViewBag.ProgramStates = (await _db.Activities
+                .Where(x => x.PartnerOrganizationId.HasValue && partnerOrgIds.Contains(x.PartnerOrganizationId.Value)
+                            && x.ApprovalStatus != null)
+                .GroupBy(x => x.ApprovalStatus!.Value)
+                .Select(g => new { State = g.Key, Count = g.Count() })
+                .ToListAsync())
+            .ToDictionary(x => x.State, x => x.Count);
+
         ViewBag.Partner = partner;
         ViewBag.Activities = activities;
         ViewBag.Bookings = bookings;

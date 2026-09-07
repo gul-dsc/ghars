@@ -1,7 +1,12 @@
 @model List<GharsPlatform.Models.Core.Activity>
 @using GharsPlatform.Models.Core
 @using GharsPlatform.Helpers
+@using System.Globalization
 @{
+    // The review queue is bilingual, following the T() convention several other admin views already
+    // use. The generic activity CRUD table below it stays as it was, with the rest of the module.
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
     ViewData["Title"] = "Activities";
     ViewData["PageTitle"] = "Activities";
     var partners = ViewBag.Partners as List<Organization> ?? new();
@@ -12,13 +17,15 @@
     var fType = ViewBag.Type as ActivityType?;
     var fApproval = ViewBag.Approval as OfferingApprovalStatus?;
     var pendingOnly = (bool)(ViewBag.PendingOnly ?? false);
+    var submitters = ViewBag.SubmitterNames as Dictionary<string, string> ?? new();
+    string Who(string? id) => !string.IsNullOrWhiteSpace(id) && submitters.TryGetValue(id!, out var n) ? n : "—";
 }
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
     <div class="fw-semibold">Activities</div>
     <div class="d-flex gap-2">
         @* The review queue is a filter over this same list rather than a second admin module. *@
         <a class="btn btn-sm @(pendingOnly ? "btn-warning" : "btn-outline-warning")" href="/Admin/Activities?pendingOnly=true">
-            <i class="bi bi-inbox"></i> Awaiting approval @if (pendingCount > 0) { <span class="badge text-bg-dark">@pendingCount</span> }
+            <i class="bi bi-inbox" aria-hidden="true"></i> @T("Awaiting approval", "بانتظار الاعتماد") @if (pendingCount > 0) { <span class="badge text-bg-dark">@pendingCount</span> }
         </a>
         @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Activities/Create"><i class="bi bi-plus-lg"></i> Create</a> }
     </div>
@@ -26,31 +33,31 @@
 
 <form method="get" class="ghars-filter-card row g-2 align-items-end mb-3">
     <div class="col-md-3">
-        <label class="form-label">Implementing entity</label>
-        <select class="form-select" name="partnerId">
+        <label class="form-label" for="f-partner">Implementing entity</label>
+        <select class="form-select" id="f-partner" name="partnerId">
             <option value="">All</option>
             @foreach (var p in partners) { <option value="@p.Id" selected="@(fPartner == p.Id)">@p.NameEn</option> }
         </select>
     </div>
     <div class="col-md-2">
-        <label class="form-label">Season</label>
-        <select class="form-select" name="seasonId">
+        <label class="form-label" for="f-season">Season</label>
+        <select class="form-select" id="f-season" name="seasonId">
             <option value="">All</option>
             @foreach (var s in seasons) { <option value="@s.Id" selected="@(fSeason == s.Id)">@s.TitleEn</option> }
         </select>
     </div>
     <div class="col-md-2">
-        <label class="form-label">Type</label>
-        <select class="form-select" name="type">
+        <label class="form-label" for="f-type">Type</label>
+        <select class="form-select" id="f-type" name="type">
             <option value="">All</option>
             @foreach (ActivityType t in Enum.GetValues(typeof(ActivityType))) { <option value="@t" selected="@(fType == t)">@t</option> }
         </select>
     </div>
     <div class="col-md-3">
-        <label class="form-label">Approval status</label>
-        <select class="form-select" name="approval">
+        <label class="form-label" for="f-approval">Approval status</label>
+        <select class="form-select" id="f-approval" name="approval">
             <option value="">All</option>
-            @foreach (OfferingApprovalStatus s in Enum.GetValues(typeof(OfferingApprovalStatus))) { <option value="@s" selected="@(fApproval == s)">@s</option> }
+            @foreach (OfferingApprovalStatus s in Enum.GetValues(typeof(OfferingApprovalStatus))) { <option value="@s" selected="@(fApproval == s)">@OfferingWorkflow.Label(s)</option> }
         </select>
     </div>
     <div class="col-md-2 d-flex gap-2">
@@ -59,19 +66,76 @@
     </div>
 </form>
 
+@if (pendingOnly)
+{
+    @* The review queue: the same list, filtered, with the columns a reviewer decides on. Deliberately
+       not a second admin module — the filters, the row data and the actions are all this screen's. *@
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-header bg-white border-0 pt-3">
+            <h2 class="h6 mb-0"><i class="bi bi-inbox me-2" aria-hidden="true"></i>@T("Awaiting DSC approval", "بانتظار اعتماد المجلس")</h2>
+            <div class="text-muted small">@T("Oldest submission first. Approving publishes the program to the club catalogue.",
+                                              "الأقدم إرسالاً أولاً. الاعتماد ينشر البرنامج في كتالوج الأندية.")</div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                @* Every field the reviewer needs, paired into five columns rather than eight. The
+                   admin shell already scrolls sideways on a phone; a wider table makes that worse
+                   for no gain, and the secondary lines read perfectly well on a narrow screen. *@
+                <tr>
+                    <th scope="col">@T("Program", "البرنامج")</th>
+                    <th scope="col">@T("Implementing Entity", "الجهة المنفذة")</th>
+                    <th scope="col">@T("Submitted", "تاريخ الإرسال")</th>
+                    <th scope="col">@T("Status", "الحالة")</th>
+                    <th scope="col"><span class="visually-hidden">@T("Review", "مراجعة")</span></th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var a in Model)
+                {
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">@a.TitleEn</div>
+                            <div class="text-muted small" dir="rtl">@a.TitleAr</div>
+                            <div class="text-muted small">@a.Type · @(a.Season?.TitleEn ?? "—")</div>
+                        </td>
+                        <td>@(a.PartnerOrganization?.NameEn ?? "—")</td>
+                        <td>
+                            <div>@(a.SubmittedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "—")</div>
+                            <div class="text-muted small">@T("by", "بواسطة") @Who(a.SubmittedByUserId)</div>
+                        </td>
+                        @* Never the raw enum name: the shared label carries the reviewer's language. *@
+                        <td><span class="badge @OfferingWorkflow.BadgeClass(a.ApprovalStatus)"><i class="bi @OfferingWorkflow.Icon(a.ApprovalStatus) me-1" aria-hidden="true"></i>@OfferingWorkflow.Label(a.ApprovalStatus)</span></td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-primary" href="/Admin/Activities/Details/@a.Id">@T("Review", "مراجعة")</a>
+                        </td>
+                    </tr>
+                }
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="5"><div class="empty-state">@T("Nothing is awaiting approval.", "لا توجد برامج بانتظار الاعتماد.")</div></td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+else
+{
 <div class="card border-0 shadow-sm rounded-4">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
+            @* Paired columns rather than one per field: this table gained two columns when the
+               approval workflow landed and had become the widest page in the admin area on a phone.
+               Every value it showed is still shown. *@
             <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Implementing Entity</th>
-                <th>Type</th>
-                <th>Start</th>
-                <th>Approval</th>
-                <th>Status</th>
-                <th></th>
+                <th scope="col">ID</th>
+                <th scope="col">Title</th>
+                <th scope="col">Type / Start</th>
+                <th scope="col">Approval</th>
+                <th scope="col">Status</th>
+                <th scope="col"><span class="visually-hidden">Actions</span></th>
             </tr>
             </thead>
             <tbody>
@@ -79,11 +143,15 @@
             {
                 <tr>
                     <td>@a.Id</td>
-                    <td class="fw-semibold">@a.TitleEn</td>
-                    @* Partner-managed offerings carry an owning entity; DSC-created activities do not. *@
-                    <td>@(a.PartnerOrganization?.NameEn ?? "—")</td>
-                    <td>@a.Type</td>
-                    <td>@a.StartDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>
+                        <div class="fw-semibold">@a.TitleEn</div>
+                        @* Partner-managed offerings carry an owning entity; DSC-created activities do not. *@
+                        <div class="text-muted small">@(a.PartnerOrganization?.NameEn ?? "—")</div>
+                    </td>
+                    <td>
+                        <div>@a.Type</div>
+                        <div class="text-muted small">@a.StartDateTime.ToString("yyyy-MM-dd HH:mm")</div>
+                    </td>
                     <td>
                         @if (a.ApprovalStatus is null)
                         {
@@ -91,7 +159,7 @@
                         }
                         else
                         {
-                            <span class="badge @OfferingWorkflow.BadgeClass(a.ApprovalStatus)">@a.ApprovalStatus</span>
+                            <span class="badge @OfferingWorkflow.BadgeClass(a.ApprovalStatus)"><i class="bi @OfferingWorkflow.Icon(a.ApprovalStatus) me-1" aria-hidden="true"></i>@OfferingWorkflow.Label(a.ApprovalStatus)</span>
                         }
                     </td>
 	                    <td>
@@ -125,9 +193,10 @@
             }
             @if (!Model.Any())
             {
-                <tr><td colspan="8"><div class="empty-state">No activities match these filters.</div></td></tr>
+                <tr><td colspan="6"><div class="empty-state">No activities match these filters.</div></td></tr>
             }
             </tbody>
         </table>
     </div>
 </div>
+}

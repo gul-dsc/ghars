@@ -10,8 +10,17 @@
  var selectedType=ViewBag.Type as ActivityType?;
  var selectedStatus=ViewBag.Status as OfferingApprovalStatus?;
  var query=ViewBag.Query as string;
- var drafts=Model.Count(x=>x.ApprovalStatus==OfferingApprovalStatus.Draft);
- var returned=Model.Count(x=>x.ApprovalStatus==OfferingApprovalStatus.ReturnedForCorrection);
+
+ // Counts come from the controller and cover every owned program, not the filtered page. Same
+ // field, same definitions as the badges below.
+ var stateCounts=ViewBag.StateCounts as Dictionary<OfferingApprovalStatus,int> ?? new();
+ var totalPrograms=(int)(ViewBag.TotalPrograms ?? 0);
+ int N(OfferingApprovalStatus s)=>stateCounts.TryGetValue(s,out var n)?n:0;
+ var drafts=N(OfferingApprovalStatus.Draft);
+ var awaiting=N(OfferingApprovalStatus.SubmittedForApproval);
+ var returned=N(OfferingApprovalStatus.ReturnedForCorrection);
+ var approved=N(OfferingApprovalStatus.Approved);
+
  ViewData["Title"]=T("My Programs","برامجي");
 
  string Availability(Activity a)
@@ -32,24 +41,61 @@
         </div>
     </div>
     <div class="d-flex gap-2">
-        <a class="btn btn-outline-secondary" href="/partner"><i class="bi bi-inbox me-1"></i>@T("Booking Requests","طلبات الحجز")</a>
-        <a class="btn btn-success" href="/partner/programs/create"><i class="bi bi-plus-lg me-1"></i>@T("New Program","برنامج جديد")</a>
+        <a class="btn btn-outline-secondary" href="/partner"><i class="bi bi-inbox me-1" aria-hidden="true"></i>@T("Booking Requests","طلبات الحجز")</a>
+        <a class="btn btn-success" href="/partner/programs/create"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>@T("New Program","برنامج جديد")</a>
+    </div>
+</div>
+
+@* Operational visibility, not analytics: how many programs exist and how many are waiting on
+   someone. Each tile filters the list below to that state. *@
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <a class="text-decoration-none" href="/partner/programs">
+            <div class="metric-card h-100">
+                <div class="label">@T("Total Programs","إجمالي البرامج")</div>
+                <div class="value">@totalPrograms</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-lg-3">
+        <a class="text-decoration-none" href="/partner/programs?status=@OfferingApprovalStatus.Draft">
+            <div class="metric-card h-100">
+                <div class="label"><i class="bi @OfferingWorkflow.Icon(OfferingApprovalStatus.Draft) me-1" aria-hidden="true"></i>@OfferingWorkflow.Label(OfferingApprovalStatus.Draft)</div>
+                <div class="value">@drafts</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-lg-3">
+        <a class="text-decoration-none" href="/partner/programs?status=@OfferingApprovalStatus.SubmittedForApproval">
+            <div class="metric-card h-100">
+                <div class="label"><i class="bi @OfferingWorkflow.Icon(OfferingApprovalStatus.SubmittedForApproval) me-1" aria-hidden="true"></i>@T("Awaiting DSC Approval","بانتظار اعتماد المجلس")</div>
+                <div class="value">@awaiting</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-lg-3">
+        <a class="text-decoration-none" href="/partner/programs?status=@OfferingApprovalStatus.Approved">
+            <div class="metric-card h-100">
+                <div class="label"><i class="bi @OfferingWorkflow.Icon(OfferingApprovalStatus.Approved) me-1" aria-hidden="true"></i>@OfferingWorkflow.Label(OfferingApprovalStatus.Approved)</div>
+                <div class="value">@approved</div>
+            </div>
+        </a>
     </div>
 </div>
 
 @if(returned>0)
 {
-    <div class="required-action-banner"><i class="bi bi-arrow-counterclockwise me-2"></i>@T($"{returned} program(s) were returned for correction. Open one to read the reviewer's notes.", $"تمت إعادة {returned} برنامج للتعديل. افتح البرنامج لقراءة ملاحظات المراجع.")</div>
+    <div class="required-action-banner"><i class="bi bi-arrow-counterclockwise me-2" aria-hidden="true"></i>@T($"{returned} program(s) were returned for correction. Open one to read the reviewer's notes.", $"تمت إعادة {returned} برنامج للتعديل. افتح البرنامج لقراءة ملاحظات المراجع.")</div>
 }
 @if(drafts>0)
 {
-    <div class="required-action-banner"><i class="bi bi-pencil-square me-2"></i>@T($"You have {drafts} draft program(s). Submit one for DSC approval to make it available to clubs.", $"لديكم {drafts} برنامج في حالة مسودة. أرسلوه لاعتماد مجلس دبي الرياضي ليصبح متاحاً للأندية.")</div>
+    <div class="required-action-banner"><i class="bi bi-pencil-square me-2" aria-hidden="true"></i>@T($"You have {drafts} draft program(s). Submit one for DSC approval to make it available to clubs.", $"لديكم {drafts} برنامج في حالة مسودة. أرسلوه لاعتماد مجلس دبي الرياضي ليصبح متاحاً للأندية.")</div>
 }
 
 <form method="get" class="ghars-filter-card row g-2 align-items-end">
-    <div class="col-md-3"><label class="form-label">@T("Type","النوع")</label><select class="form-select" name="type"><option value="">@T("All","الكل")</option><option value="@ActivityType.TrainingProgram" selected="@(selectedType==ActivityType.TrainingProgram)">@T("Training","تدريب")</option><option value="@ActivityType.Workshop" selected="@(selectedType==ActivityType.Workshop)">@T("Workshop","ورشة عمل")</option></select></div>
-    <div class="col-md-3"><label class="form-label">@T("Approval status","حالة الاعتماد")</label>
-        <select class="form-select" name="status">
+    <div class="col-md-3"><label class="form-label" for="f-type">@T("Type","النوع")</label><select class="form-select" id="f-type" name="type"><option value="">@T("All","الكل")</option><option value="@ActivityType.TrainingProgram" selected="@(selectedType==ActivityType.TrainingProgram)">@T("Training","تدريب")</option><option value="@ActivityType.Workshop" selected="@(selectedType==ActivityType.Workshop)">@T("Workshop","ورشة عمل")</option></select></div>
+    <div class="col-md-3"><label class="form-label" for="f-status">@T("Approval status","حالة الاعتماد")</label>
+        <select class="form-select" id="f-status" name="status">
             <option value="">@T("All","الكل")</option>
             @foreach(OfferingApprovalStatus s in Enum.GetValues(typeof(OfferingApprovalStatus)))
             {
@@ -57,19 +103,19 @@
             }
         </select>
     </div>
-    <div class="col-md-3"><label class="form-label">@T("Search","بحث")</label><input class="form-control" name="q" value="@query" placeholder="@T("Program title","عنوان البرنامج")" /></div>
+    <div class="col-md-3"><label class="form-label" for="f-q">@T("Search","بحث")</label><input class="form-control" id="f-q" name="q" value="@query" placeholder="@T("Program title","عنوان البرنامج")" /></div>
     <div class="col-md-3 d-flex gap-2"><button class="btn btn-primary">@T("Filter","تصفية")</button><a class="btn btn-outline-secondary" href="/partner/programs">@T("Reset","إعادة تعيين")</a></div>
 </form>
 
 <div class="card shadow-sm border-0 rounded-4"><div class="table-responsive"><table class="table align-middle mb-0">
-<thead><tr><th>@T("Title","العنوان")</th><th>@T("Type","النوع")</th><th>@T("Season","الموسم")</th><th>@T("Availability","الإتاحة")</th><th>@T("Booking Requests","طلبات الحجز")</th><th>@T("Approval status","حالة الاعتماد")</th><th></th></tr></thead>
+<thead><tr><th scope="col">@T("Title","العنوان")</th><th scope="col">@T("Type","النوع")</th><th scope="col">@T("Season","الموسم")</th><th scope="col">@T("Availability","الإتاحة")</th><th scope="col">@T("Booking Requests","طلبات الحجز")</th><th scope="col">@T("Approval status","حالة الاعتماد")</th><th scope="col"><span class="visually-hidden">@T("Actions","الإجراءات")</span></th></tr></thead>
 <tbody>
 @foreach(var x in Model)
 {
     var bookings = counts.TryGetValue(x.Id, out var c) ? c : 0;
     <tr>
         <td>
-            <div class="fw-semibold">@(ar && !string.IsNullOrWhiteSpace(x.TitleAr) ? x.TitleAr : x.TitleEn)</div>
+            <div class="fw-semibold"><a class="text-decoration-none" href="/partner/programs/details/@x.Id">@(ar && !string.IsNullOrWhiteSpace(x.TitleAr) ? x.TitleAr : x.TitleEn)</a></div>
             <div class="text-muted small">@x.StartDateTime.ToString("yyyy-MM-dd HH:mm") · @T("Capacity","السعة") @x.Capacity</div>
             @* Shown only while the note is something to act on. It is retained in the record after
                resubmission so the reviewer keeps the context, but repeating it to the partner then
@@ -79,7 +125,7 @@
                     || x.ApprovalStatus == OfferingApprovalStatus.Rejected
                     || x.ApprovalStatus == OfferingApprovalStatus.Unpublished))
             {
-                <div class="small mt-1"><span class="fw-semibold">@T("Reviewer notes","ملاحظات المراجع"):</span> @x.ReviewNotes</div>
+                <div class="small mt-1"><span class="fw-semibold">@T("DSC Review Notes","ملاحظات مراجعة المجلس"):</span> @x.ReviewNotes</div>
             }
         </td>
         <td>@TypeText(x.Type)</td>
@@ -87,14 +133,24 @@
         <td>@Availability(x)</td>
         <td>@bookings</td>
         <td>
-            <span class="badge @OfferingWorkflow.BadgeClass(x.ApprovalStatus)">@OfferingWorkflow.Label(x.ApprovalStatus)</span>
+            @* Icon plus text: the state is never carried by the badge colour alone. *@
+            <span class="badge @OfferingWorkflow.BadgeClass(x.ApprovalStatus)"><i class="bi @OfferingWorkflow.Icon(x.ApprovalStatus) me-1" aria-hidden="true"></i>@OfferingWorkflow.Label(x.ApprovalStatus)</span>
             @if(x.SubmittedAtUtc is not null && x.ApprovalStatus==OfferingApprovalStatus.SubmittedForApproval)
             {
                 <div class="text-muted small">@T("Sent","أُرسل") @x.SubmittedAtUtc.Value.ToString("yyyy-MM-dd")</div>
             }
+            @* The locks are explained rather than left as a missing button, so an intentional rule
+               does not read as a broken screen. *@
+            @if(x.ApprovalStatus==OfferingApprovalStatus.Approved || x.ApprovalStatus==OfferingApprovalStatus.SubmittedForApproval)
+            {
+                <div class="text-muted small mt-1" style="max-width:22rem;">@OfferingWorkflow.Explain(x.ApprovalStatus)</div>
+            }
         </td>
         <td class="text-end">
             <div class="d-flex gap-2 justify-content-end flex-wrap">
+                @* Only actions the server will actually accept are offered. The server re-checks the
+                   same predicates on every POST, so the buttons are a convenience, never the rule. *@
+                <a class="btn btn-sm btn-outline-secondary" href="/partner/programs/details/@x.Id">@T("View","عرض")</a>
                 @if(OfferingWorkflow.PartnerCanEdit(x.ApprovalStatus))
                 {
                     <a class="btn btn-sm btn-outline-primary" href="/partner/programs/edit/@x.Id">@T("Edit","تعديل")</a>
@@ -106,7 +162,8 @@
                 }
                 @if(OfferingWorkflow.CanUnpublish(x.ApprovalStatus))
                 {
-                    <form method="post" action="/partner/programs/unpublish" class="d-inline">
+                    <form method="post" action="/partner/programs/unpublish" class="d-inline"
+                          onsubmit="return confirm('@T("Withdraw this program from the club catalogue? Clubs will no longer be able to request it.","سحب هذا البرنامج من كتالوج الأندية؟ لن تتمكن الأندية من طلبه بعد ذلك.")');">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="id" value="@x.Id" />
                         <button class="btn btn-sm btn-outline-secondary" type="submit">@T("Unpublish","إلغاء النشر")</button>
@@ -114,7 +171,7 @@
                 }
                 @if(x.ApprovalStatus==OfferingApprovalStatus.SubmittedForApproval)
                 {
-                    <span class="text-muted small">@T("Awaiting DSC review","بانتظار مراجعة المجلس")</span>
+                    <span class="text-muted small align-self-center">@T("Awaiting DSC review","بانتظار مراجعة المجلس")</span>
                 }
             </div>
         </td>
@@ -124,8 +181,16 @@
 {
     <tr><td colspan="7">
         <div class="empty-state">
-            <div class="mb-3">@T("You have not created any programs yet.","لم تقم بإنشاء أي برامج بعد.")</div>
-            <a class="btn btn-success" href="/partner/programs/create"><i class="bi bi-plus-lg me-1"></i>@T("Create Your First Program","أنشئ برنامجك الأول")</a>
+            @if(totalPrograms>0)
+            {
+                <div class="mb-3">@T("No programs match these filters.","لا توجد برامج مطابقة لهذه الفلاتر.")</div>
+                <a class="btn btn-outline-secondary" href="/partner/programs">@T("Reset","إعادة تعيين")</a>
+            }
+            else
+            {
+                <div class="mb-3">@T("You have not created any programs yet.","لم تقم بإنشاء أي برامج بعد.")</div>
+                <a class="btn btn-success" href="/partner/programs/create"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>@T("Create Your First Program","أنشئ برنامجك الأول")</a>
+            }
         </div>
     </td></tr>
 }

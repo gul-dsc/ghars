@@ -66,11 +66,57 @@ public class PartnerProgramsController : Controllers.BaseController
             .Select(g => new { ActivityId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.ActivityId, x => x.Count);
 
+        // Operational summary. Counted over every owned program rather than the filtered page, so the
+        // header keeps telling the partner what is outstanding while they are looking at one slice —
+        // and computed from ApprovalStatus, the same field the list badges and the filter use, so the
+        // two can never disagree. One grouped query, not a count per state.
+        var byState = await OwnedActivities(orgIds)
+            .GroupBy(x => x.ApprovalStatus)
+            .Select(g => new { State = g.Key, Count = g.Count() })
+            .ToListAsync();
+        // The total counts every owned program; the per-state tiles cover only rows that carry a
+        // workflow state, which for a partner-owned row is all of them.
+        ViewBag.TotalPrograms = byState.Sum(x => x.Count);
+        ViewBag.StateCounts = byState.Where(x => x.State.HasValue)
+            .ToDictionary(x => x.State!.Value, x => x.Count);
+
         ViewBag.Organization = await Db.Organizations.FirstOrDefaultAsync(x => x.Id == orgIds[0]);
         ViewBag.Type = type;
         ViewBag.Status = status;
         ViewBag.Query = q;
         return View(programs);
+    }
+
+    /// <summary>
+    /// One offering, with the review history behind it. Read-only: every state change still goes
+    /// through the actions below, which re-derive ownership and re-check the transition rules.
+    /// </summary>
+    [HttpGet("/partner/programs/details/{id:int}")]
+    public async Task<IActionResult> Details(int id)
+    {
+        var orgIds = await PartnerOrganizationIdsAsync();
+        if (orgIds.Count == 0) return Forbid();
+
+        var a = await OwnedActivities(orgIds)
+            .Include(x => x.Season)
+            .Include(x => x.PartnerOrganization)
+            .FirstOrDefaultAsync(x => x.Id == id);
+        if (a is null) return NotFound();
+
+        ViewBag.BookingCount = await Db.BookingRequests.CountAsync(x => x.ActivityId == a.Id);
+        ViewBag.People = await ResolveDisplayNamesAsync(a.SubmittedByUserId, a.ReviewedByUserId);
+
+        // The workflow timeline, read from the audit log this workflow already writes. Only the
+        // action and its timestamp are surfaced; the stored JSON payload holds internal field values
+        // and is deliberately not shown.
+        var key = a.Id.ToString();
+        ViewBag.History = await Db.SystemAuditLogs
+            .Where(x => x.EntityName == nameof(Activity) && x.EntityId == key)
+            .OrderByDescending(x => x.AtUtc)
+            .Select(x => new OfferingHistoryEntry(x.Action, x.AtUtc))
+            .ToListAsync();
+
+        return View(a);
     }
 
     [HttpGet("/partner/programs/create")]
@@ -291,16 +337,29 @@ public class PartnerProgramsController : Controllers.BaseController
 
     // ------------------------------------------------------------------ helpers
 
-    private string EditLockMessage(OfferingApprovalStatus? s) => s switch
+    /// <summary>
+    /// Display names for the people named on an offering's workflow stamps. Only <c>FullName</c> is
+    /// returned: the stored value is a user id, which is internal, and the account's email address is
+    /// a contact detail the partner has no reason to receive. A reviewer with no name on file becomes
+    /// a role description rather than an identifier.
+    /// </summary>
+    private async Task<Dictionary<string, string>> ResolveDisplayNamesAsync(params string?[] userIds)
     {
-        OfferingApprovalStatus.SubmittedForApproval => IsAr
-            ? "البرنامج قيد مراجعة مجلس دبي الرياضي ولا يمكن تعديله حالياً."
-            : "This program is under DSC review and cannot be edited until a decision is made.",
-        OfferingApprovalStatus.Approved => IsAr
-            ? "البرنامج معتمد ومنشور. يرجى إلغاء نشره أولاً لتعديله، ثم إعادة إرساله للاعتماد."
-            : "This program is approved and live. Unpublish it first to edit, then resubmit it for approval.",
-        _ => IsAr ? "لا يمكن تعديل هذا البرنامج في حالته الحالية." : "This program cannot be edited in its current state."
-    };
+        var ids = userIds.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!).Distinct().ToList();
+        if (ids.Count == 0) return new Dictionary<string, string>();
+
+        var users = await Db.Users.Where(x => ids.Contains(x.Id))
+            .Select(x => new { x.Id, x.FullName })
+            .ToListAsync();
+
+        return users.ToDictionary(
+            x => x.Id,
+            x => string.IsNullOrWhiteSpace(x.FullName)
+                ? (IsAr ? "مستخدم معتمد" : "Authorised user")
+                : x.FullName!);
+    }
+
+    private string EditLockMessage(OfferingApprovalStatus? s) => OfferingWorkflow.EditLockMessage(s);
 
     /// <summary>
     /// The single place a submission is recorded, so create-and-submit, edit-and-submit and
@@ -316,12 +375,19 @@ public class PartnerProgramsController : Controllers.BaseController
         await Db.SaveChangesAsync();
         await AuditAsync(auditAction, nameof(Activity), a.Id.ToString(), old, new { a.ApprovalStatus, a.SubmittedAtUtc, a.Status });
 
-        var entityName = await Db.Organizations.Where(x => x.Id == a.PartnerOrganizationId)
-            .Select(x => x.NameEn).FirstOrDefaultAsync() ?? "An implementing entity";
+        // Both names are read, so the Arabic notification names the entity in Arabic. The message is
+        // written once and stored in both languages; the recipient's culture decides which is shown.
+        var entity = await Db.Organizations.Where(x => x.Id == a.PartnerOrganizationId)
+            .Select(x => new { x.NameEn, x.NameAr }).FirstOrDefaultAsync();
+        var nameEn = string.IsNullOrWhiteSpace(entity?.NameEn) ? "An implementing entity" : entity!.NameEn;
+        var nameAr = string.IsNullOrWhiteSpace(entity?.NameAr) ? "جهة منفذة" : entity!.NameAr!;
+        var kindEn = a.Type == ActivityType.Workshop ? "workshop" : "training program";
+        var kindAr = a.Type == ActivityType.Workshop ? "ورشة عمل" : "برنامجاً تدريبياً";
+
         await NotifyReviewersAsync(
-            "Program submitted for approval", "برنامج بانتظار الاعتماد",
-            $"{entityName} submitted '{a.TitleEn}' for DSC approval.",
-            $"قدمت {entityName} البرنامج '{a.TitleAr}' لاعتماد مجلس دبي الرياضي.",
+            "Program awaiting DSC review", "برنامج بانتظار مراجعة المجلس",
+            $"{nameEn} submitted the {kindEn} '{a.TitleEn}' for approval. Your review is required.",
+            $"قدمت {nameAr} {kindAr} بعنوان '{a.TitleAr}' للاعتماد. مطلوب مراجعتكم.",
             $"/Admin/Activities/Details/{a.Id}");
     }
 

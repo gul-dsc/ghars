@@ -19,6 +19,9 @@
     var returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
 
     var offerings = ViewBag.Offerings as Dictionary<int, List<Activity>> ?? new();
+    // Only entities that actually have something bookable appear in the catalogue filter. Every
+    // eligible entity is still reachable through Request Custom Booking, which keeps its own list.
+    var filterEntities = ViewBag.FilterEntities as List<Organization> ?? Model;
     var seasons = ViewBag.Seasons as List<Season> ?? new();
     var selectedEntity = ViewBag.EntityId as int?;
     var selectedType = ViewBag.Type as ActivityType?;
@@ -67,26 +70,26 @@ else if (isAdmin)
 
 <form method="get" class="ghars-filter-card row g-2 align-items-end mb-4">
     <div class="col-md-3">
-        <label class="form-label">@T("Implementing Entity", "الجهة المنفذة")</label>
-        <select class="form-select" name="entityId">
+        <label class="form-label" for="f-entity">@T("Implementing Entity", "الجهة المنفذة")</label>
+        <select class="form-select" id="f-entity" name="entityId">
             <option value="">@T("All", "الكل")</option>
-            @foreach (var e in Model)
+            @foreach (var e in filterEntities)
             {
                 <option value="@e.Id" selected="@(selectedEntity == e.Id)">@Name(e)</option>
             }
         </select>
     </div>
     <div class="col-md-2">
-        <label class="form-label">@T("Type", "النوع")</label>
-        <select class="form-select" name="type">
+        <label class="form-label" for="f-type">@T("Type", "النوع")</label>
+        <select class="form-select" id="f-type" name="type">
             <option value="">@T("All", "الكل")</option>
             <option value="@ActivityType.TrainingProgram" selected="@(selectedType == ActivityType.TrainingProgram)">@T("Training", "تدريب")</option>
             <option value="@ActivityType.Workshop" selected="@(selectedType == ActivityType.Workshop)">@T("Workshop", "ورشة عمل")</option>
         </select>
     </div>
     <div class="col-md-3">
-        <label class="form-label">@T("Sports Season", "الموسم الرياضي")</label>
-        <select class="form-select" name="seasonId">
+        <label class="form-label" for="f-season">@T("Sports Season", "الموسم الرياضي")</label>
+        <select class="form-select" id="f-season" name="seasonId">
             <option value="">@T("All", "الكل")</option>
             @foreach (var s in seasons)
             {
@@ -95,8 +98,8 @@ else if (isAdmin)
         </select>
     </div>
     <div class="col-md-2">
-        <label class="form-label">@T("Search", "بحث")</label>
-        <input class="form-control" name="q" value="@query" placeholder="@T("Program title", "عنوان البرنامج")" />
+        <label class="form-label" for="f-q">@T("Search", "بحث")</label>
+        <input class="form-control" id="f-q" name="q" value="@query" placeholder="@T("Program title", "عنوان البرنامج")" />
     </div>
     <div class="col-md-2 d-flex gap-2">
         <button class="btn btn-primary">@T("Filter", "تصفية")</button>
@@ -112,10 +115,12 @@ else if (isAdmin)
 @if (total == 0)
 {
     <div class="empty-state mb-4">
-        <div class="mb-3">@T("No programs are currently available.", "لا توجد برامج متاحة حالياً.")</div>
+        <div class="mb-3">@T("No programs match your filters right now.", "لا توجد برامج مطابقة لبحثكم حالياً.")</div>
         @if (isClub)
         {
-            <a class="btn btn-ghars" href="@customHref"><i class="bi bi-pencil-square me-1"></i>@T("Request Custom Booking", "طلب حجز مخصص")</a>
+            <div class="mb-3 small text-muted">@T("You can still describe what your club needs and send it to an implementing entity.",
+                                                  "يمكنكم مع ذلك وصف ما يحتاجه ناديكم وإرساله إلى إحدى الجهات المنفذة.")</div>
+            <a class="btn btn-ghars" href="@customHref"><i class="bi bi-pencil-square me-1" aria-hidden="true"></i>@T("Request Custom Booking", "طلب حجز مخصص")</a>
         }
         else if (!isAuthenticated)
         {
@@ -166,19 +171,39 @@ else
                                 <ul class="list-unstyled small text-muted mb-3">
                                     @if (audiences.Count > 0)
                                     {
-                                        <li><i class="bi bi-people me-1"></i>@string.Join("، ", audiences.Select(AudienceText))</li>
+                                        <li><i class="bi bi-people me-1" aria-hidden="true"></i>@string.Join("، ", audiences.Select(AudienceText))</li>
+                                    }
+                                    @if (offering.Capacity > 0)
+                                    {
+                                        <li><i class="bi bi-person-badge me-1" aria-hidden="true"></i>@T($"Up to {offering.Capacity} participants", $"حتى {offering.Capacity} مشارك")</li>
                                     }
                                     @if (minutes > 0)
                                     {
-                                        <li><i class="bi bi-clock me-1"></i>@T($"{minutes} minutes", $"{minutes} دقيقة")</li>
+                                        <li><i class="bi bi-clock me-1" aria-hidden="true"></i>@T($"{minutes} minutes", $"{minutes} دقيقة")</li>
                                     }
                                     @if (offering.Season is not null)
                                     {
-                                        <li><i class="bi bi-calendar3 me-1"></i>@(ar ? offering.Season.TitleAr : offering.Season.TitleEn)</li>
+                                        <li><i class="bi bi-calendar3 me-1" aria-hidden="true"></i>@(ar ? offering.Season.TitleAr : offering.Season.TitleEn)</li>
                                     }
-                                    @if (offering.AvailableUntilUtc is not null)
+                                    @if (offering.AvailableFromUtc is not null || offering.AvailableUntilUtc is not null)
                                     {
-                                        <li><i class="bi bi-hourglass-split me-1"></i>@T("Available until", "متاح حتى") @offering.AvailableUntilUtc.Value.ToString("yyyy-MM-dd")</li>
+                                        @* Shown only when the partner set a window. An offering with no
+                                           window is simply available, and saying so adds nothing. *@
+                                        <li>
+                                            <i class="bi bi-hourglass-split me-1" aria-hidden="true"></i>
+                                            @if (offering.AvailableFromUtc is not null && offering.AvailableUntilUtc is not null)
+                                            {
+                                                @T("Available", "متاح")<text> </text>@offering.AvailableFromUtc.Value.ToString("yyyy-MM-dd")<text> → </text>@offering.AvailableUntilUtc.Value.ToString("yyyy-MM-dd")
+                                            }
+                                            else if (offering.AvailableUntilUtc is not null)
+                                            {
+                                                @T("Available until", "متاح حتى")<text> </text>@offering.AvailableUntilUtc.Value.ToString("yyyy-MM-dd")
+                                            }
+                                            else
+                                            {
+                                                @T("Available from", "متاح من")<text> </text>@offering.AvailableFromUtc!.Value.ToString("yyyy-MM-dd")
+                                            }
+                                        </li>
                                     }
                                 </ul>
 
@@ -208,13 +233,18 @@ else
         </section>
     }
 
-    @* Secondary by design: the catalogue is the primary journey, custom booking the fallback. *@
+    @* Secondary by design, but not an error path: the catalogue is the primary journey and a custom
+       request is the legitimate fallback when it holds nothing suitable. *@
     @if (isClub)
     {
         <div class="ghars-filter-empty d-flex flex-wrap align-items-center justify-content-between gap-3">
-            <span>@T("Can't find what you need?", "لم تجد ما تحتاجه؟")</span>
-            <a class="btn btn-outline-primary btn-sm" href="@customHref">
-                <i class="bi bi-pencil-square me-1"></i>@T("Request Custom Booking", "طلب حجز مخصص")
+            <div>
+                <div class="fw-semibold">@T("Can't find the training or workshop you need?", "لم تجدوا التدريب أو الورشة التي تحتاجونها؟")</div>
+                <div class="small text-muted mb-0">@T("Describe what your club needs and send it directly to an implementing entity.",
+                                                      "صِفوا ما يحتاجه ناديكم وأرسلوه مباشرة إلى إحدى الجهات المنفذة.")</div>
+            </div>
+            <a class="btn btn-outline-primary" href="@customHref">
+                <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>@T("Request Custom Booking", "طلب حجز مخصص")
             </a>
         </div>
     }

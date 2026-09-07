@@ -7,13 +7,18 @@
     var isClubSide = (bool)(ViewBag.IsClubSide ?? false);
     var isPartnerSide = (bool)(ViewBag.IsPartnerSide ?? false);
     string T(string en, string ar) => isAr ? ar : en;
-    // Direct (entity-first) requests have no linked program: fall back to the requested subject.
+    // Where the request came from. ActivityId is the discriminator: a custom request has none, and
+    // no placeholder Activity is ever created to fill the gap.
+    var fromOffering = Model.ActivityId.HasValue && Model.Activity is not null;
+
+    // A custom request has no linked program, so the requested subject stands in for the title and
+    // the source is labelled rather than left blank.
     string ProgramTitle()
     {
         var title = isAr ? (Model.Activity?.TitleAr ?? Model.Activity?.TitleEn) : (Model.Activity?.TitleEn ?? Model.Activity?.TitleAr);
         if (!string.IsNullOrWhiteSpace(title)) return title!;
         return string.IsNullOrWhiteSpace(Model.Subject)
-            ? (isAr ? "طلب مباشر" : "Direct request")
+            ? (isAr ? "طلب حجز مخصص" : "Custom Booking Request")
             : Model.Subject!;
     }
     string OrgName(Organization? o) => isAr ? (o?.NameAr ?? o?.NameEn ?? "") : (o?.NameEn ?? o?.NameAr ?? "");
@@ -48,6 +53,19 @@
         "Others" => T("Others", "أخرى"),
         _ => value
     };
+    // The audit trail stores an action name plus a JSON payload. Only the action is shown, and it is
+    // translated rather than printed raw; an unrecognised action falls back to its stored name.
+    string HistoryText(string action) => action switch
+    {
+        "ClubSubmitted" => T("Club submitted the request", "قدّم النادي الطلب"),
+        "ClubAcceptedProposedTime" => T("Club accepted a proposed time", "وافق النادي على وقت مقترح"),
+        "ClubRejectedProposedTimes" => T("Club rejected the proposed times", "رفض النادي الأوقات المقترحة"),
+        "PartnerApproved" => T("Implementing entity confirmed the booking", "أكدت الجهة المنفذة الحجز"),
+        "PartnerRejected" => T("Implementing entity rejected the request", "رفضت الجهة المنفذة الطلب"),
+        "PartnerProposedNewTime" => T("Implementing entity proposed alternative times", "اقترحت الجهة المنفذة أوقاتاً بديلة"),
+        _ => action
+    };
+
     var activeOptions = Model.ProposedTimeOptions.Where(x => x.IsActive && !x.IsSelected).OrderBy(x => x.ProposedStartUtc).ToList();
     var targetAudiences = (Model.TargetAudienceCsv ?? string.Empty)
         .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -75,7 +93,15 @@
     <div class="row g-3">
         <div class="col-md-6 col-xl-3"><div class="text-muted small">@T("Club", "النادي")</div><div class="fw-semibold">@OrgName(Model.Organization)</div></div>
         <div class="col-md-6 col-xl-3"><div class="text-muted small">@T("Partner", "الشريك")</div><div class="fw-semibold">@(OrgName(Model.PartnerOrganization) == "" ? T("Not assigned", "غير محدد") : OrgName(Model.PartnerOrganization))</div></div>
-        <div class="col-md-6 col-xl-3"><div class="text-muted small">@T("Program", "البرنامج")</div><div class="fw-semibold">@ProgramTitle()</div></div>
+        <div class="col-md-6 col-xl-3">
+            <div class="text-muted small">@T("Program", "البرنامج")</div>
+            <div class="fw-semibold">@ProgramTitle()</div>
+            @* Visible before the partner acts, so they know whether this is one of their published
+               programs or a request the club described themselves. *@
+            <span class="badge rounded-pill @(fromOffering ? "text-bg-light border" : "text-bg-info") mt-1">
+                @(fromOffering ? T("From published program", "من برنامج منشور") : T("Custom Booking Request", "طلب حجز مخصص"))
+            </span>
+        </div>
         <div class="col-md-6 col-xl-3"><div class="text-muted small">@T("Sports season", "الموسم الرياضي")</div><div class="fw-semibold">@(isAr ? (Model.Season?.TitleAr ?? Model.Activity?.Season?.TitleAr) : (Model.Season?.TitleEn ?? Model.Activity?.Season?.TitleEn))</div></div>
     </div>
 </div>
@@ -86,8 +112,10 @@
             <h4 class="h5 mb-3">@T("Program Details", "تفاصيل البرنامج")</h4>
             <div class="row g-3">
                 <div class="col-12"><div class="text-muted small">@T("Program title", "عنوان البرنامج")</div><div class="fw-semibold">@ProgramTitle()</div></div>
-                <div class="col-md-6"><div class="text-muted small">@T("Program type", "نوع البرنامج")</div><div class="fw-semibold">@(Model.Activity is null ? "" : ActivityTypeText(Model.Activity.Type))</div></div>
-                <div class="col-md-6"><div class="text-muted small">@T("Original program date/time", "تاريخ / وقت البرنامج الأصلي")</div><div class="fw-semibold">@(Model.Activity is null ? T("Not available", "غير متاح") : $"{Model.Activity.StartDateTime:g} - {Model.Activity.EndDateTime:g}")</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Request source", "مصدر الطلب")</div><div class="fw-semibold">@(fromOffering ? T("Published program from the catalogue", "برنامج منشور من الكتالوج") : T("Custom Booking Request", "طلب حجز مخصص"))</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Implementing entity", "الجهة المنفذة")</div><div class="fw-semibold">@(OrgName(Model.PartnerOrganization) == "" ? T("Not assigned", "غير محدد") : OrgName(Model.PartnerOrganization))</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Program type", "نوع البرنامج")</div><div class="fw-semibold">@(Model.Activity is null ? ActivityTypeText(Model.RequestedActivityType) : ActivityTypeText(Model.Activity.Type))</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Original program date/time", "تاريخ / وقت البرنامج الأصلي")</div><div class="fw-semibold">@(Model.Activity is null ? T("Not applicable — custom request", "لا ينطبق — طلب مخصص") : $"{Model.Activity.StartDateTime:g} - {Model.Activity.EndDateTime:g}")</div></div>
                 <div class="col-md-6"><div class="text-muted small">@T("Requested activity type", "نوع النشاط المطلوب")</div><div class="fw-semibold">@ActivityTypeText(Model.RequestedActivityType)</div></div>
                 <div class="col-md-6"><div class="text-muted small">@T("Subject", "الموضوع")</div><div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.Subject) ? T("Not provided", "غير متوفر") : Model.Subject)</div></div>
                 <div class="col-md-6"><div class="text-muted small">@T("Requested date/time", "التاريخ / الوقت المطلوب")</div><div class="fw-semibold">@(Model.ProposedStartDateTime.HasValue ? $"{Model.ProposedStartDateTime:g} - {Model.ProposedEndDateTime:g}" : T("Not provided", "غير متوفر"))</div></div>
@@ -263,7 +291,7 @@
 
 <div class="metric-card booking-section-card">
     <h4 class="h5 mb-3">@T("Booking history", "سجل الحجز")</h4>
-    <div class="table-responsive"><table class="table align-middle"><thead><tr><th>@T("Action", "الإجراء")</th><th>@T("Date", "التاريخ")</th></tr></thead><tbody>@foreach (var h in Model.AuditTrail.OrderByDescending(x => x.AtUtc)){<tr><td>@h.Action</td><td>@h.AtUtc.ToString("g")</td></tr>}@if(!Model.AuditTrail.Any()){<tr><td colspan="2"><div class="text-muted">@T("No history yet.", "لا يوجد سجل حتى الآن.")</div></td></tr>}</tbody></table></div>
+    <div class="table-responsive"><table class="table align-middle"><thead><tr><th>@T("Action", "الإجراء")</th><th>@T("Date", "التاريخ")</th></tr></thead><tbody>@foreach (var h in Model.AuditTrail.OrderByDescending(x => x.AtUtc)){<tr><td>@HistoryText(h.Action)</td><td>@h.AtUtc.ToString("g")</td></tr>}@if(!Model.AuditTrail.Any()){<tr><td colspan="2"><div class="text-muted">@T("No history yet.", "لا يوجد سجل حتى الآن.")</div></td></tr>}</tbody></table></div>
 </div>
 
 @section Scripts{

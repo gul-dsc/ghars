@@ -40,7 +40,14 @@ public class ActivitiesController : Controllers.BaseController
         if (approval.HasValue) q = q.Where(x => x.ApprovalStatus == approval.Value);
         if (pendingOnly) q = q.Where(x => x.ApprovalStatus == OfferingApprovalStatus.SubmittedForApproval);
 
-        var list = await q.OrderByDescending(x => x.StartDateTime).ToListAsync();
+        // A submission the reviewer has not acted on is more urgent than one they have, so the queue
+        // is ordered by how long it has been waiting. Everything else keeps the existing order.
+        var list = pendingOnly
+            ? await q.OrderBy(x => x.SubmittedAtUtc).ToListAsync()
+            : await q.OrderByDescending(x => x.StartDateTime).ToListAsync();
+
+        // Who submitted each row, resolved once for the whole page rather than per row.
+        ViewBag.SubmitterNames = await ResolveDisplayNamesAsync(list.Select(x => x.SubmittedByUserId));
 
         ViewBag.Partners = await Db.Organizations
             .Where(x => x.OrganizationType == OrganizationType.GovernmentAuthority || x.OrganizationType == OrganizationType.OtherPartner)
@@ -63,7 +70,35 @@ public class ActivitiesController : Controllers.BaseController
             .Include(x => x.BookingRequests).ThenInclude(b => b.Organization)
             .FirstOrDefaultAsync(x => x.Id == id);
         if (activity is null) return NotFound();
+
+        ViewBag.People = await ResolveDisplayNamesAsync(new[] { activity.SubmittedByUserId, activity.ReviewedByUserId });
+
+        // The same workflow timeline the partner sees, read from the audit log rather than a second
+        // store. Action name and timestamp only — the stored JSON payload stays internal.
+        var key = activity.Id.ToString();
+        ViewBag.History = await Db.SystemAuditLogs
+            .Where(x => x.EntityName == nameof(Activity) && x.EntityId == key)
+            .OrderByDescending(x => x.AtUtc)
+            .Select(x => new OfferingHistoryEntry(x.Action, x.AtUtc))
+            .ToListAsync();
+
         return View(activity);
+    }
+
+    /// <summary>Display names for the workflow stamps. Falls back to a role description rather than
+    /// rendering a user id or an email address.</summary>
+    private async Task<Dictionary<string, string>> ResolveDisplayNamesAsync(IEnumerable<string?> userIds)
+    {
+        var ids = userIds.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!).Distinct().ToList();
+        if (ids.Count == 0) return new Dictionary<string, string>();
+
+        var users = await Db.Users.Where(x => ids.Contains(x.Id))
+            .Select(x => new { x.Id, x.FullName })
+            .ToListAsync();
+
+        return users.ToDictionary(
+            x => x.Id,
+            x => string.IsNullOrWhiteSpace(x.FullName) ? "Authorised user" : x.FullName!);
     }
 
     [Authorize(Roles = RoleNames.SuperAdmin)]

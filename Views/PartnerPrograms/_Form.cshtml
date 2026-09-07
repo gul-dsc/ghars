@@ -10,7 +10,15 @@
  var locked=Model.HasBookings;
 }
 
-<div asp-validation-summary="All" class="alert alert-danger" role="alert"></div>
+@* Rendered only when there is something to say. The tag helper emits its container either way, so
+   without this guard a valid form shows an empty red alert. *@
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-danger" role="alert">
+        <h2 class="h6 mb-2">@T("Please correct the following:","يرجى تصحيح ما يلي:")</h2>
+        <div asp-validation-summary="All" class="mb-0"></div>
+    </div>
+}
 
 @if(locked)
 {
@@ -33,13 +41,16 @@
             </div>
 
             <div class="col-md-3">
-                <label class="form-label">@T("Sports Season","الموسم الرياضي")</label>
+                @* The label binds to the control only when there is one: a locked field renders as
+                   read-only text, and a "for" pointing at nothing helps no reader. *@
                 @if(locked)
                 {
+                    <label class="form-label">@T("Sports Season","الموسم الرياضي")</label>
                     <div class="booking-readonly-value">@(seasons.FirstOrDefault(s=>s.Id==Model.SeasonId) is Season s0 ? (ar?s0.TitleAr:s0.TitleEn) : "—")</div>
                 }
                 else
                 {
+                    <label class="form-label" asp-for="SeasonId">@T("Sports Season","الموسم الرياضي")</label>
                     <select class="form-select" asp-for="SeasonId">
                         <option value="0">@T("Select a season","اختر الموسم")</option>
                         @foreach(var s in seasons){<option value="@s.Id" selected="@(Model.SeasonId==s.Id)">@(ar?s.TitleAr:s.TitleEn)</option>}
@@ -48,13 +59,14 @@
             </div>
 
             <div class="col-md-3">
-                <label class="form-label">@T("Type","النوع")</label>
                 @if(locked)
                 {
+                    <label class="form-label">@T("Type","النوع")</label>
                     <div class="booking-readonly-value">@(Model.Type==ActivityType.Workshop ? T("Workshop","ورشة عمل") : T("Training","تدريب"))</div>
                 }
                 else
                 {
+                    <label class="form-label" asp-for="Type">@T("Type","النوع")</label>
                     <select class="form-select" asp-for="Type">
                         <option value="@ActivityType.TrainingProgram" selected="@(Model.Type==ActivityType.TrainingProgram)">@T("Training","تدريب")</option>
                         <option value="@ActivityType.Workshop" selected="@(Model.Type==ActivityType.Workshop)">@T("Workshop","ورشة عمل")</option>
@@ -63,20 +75,20 @@
             </div>
 
             <div class="col-md-6">
-                <label class="form-label">@T("Title (English)","العنوان بالإنجليزية")</label>
+                <label class="form-label" asp-for="TitleEn">@T("Title (English)","العنوان بالإنجليزية")</label>
                 <input class="form-control" asp-for="TitleEn" dir="ltr" maxlength="250" />
             </div>
             <div class="col-md-6">
-                <label class="form-label">@T("Title (Arabic)","العنوان بالعربية")</label>
+                <label class="form-label" asp-for="TitleAr">@T("Title (Arabic)","العنوان بالعربية")</label>
                 <input class="form-control" asp-for="TitleAr" dir="rtl" maxlength="250" />
             </div>
 
             <div class="col-md-6">
-                <label class="form-label">@T("Description (English)","الوصف بالإنجليزية")</label>
+                <label class="form-label" asp-for="DescriptionEn">@T("Description (English)","الوصف بالإنجليزية")</label>
                 <textarea class="form-control" asp-for="DescriptionEn" rows="4" dir="ltr" maxlength="3000"></textarea>
             </div>
             <div class="col-md-6">
-                <label class="form-label">@T("Description (Arabic)","الوصف بالعربية")</label>
+                <label class="form-label" asp-for="DescriptionAr">@T("Description (Arabic)","الوصف بالعربية")</label>
                 <textarea class="form-control" asp-for="DescriptionAr" rows="4" dir="rtl" maxlength="3000"></textarea>
             </div>
         </div>
@@ -96,7 +108,7 @@
             }
         </div>
         <div class="mt-3">
-            <label class="form-label">@T("If Others, please describe","إذا اخترتم أخرى، يرجى التوضيح")</label>
+            <label class="form-label" asp-for="OtherTargetAudience">@T("If Others, please describe","إذا اخترتم أخرى، يرجى التوضيح")</label>
             <input class="form-control" asp-for="OtherTargetAudience" maxlength="150" />
         </div>
     </div>
@@ -111,37 +123,37 @@
         </p>
         <div class="row g-3">
             <div class="col-md-4">
-                <label class="form-label">@T("Indicative session date","تاريخ الجلسة الاسترشادي")</label>
+                <label class="form-label" asp-for="SessionDate">@T("Indicative session date","تاريخ الجلسة الاسترشادي")</label>
                 <input class="form-control" type="date" asp-for="SessionDate" />
             </div>
             <div class="col-md-4">
-                <label class="form-label">@T("Start time","وقت البداية")</label>
+                <label class="form-label" asp-for="SessionStartTime">@T("Start time","وقت البداية")</label>
                 <input class="form-control" type="time" asp-for="SessionStartTime" />
             </div>
             <div class="col-md-4">
-                <label class="form-label">@T("End time","وقت النهاية")</label>
+                <label class="form-label" asp-for="SessionEndTime">@T("End time","وقت النهاية")</label>
                 <input class="form-control" type="time" asp-for="SessionEndTime" />
             </div>
 
             <div class="col-md-4">
-                <label class="form-label">@T("Capacity","السعة")</label>
+                <label class="form-label" asp-for="Capacity">@T("Capacity","السعة")</label>
                 <input class="form-control" type="number" min="1" max="5000" asp-for="Capacity" />
             </div>
             <div class="col-md-4">
-                <label class="form-label">@T("Available from (optional)","متاح من (اختياري)")</label>
+                <label class="form-label" asp-for="AvailableFrom">@T("Available from (optional)","متاح من (اختياري)")</label>
                 <input class="form-control" type="date" asp-for="AvailableFrom" />
             </div>
             <div class="col-md-4">
-                <label class="form-label">@T("Available until (optional)","متاح حتى (اختياري)")</label>
+                <label class="form-label" asp-for="AvailableUntil">@T("Available until (optional)","متاح حتى (اختياري)")</label>
                 <input class="form-control" type="date" asp-for="AvailableUntil" />
             </div>
 
             <div class="col-md-6">
-                <label class="form-label">@T("Location (English, optional)","الموقع بالإنجليزية (اختياري)")</label>
+                <label class="form-label" asp-for="LocationEn">@T("Location (English, optional)","الموقع بالإنجليزية (اختياري)")</label>
                 <input class="form-control" asp-for="LocationEn" dir="ltr" maxlength="300" />
             </div>
             <div class="col-md-6">
-                <label class="form-label">@T("Location (Arabic, optional)","الموقع بالعربية (اختياري)")</label>
+                <label class="form-label" asp-for="LocationAr">@T("Location (Arabic, optional)","الموقع بالعربية (اختياري)")</label>
                 <input class="form-control" asp-for="LocationAr" dir="rtl" maxlength="300" />
             </div>
         </div>

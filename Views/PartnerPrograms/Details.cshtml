@@ -1,0 +1,168 @@
+@model GharsPlatform.Models.Core.Activity
+@using GharsPlatform.Models.Core
+@using GharsPlatform.Helpers
+@using System.Globalization
+@{
+ var ar=CultureInfo.CurrentUICulture.TwoLetterISOLanguageName=="ar"; string T(string e,string a)=>ar?a:e;
+ string TypeText(ActivityType t)=>t switch{ActivityType.Lecture=>T("Lecture","محاضرة"),ActivityType.Event=>T("Event","فعالية"),ActivityType.Workshop=>T("Workshop","ورشة عمل"),ActivityType.TrainingProgram=>T("Training","تدريب"),ActivityType.Course=>T("Course","دورة"),ActivityType.Activity=>T("Activity","نشاط"),_=>t.ToString()};
+ string AudienceText(string a)=>a switch{"Players"=>T("Players","لاعبون"),"Coaches"=>T("Coaches","مدربون"),"Staff"=>T("Staff","موظفون"),"Administrators"=>T("Administrators","إداريون"),"Parents"=>T("Parents","أولياء أمور"),"Others"=>T("Others","أخرى"),_=>a};
+
+ var people=ViewBag.People as Dictionary<string,string> ?? new();
+ // The stored value is a user id and is never rendered: an unresolved name becomes a dash.
+ string Who(string? userId)=>!string.IsNullOrWhiteSpace(userId) && people.TryGetValue(userId!,out var n) ? n : "—";
+ string When(DateTime? d)=>d.HasValue ? d.Value.ToString("yyyy-MM-dd HH:mm") : "—";
+
+ var bookingCount=(int)(ViewBag.BookingCount ?? 0);
+ var history=ViewBag.History as List<OfferingHistoryEntry> ?? new();
+ var title=ar && !string.IsNullOrWhiteSpace(Model.TitleAr) ? Model.TitleAr : Model.TitleEn;
+ var org=Model.PartnerOrganization;
+ var audiences=string.IsNullOrWhiteSpace(Model.TargetAudienceCsv)
+     ? new List<string>()
+     : Model.TargetAudienceCsv.Split(',',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).ToList();
+
+ // Shown only while the note is still something to act on — the same rule the list uses.
+ var notesActionable=!string.IsNullOrWhiteSpace(Model.ReviewNotes)
+     && (Model.ApprovalStatus==OfferingApprovalStatus.ReturnedForCorrection
+         || Model.ApprovalStatus==OfferingApprovalStatus.Rejected
+         || Model.ApprovalStatus==OfferingApprovalStatus.Unpublished);
+
+ ViewData["Title"]=title;
+
+ string Availability()
+ {
+     if(Model.AvailableFromUtc is null && Model.AvailableUntilUtc is null) return T("Always available","متاح دائماً");
+     var from=Model.AvailableFromUtc?.ToString("yyyy-MM-dd") ?? T("Any","أي");
+     var until=Model.AvailableUntilUtc?.ToString("yyyy-MM-dd") ?? T("Any","أي");
+     return $"{from} → {until}";
+ }
+}
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+    <div>
+        <h1 class="h3 mb-1">@title</h1>
+        <div class="text-muted">
+            @TypeText(Model.Type)
+            @if(org is not null){<text> · @(ar && !string.IsNullOrWhiteSpace(org.NameAr) ? org.NameAr : org.NameEn)</text>}
+        </div>
+        <span class="badge @OfferingWorkflow.BadgeClass(Model.ApprovalStatus) mt-2"><i class="bi @OfferingWorkflow.Icon(Model.ApprovalStatus) me-1" aria-hidden="true"></i>@OfferingWorkflow.Label(Model.ApprovalStatus)</span>
+    </div>
+    <a class="btn btn-outline-secondary" href="/partner/programs"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>@T("Back to My Programs","العودة إلى برامجي")</a>
+</div>
+
+@* Reviewer notes come first, not last: on a returned or rejected program they are the whole reason
+   the partner opened this page. No panel is rendered when there is nothing to say. *@
+@if(notesActionable)
+{
+    <div class="alert @(Model.ApprovalStatus==OfferingApprovalStatus.Rejected ? "alert-danger" : "alert-warning")" role="alert">
+        <h2 class="h6 mb-2"><i class="bi bi-chat-left-text me-2" aria-hidden="true"></i>@T("DSC Review Notes","ملاحظات مراجعة المجلس")</h2>
+        <div>@Model.ReviewNotes</div>
+        <div class="small mt-2 mb-0">@OfferingWorkflow.Explain(Model.ApprovalStatus)</div>
+    </div>
+}
+else
+{
+    <div class="ghars-filter-empty mb-4">@OfferingWorkflow.Explain(Model.ApprovalStatus)</div>
+}
+
+<div class="d-flex gap-2 flex-wrap mb-4">
+    @if(OfferingWorkflow.PartnerCanEdit(Model.ApprovalStatus))
+    {
+        <a class="btn btn-outline-primary" href="/partner/programs/edit/@Model.Id"><i class="bi bi-pencil me-1" aria-hidden="true"></i>@T("Edit","تعديل")</a>
+        <form method="post" action="/partner/programs/submit">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@Model.Id" />
+            <button class="btn btn-success" type="submit"><i class="bi bi-send me-1" aria-hidden="true"></i>@(Model.ApprovalStatus==OfferingApprovalStatus.Draft ? T("Submit for approval","إرسال للاعتماد") : T("Resubmit","إعادة الإرسال"))</button>
+        </form>
+    }
+    @if(OfferingWorkflow.CanUnpublish(Model.ApprovalStatus))
+    {
+        <form method="post" action="/partner/programs/unpublish"
+              onsubmit="return confirm('@T("Withdraw this program from the club catalogue? Clubs will no longer be able to request it.","سحب هذا البرنامج من كتالوج الأندية؟ لن تتمكن الأندية من طلبه بعد ذلك.")');">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@Model.Id" />
+            <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-eye-slash me-1" aria-hidden="true"></i>@T("Unpublish","إلغاء النشر")</button>
+        </form>
+    }
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <section class="card shadow-sm border-0 rounded-4 mb-3"><div class="card-body">
+            <h2 class="h5 mb-3">@T("Program Information","معلومات البرنامج")</h2>
+            <dl class="row mb-0">
+                <dt class="col-sm-5">@T("Title (English)","العنوان بالإنجليزية")</dt><dd class="col-sm-7" dir="ltr">@Model.TitleEn</dd>
+                <dt class="col-sm-5">@T("Title (Arabic)","العنوان بالعربية")</dt><dd class="col-sm-7" dir="rtl">@Model.TitleAr</dd>
+                <dt class="col-sm-5">@T("Type","النوع")</dt><dd class="col-sm-7">@TypeText(Model.Type)</dd>
+                <dt class="col-sm-5">@T("Sports Season","الموسم الرياضي")</dt><dd class="col-sm-7">@(ar?Model.Season?.TitleAr:Model.Season?.TitleEn)</dd>
+                <dt class="col-sm-5">@T("Indicative session","الجلسة الاسترشادية")</dt><dd class="col-sm-7">@Model.StartDateTime.ToString("yyyy-MM-dd HH:mm") – @Model.EndDateTime.ToString("HH:mm")</dd>
+                <dt class="col-sm-5">@T("Capacity","السعة")</dt><dd class="col-sm-7">@Model.Capacity</dd>
+                <dt class="col-sm-5">@T("Availability","الإتاحة")</dt><dd class="col-sm-7">@Availability()</dd>
+                <dt class="col-sm-5">@T("Target audience","الفئة المستهدفة")</dt>
+                <dd class="col-sm-7">
+                    @if(audiences.Any())
+                    {
+                        <div class="d-flex flex-wrap gap-1">
+                            @foreach(var a in audiences){<span class="badge rounded-pill text-bg-light border">@AudienceText(a)</span>}
+                        </div>
+                        @if(!string.IsNullOrWhiteSpace(Model.OtherTargetAudience)){<div class="small text-muted mt-1">@Model.OtherTargetAudience</div>}
+                    }
+                    else
+                    {
+                        <span class="text-muted">@T("Not specified","غير محدد")</span>
+                    }
+                </dd>
+                <dt class="col-sm-5">@T("Booking requests","طلبات الحجز")</dt><dd class="col-sm-7">@bookingCount</dd>
+            </dl>
+        </div></section>
+
+        <section class="card shadow-sm border-0 rounded-4"><div class="card-body">
+            <h2 class="h5 mb-3">@T("Description","الوصف")</h2>
+            <p dir="ltr">@(string.IsNullOrWhiteSpace(Model.DescriptionEn) ? T("Not provided","غير متوفر") : Model.DescriptionEn)</p>
+            <p class="text-muted mb-0" dir="rtl">@(string.IsNullOrWhiteSpace(Model.DescriptionAr) ? T("Not provided","غير متوفر") : Model.DescriptionAr)</p>
+        </div></section>
+    </div>
+
+    <div class="col-lg-5">
+        <section class="card shadow-sm border-0 rounded-4 mb-3"><div class="card-body">
+            <h2 class="h5 mb-3">@T("Approval Workflow","سير الاعتماد")</h2>
+            <dl class="row mb-0">
+                <dt class="col-6">@T("Approval status","حالة الاعتماد")</dt>
+                <dd class="col-6"><span class="badge @OfferingWorkflow.BadgeClass(Model.ApprovalStatus)"><i class="bi @OfferingWorkflow.Icon(Model.ApprovalStatus) me-1" aria-hidden="true"></i>@OfferingWorkflow.Label(Model.ApprovalStatus)</span></dd>
+                <dt class="col-6">@T("Created","تاريخ الإنشاء")</dt><dd class="col-6">@When(Model.CreatedAtUtc)</dd>
+                <dt class="col-6">@T("Last updated","آخر تحديث")</dt><dd class="col-6">@When(Model.UpdatedAtUtc)</dd>
+                <dt class="col-6">@T("Submitted","تاريخ الإرسال")</dt><dd class="col-6">@When(Model.SubmittedAtUtc)</dd>
+                <dt class="col-6">@T("Submitted by","أُرسل بواسطة")</dt><dd class="col-6">@Who(Model.SubmittedByUserId)</dd>
+                <dt class="col-6">@T("Reviewed","تاريخ المراجعة")</dt><dd class="col-6">@When(Model.ReviewedAtUtc)</dd>
+                <dt class="col-6">@T("Reviewed by","روجع بواسطة")</dt><dd class="col-6">@Who(Model.ReviewedByUserId)</dd>
+            </dl>
+        </div></section>
+
+        <section class="card shadow-sm border-0 rounded-4"><div class="card-body">
+            <h2 class="h5 mb-3">@T("Workflow History","سجل سير العمل")</h2>
+            @{
+                // Only recognised workflow transitions are narrated. Anything else in the audit table
+                // belongs to a different flow, and the stored JSON payload is never rendered.
+                var entries=history
+                    .Select(h=>new{ Label=OfferingWorkflow.AuditActionLabel(h.Action), h.AtUtc })
+                    .Where(x=>x.Label is not null)
+                    .ToList();
+            }
+            @if(entries.Count==0)
+            {
+                <div class="text-muted">@T("No workflow history recorded yet.","لا يوجد سجل لسير العمل حتى الآن.")</div>
+            }
+            else
+            {
+                <ol class="list-unstyled mb-0">
+                    @foreach(var e in entries)
+                    {
+                        <li class="border-bottom py-2 d-flex justify-content-between gap-3">
+                            <span>@e.Label</span>
+                            <span class="text-muted small text-nowrap">@e.AtUtc.ToString("yyyy-MM-dd HH:mm")</span>
+                        </li>
+                    }
+                </ol>
+            }
+        </div></section>
+    </div>
+</div>

@@ -1,17 +1,17 @@
 @model List<GharsPlatform.Models.Core.Activity>
 @using GharsPlatform.Models.Core
+@using GharsPlatform.Helpers
 @using System.Globalization
 @{
  var ar=CultureInfo.CurrentUICulture.TwoLetterISOLanguageName=="ar"; string T(string e,string a)=>ar?a:e;
  string TypeText(ActivityType t)=>t switch{ActivityType.Lecture=>T("Lecture","محاضرة"),ActivityType.Event=>T("Event","فعالية"),ActivityType.Workshop=>T("Workshop","ورشة عمل"),ActivityType.TrainingProgram=>T("Training","تدريب"),ActivityType.Course=>T("Course","دورة"),ActivityType.Activity=>T("Activity","نشاط"),_=>t.ToString()};
- string StatusText(ActivityStatus s)=>s switch{ActivityStatus.Draft=>T("Draft","مسودة"),ActivityStatus.Published=>T("Published","منشور"),ActivityStatus.Closed=>T("Closed","مغلق"),ActivityStatus.Cancelled=>T("Cancelled","ملغى"),_=>s.ToString()};
- string StatusClass(ActivityStatus s)=>s switch{ActivityStatus.Published=>"text-bg-success",ActivityStatus.Draft=>"text-bg-secondary",ActivityStatus.Cancelled=>"text-bg-danger",_=>"text-bg-warning"};
  var counts=ViewBag.BookingCounts as Dictionary<int,int> ?? new();
  var org=ViewBag.Organization as Organization;
  var selectedType=ViewBag.Type as ActivityType?;
- var selectedStatus=ViewBag.Status as ActivityStatus?;
+ var selectedStatus=ViewBag.Status as OfferingApprovalStatus?;
  var query=ViewBag.Query as string;
- var drafts=Model.Count(x=>x.Status==ActivityStatus.Draft);
+ var drafts=Model.Count(x=>x.ApprovalStatus==OfferingApprovalStatus.Draft);
+ var returned=Model.Count(x=>x.ApprovalStatus==OfferingApprovalStatus.ReturnedForCorrection);
  ViewData["Title"]=T("My Programs","برامجي");
 
  string Availability(Activity a)
@@ -26,7 +26,8 @@
     <div>
         <h1 class="mb-1">@T("My Programs","برامجي")</h1>
         <div class="text-muted">
-            @T("The training sessions and workshops your entity offers to clubs.","الدورات التدريبية وورش العمل التي تقدمها جهتكم للأندية.")
+            @T("The training sessions and workshops your entity offers to clubs. Each one is visible to clubs only after DSC approval.",
+               "الدورات التدريبية وورش العمل التي تقدمها جهتكم للأندية. لا يظهر أي برنامج للأندية إلا بعد اعتماد مجلس دبي الرياضي.")
             @if(org is not null){<text> — @(ar && !string.IsNullOrWhiteSpace(org.NameAr) ? org.NameAr : org.NameEn)</text>}
         </div>
     </div>
@@ -36,20 +37,32 @@
     </div>
 </div>
 
+@if(returned>0)
+{
+    <div class="required-action-banner"><i class="bi bi-arrow-counterclockwise me-2"></i>@T($"{returned} program(s) were returned for correction. Open one to read the reviewer's notes.", $"تمت إعادة {returned} برنامج للتعديل. افتح البرنامج لقراءة ملاحظات المراجع.")</div>
+}
 @if(drafts>0)
 {
-    <div class="required-action-banner"><i class="bi bi-pencil-square me-2"></i>@T($"You have {drafts} draft program(s) that clubs cannot see until you publish them.", $"لديكم {drafts} برنامج في حالة مسودة لا تظهر للأندية حتى يتم نشرها.")</div>
+    <div class="required-action-banner"><i class="bi bi-pencil-square me-2"></i>@T($"You have {drafts} draft program(s). Submit one for DSC approval to make it available to clubs.", $"لديكم {drafts} برنامج في حالة مسودة. أرسلوه لاعتماد مجلس دبي الرياضي ليصبح متاحاً للأندية.")</div>
 }
 
 <form method="get" class="ghars-filter-card row g-2 align-items-end">
     <div class="col-md-3"><label class="form-label">@T("Type","النوع")</label><select class="form-select" name="type"><option value="">@T("All","الكل")</option><option value="@ActivityType.TrainingProgram" selected="@(selectedType==ActivityType.TrainingProgram)">@T("Training","تدريب")</option><option value="@ActivityType.Workshop" selected="@(selectedType==ActivityType.Workshop)">@T("Workshop","ورشة عمل")</option></select></div>
-    <div class="col-md-3"><label class="form-label">@T("Status","الحالة")</label><select class="form-select" name="status"><option value="">@T("All","الكل")</option><option value="@ActivityStatus.Published" selected="@(selectedStatus==ActivityStatus.Published)">@T("Published","منشور")</option><option value="@ActivityStatus.Draft" selected="@(selectedStatus==ActivityStatus.Draft)">@T("Draft","مسودة")</option></select></div>
+    <div class="col-md-3"><label class="form-label">@T("Approval status","حالة الاعتماد")</label>
+        <select class="form-select" name="status">
+            <option value="">@T("All","الكل")</option>
+            @foreach(OfferingApprovalStatus s in Enum.GetValues(typeof(OfferingApprovalStatus)))
+            {
+                <option value="@s" selected="@(selectedStatus==s)">@OfferingWorkflow.Label(s)</option>
+            }
+        </select>
+    </div>
     <div class="col-md-3"><label class="form-label">@T("Search","بحث")</label><input class="form-control" name="q" value="@query" placeholder="@T("Program title","عنوان البرنامج")" /></div>
     <div class="col-md-3 d-flex gap-2"><button class="btn btn-primary">@T("Filter","تصفية")</button><a class="btn btn-outline-secondary" href="/partner/programs">@T("Reset","إعادة تعيين")</a></div>
 </form>
 
 <div class="card shadow-sm border-0 rounded-4"><div class="table-responsive"><table class="table align-middle mb-0">
-<thead><tr><th>@T("Title","العنوان")</th><th>@T("Type","النوع")</th><th>@T("Season","الموسم")</th><th>@T("Availability","الإتاحة")</th><th>@T("Booking Requests","طلبات الحجز")</th><th>@T("Status","الحالة")</th><th></th></tr></thead>
+<thead><tr><th>@T("Title","العنوان")</th><th>@T("Type","النوع")</th><th>@T("Season","الموسم")</th><th>@T("Availability","الإتاحة")</th><th>@T("Booking Requests","طلبات الحجز")</th><th>@T("Approval status","حالة الاعتماد")</th><th></th></tr></thead>
 <tbody>
 @foreach(var x in Model)
 {
@@ -58,16 +71,40 @@
         <td>
             <div class="fw-semibold">@(ar && !string.IsNullOrWhiteSpace(x.TitleAr) ? x.TitleAr : x.TitleEn)</div>
             <div class="text-muted small">@x.StartDateTime.ToString("yyyy-MM-dd HH:mm") · @T("Capacity","السعة") @x.Capacity</div>
+            @* Shown only while the note is something to act on. It is retained in the record after
+               resubmission so the reviewer keeps the context, but repeating it to the partner then
+               reads as though the correction had not been made. *@
+            @if(!string.IsNullOrWhiteSpace(x.ReviewNotes)
+                && (x.ApprovalStatus == OfferingApprovalStatus.ReturnedForCorrection
+                    || x.ApprovalStatus == OfferingApprovalStatus.Rejected
+                    || x.ApprovalStatus == OfferingApprovalStatus.Unpublished))
+            {
+                <div class="small mt-1"><span class="fw-semibold">@T("Reviewer notes","ملاحظات المراجع"):</span> @x.ReviewNotes</div>
+            }
         </td>
         <td>@TypeText(x.Type)</td>
         <td>@(ar?x.Season?.TitleAr:x.Season?.TitleEn)</td>
         <td>@Availability(x)</td>
         <td>@bookings</td>
-        <td><span class="badge @StatusClass(x.Status)">@StatusText(x.Status)</span></td>
+        <td>
+            <span class="badge @OfferingWorkflow.BadgeClass(x.ApprovalStatus)">@OfferingWorkflow.Label(x.ApprovalStatus)</span>
+            @if(x.SubmittedAtUtc is not null && x.ApprovalStatus==OfferingApprovalStatus.SubmittedForApproval)
+            {
+                <div class="text-muted small">@T("Sent","أُرسل") @x.SubmittedAtUtc.Value.ToString("yyyy-MM-dd")</div>
+            }
+        </td>
         <td class="text-end">
-            <div class="d-flex gap-2 justify-content-end">
-                <a class="btn btn-sm btn-outline-primary" href="/partner/programs/edit/@x.Id">@T("Edit","تعديل")</a>
-                @if(x.Status==ActivityStatus.Published)
+            <div class="d-flex gap-2 justify-content-end flex-wrap">
+                @if(OfferingWorkflow.PartnerCanEdit(x.ApprovalStatus))
+                {
+                    <a class="btn btn-sm btn-outline-primary" href="/partner/programs/edit/@x.Id">@T("Edit","تعديل")</a>
+                    <form method="post" action="/partner/programs/submit" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@x.Id" />
+                        <button class="btn btn-sm btn-success" type="submit">@(x.ApprovalStatus==OfferingApprovalStatus.Draft ? T("Submit for approval","إرسال للاعتماد") : T("Resubmit","إعادة الإرسال"))</button>
+                    </form>
+                }
+                @if(OfferingWorkflow.CanUnpublish(x.ApprovalStatus))
                 {
                     <form method="post" action="/partner/programs/unpublish" class="d-inline">
                         @Html.AntiForgeryToken()
@@ -75,13 +112,9 @@
                         <button class="btn btn-sm btn-outline-secondary" type="submit">@T("Unpublish","إلغاء النشر")</button>
                     </form>
                 }
-                else if(x.Status==ActivityStatus.Draft)
+                @if(x.ApprovalStatus==OfferingApprovalStatus.SubmittedForApproval)
                 {
-                    <form method="post" action="/partner/programs/publish" class="d-inline">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="id" value="@x.Id" />
-                        <button class="btn btn-sm btn-success" type="submit">@T("Publish","نشر")</button>
-                    </form>
+                    <span class="text-muted small">@T("Awaiting DSC review","بانتظار مراجعة المجلس")</span>
                 }
             </div>
         </td>

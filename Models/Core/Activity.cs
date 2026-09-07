@@ -74,6 +74,29 @@ public class Activity : AuditableEntity
 
     public DateTime? AvailableUntilUtc { get; set; }
 
+    // ------------------------------------------------------------------ DSC review workflow
+    //
+    // Null for DSC-created activities: they have no owning implementing entity and do not pass
+    // through partner review. For partner offerings this is the authority on whether clubs may see
+    // the row, alongside Status.
+
+    public OfferingApprovalStatus? ApprovalStatus { get; set; }
+
+    public DateTime? SubmittedAtUtc { get; set; }
+
+    [MaxLength(450)]
+    public string? SubmittedByUserId { get; set; }
+
+    public DateTime? ReviewedAtUtc { get; set; }
+
+    [MaxLength(450)]
+    public string? ReviewedByUserId { get; set; }
+
+    /// <summary>The reviewer's note from the most recent return or rejection, shown to the partner
+    /// so they know what to correct. Cleared on approval.</summary>
+    [MaxLength(2000)]
+    public string? ReviewNotes { get; set; }
+
     public ActivityStatus Status { get; set; } = ActivityStatus.Draft;
 
     [Required, MaxLength(450)]

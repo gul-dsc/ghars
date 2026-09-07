@@ -38,6 +38,28 @@ public enum ActivityStatus : byte
     Cancelled = 4
 }
 
+/// <summary>
+/// The DSC review lifecycle for a partner-created offering. Deliberately a separate enum from
+/// <see cref="ActivityStatus"/> rather than extra members on it: <c>Status == Published</c> is
+/// compared in a dozen unrelated places (surveys, attendance, the public home page, the admin
+/// dashboard) and widening that enum would change what those comparisons silently exclude.
+///
+/// The column is null for DSC-created activities, which have no owning entity and are outside this
+/// workflow entirely.
+///
+/// Visibility to clubs requires BOTH <see cref="Approved"/> here and
+/// <see cref="ActivityStatus.Published"/> there; only a DSC approval ever sets the pair.
+/// </summary>
+public enum OfferingApprovalStatus : byte
+{
+    Draft = 1,
+    SubmittedForApproval = 2,
+    ReturnedForCorrection = 3,
+    Approved = 4,
+    Rejected = 5,
+    Unpublished = 6
+}
+
 public enum BookingStatus : byte
 {
     Pending = 1,

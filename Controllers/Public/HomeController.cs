@@ -105,6 +105,7 @@ public class HomeController : Controller
         var offerings = _db.Activities
             .Include(x => x.Season)
             .Where(x => x.Status == ActivityStatus.Published
+                        && x.ApprovalStatus == OfferingApprovalStatus.Approved
                         && x.PartnerOrganizationId != null
                         && entityIds.Contains(x.PartnerOrganizationId.Value)
                         && (x.Type == ActivityType.TrainingProgram || x.Type == ActivityType.Workshop)

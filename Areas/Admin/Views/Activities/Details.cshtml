@@ -1,8 +1,12 @@
 @model GharsPlatform.Models.Core.Activity
+@using GharsPlatform.Models.Core
+@using GharsPlatform.Helpers
 @{
     ViewData["Title"] = "Activity Details";
     ViewData["PageTitle"] = "Activity Details";
     var bookings = Model.BookingRequests?.OrderByDescending(x => x.CreatedAtUtc).ToList() ?? new List<GharsPlatform.Models.Core.BookingRequest>();
+    var isOffering = OfferingWorkflow.IsPartnerOffering(Model);
+    var awaiting = OfferingWorkflow.DscCanReview(Model.ApprovalStatus);
 }
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
@@ -39,6 +43,55 @@
         </div></div>
     </div>
     <div class="col-lg-4">
+        @if (isOffering)
+        {
+            <div class="card border-0 shadow-sm rounded-4 mb-3"><div class="card-body">
+                <h5>DSC Review</h5>
+                <dl class="row mb-3">
+                    <dt class="col-sm-5">Approval</dt>
+                    <dd class="col-sm-7"><span class="badge @OfferingWorkflow.BadgeClass(Model.ApprovalStatus)">@Model.ApprovalStatus</span></dd>
+                    <dt class="col-sm-5">Submitted</dt>
+                    <dd class="col-sm-7">@(Model.SubmittedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "—")</dd>
+                    <dt class="col-sm-5">Reviewed</dt>
+                    <dd class="col-sm-7">@(Model.ReviewedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "—")</dd>
+                </dl>
+                @if (!string.IsNullOrWhiteSpace(Model.ReviewNotes))
+                {
+                    <div class="alert alert-warning py-2 small mb-3"><span class="fw-semibold">Current notes:</span> @Model.ReviewNotes</div>
+                }
+
+                @if (awaiting)
+                {
+                    @* Notes are required for a return or a rejection; the server enforces that too. *@
+                    <form method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <label class="form-label">Reviewer notes</label>
+                        <textarea class="form-control mb-2" name="notes" rows="3" maxlength="2000"
+                                  placeholder="Required when returning or rejecting"></textarea>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-success" type="submit" formaction="/Admin/Activities/Approve">Approve &amp; publish</button>
+                            <button class="btn btn-outline-warning" type="submit" formaction="/Admin/Activities/ReturnForCorrection">Return for correction</button>
+                            <button class="btn btn-outline-danger" type="submit" formaction="/Admin/Activities/Reject">Reject</button>
+                        </div>
+                    </form>
+                }
+                else if (OfferingWorkflow.CanUnpublish(Model.ApprovalStatus))
+                {
+                    <form method="post" action="/Admin/Activities/UnpublishOffering">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <label class="form-label">Reason (optional)</label>
+                        <textarea class="form-control mb-2" name="notes" rows="2" maxlength="2000"></textarea>
+                        <button class="btn btn-outline-secondary w-100" type="submit">Unpublish offering</button>
+                    </form>
+                }
+                else
+                {
+                    <div class="text-muted small">No review action is available in this state.</div>
+                }
+            </div></div>
+        }
         <div class="card border-0 shadow-sm rounded-4"><div class="card-body">
             <h5>Bookings</h5>
             @if (!bookings.Any()) { <div class="text-muted">No bookings yet.</div> }

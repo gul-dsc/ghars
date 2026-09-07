@@ -1,12 +1,63 @@
 @model List<GharsPlatform.Models.Core.Activity>
+@using GharsPlatform.Models.Core
+@using GharsPlatform.Helpers
 @{
     ViewData["Title"] = "Activities";
     ViewData["PageTitle"] = "Activities";
+    var partners = ViewBag.Partners as List<Organization> ?? new();
+    var seasons = ViewBag.Seasons as List<Season> ?? new();
+    var pendingCount = (int)(ViewBag.PendingCount ?? 0);
+    var fPartner = ViewBag.PartnerId as int?;
+    var fSeason = ViewBag.SeasonId as int?;
+    var fType = ViewBag.Type as ActivityType?;
+    var fApproval = ViewBag.Approval as OfferingApprovalStatus?;
+    var pendingOnly = (bool)(ViewBag.PendingOnly ?? false);
 }
-<div class="d-flex align-items-center justify-content-between mb-3">
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
     <div class="fw-semibold">Activities</div>
-    @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Activities/Create"><i class="bi bi-plus-lg"></i> Create</a> }
+    <div class="d-flex gap-2">
+        @* The review queue is a filter over this same list rather than a second admin module. *@
+        <a class="btn btn-sm @(pendingOnly ? "btn-warning" : "btn-outline-warning")" href="/Admin/Activities?pendingOnly=true">
+            <i class="bi bi-inbox"></i> Awaiting approval @if (pendingCount > 0) { <span class="badge text-bg-dark">@pendingCount</span> }
+        </a>
+        @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Activities/Create"><i class="bi bi-plus-lg"></i> Create</a> }
+    </div>
 </div>
+
+<form method="get" class="ghars-filter-card row g-2 align-items-end mb-3">
+    <div class="col-md-3">
+        <label class="form-label">Implementing entity</label>
+        <select class="form-select" name="partnerId">
+            <option value="">All</option>
+            @foreach (var p in partners) { <option value="@p.Id" selected="@(fPartner == p.Id)">@p.NameEn</option> }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Season</label>
+        <select class="form-select" name="seasonId">
+            <option value="">All</option>
+            @foreach (var s in seasons) { <option value="@s.Id" selected="@(fSeason == s.Id)">@s.TitleEn</option> }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Type</label>
+        <select class="form-select" name="type">
+            <option value="">All</option>
+            @foreach (ActivityType t in Enum.GetValues(typeof(ActivityType))) { <option value="@t" selected="@(fType == t)">@t</option> }
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Approval status</label>
+        <select class="form-select" name="approval">
+            <option value="">All</option>
+            @foreach (OfferingApprovalStatus s in Enum.GetValues(typeof(OfferingApprovalStatus))) { <option value="@s" selected="@(fApproval == s)">@s</option> }
+        </select>
+    </div>
+    <div class="col-md-2 d-flex gap-2">
+        <button class="btn btn-primary">Filter</button>
+        <a class="btn btn-outline-secondary" href="/Admin/Activities">Reset</a>
+    </div>
+</form>
 
 <div class="card border-0 shadow-sm rounded-4">
     <div class="table-responsive">
@@ -18,6 +69,7 @@
                 <th>Implementing Entity</th>
                 <th>Type</th>
                 <th>Start</th>
+                <th>Approval</th>
                 <th>Status</th>
                 <th></th>
             </tr>
@@ -32,6 +84,16 @@
                     <td>@(a.PartnerOrganization?.NameEn ?? "—")</td>
                     <td>@a.Type</td>
                     <td>@a.StartDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>
+                        @if (a.ApprovalStatus is null)
+                        {
+                            <span class="text-muted small">—</span>
+                        }
+                        else
+                        {
+                            <span class="badge @OfferingWorkflow.BadgeClass(a.ApprovalStatus)">@a.ApprovalStatus</span>
+                        }
+                    </td>
 	                    <td>
 	                        <span class="badge text-bg-@(
 	                            a.Status == ActivityStatus.Published ? "success" :
@@ -40,7 +102,9 @@
 	                            "warning")">@a.Status</span>
 	                    </td>
                     <td class="text-end">
-                        <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Activities/Details/@a.Id">Details</a>
+                        <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Activities/Details/@a.Id">
+                            @(OfferingWorkflow.DscCanReview(a.ApprovalStatus) ? "Review" : "Details")
+                        </a>
                         @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-outline-primary" href="/Admin/Activities/Edit/@a.Id">Edit</a> }
                         @if (User.IsInRole("Super Admin") && a.Status != ActivityStatus.Published)
                         {
@@ -58,6 +122,10 @@
                         }
                     </td>
                 </tr>
+            }
+            @if (!Model.Any())
+            {
+                <tr><td colspan="8"><div class="empty-state">No activities match these filters.</div></td></tr>
             }
             </tbody>
         </table>

@@ -1617,11 +1617,13 @@ Arabic.
 
 ### 27.12 Open policy question
 
-No DSC approval workflow exists for partner content, and none was invented. A Partner Admin publishes
-their own Training and Workshop offerings under their own organization directly. DSC retains full
-oversight and can edit or unpublish anything through `/Admin/Activities`. **If Ghars business rules
-require DSC approval before partner content becomes publicly visible, that rule is not implemented
-and would need to be specified.**
+No DSC approval workflow existed at the time of this section, and none was invented here. **This was
+subsequently resolved: see section 28, which implements the approval workflow. A Partner Admin can no
+longer publish directly.** The description below records the state as of 2026-09-07 before that
+change.
+
+A Partner Admin published their own Training and Workshop offerings under their own organization
+directly. DSC retained full oversight and could edit or unpublish anything through `/Admin/Activities`.
 
 ### 27.13 Test data removed
 
@@ -1629,3 +1631,223 @@ All rows created by this pass were deleted: 6 activities, 1 booking request, 2 b
 1 agenda entry, 1 attendance session, 2 attendance records, 2 certificates, 2 notifications, 3
 notification deliveries and 7 system audit log rows. Every metric returned to its exact pre-test
 value and no orphaned rows remain.
+
+---
+
+## 28. DSC Approval Workflow for Partner Offerings (2026-09-07)
+
+Section 27 left an open policy question: a Partner Admin could publish their own offering directly,
+with no DSC gate. This section closes it. **A partner can no longer make anything visible to clubs.**
+
+### 28.1 Lifecycle
+
+```
+  Draft ──submit──▶ SubmittedForApproval ──approve──▶ Approved ──unpublish──▶ Unpublished
+    ▲                    │        │                                              │
+    │                    │        └──reject──▶ Rejected ──edit──┐                │
+    └────────edit────────┴──return──▶ ReturnedForCorrection ────┴──resubmit──────┘
+```
+
+| State | Visible to clubs | Partner may edit | Partner may submit |
+| --- | --- | --- | --- |
+| `Draft` | no | yes | yes |
+| `SubmittedForApproval` | no | **no** | no |
+| `ReturnedForCorrection` | no | yes | yes (resubmit) |
+| `Rejected` | no | yes | yes (resubmit) |
+| `Approved` | **yes** | **no** | no |
+| `Unpublished` | no | yes | yes (resubmit) |
+
+Two locks are worth stating explicitly:
+
+- **Submitted is locked** so a partner cannot alter content out from under a reviewer mid-review.
+- **Approved is locked** so approved text cannot be silently rewritten after review. To change an
+  approved offering the partner unpublishes it, edits, and resubmits. Both locks are enforced on GET
+  *and* on POST, so a form rendered while the offering was editable cannot be posted after the state
+  moves.
+
+### 28.2 Data model
+
+A separate `OfferingApprovalStatus` enum on a **new nullable column**, rather than extra members on
+`ActivityStatus`. `Status == Published` is compared in a dozen unrelated places — surveys, attendance,
+the public home page, the admin dashboard — and widening that enum would silently change what those
+comparisons exclude. The column is `NULL` for DSC-created activities, which have no owning entity and
+are outside this workflow entirely.
+
+Visibility to a club now requires **both** `ApprovalStatus == Approved` and
+`ActivityStatus.Published`, and only a DSC approval ever sets that pair.
+
+Migration `20260907172613_AddOfferingApprovalWorkflow`, additive:
+
+| Column | Type |
+| --- | --- |
+| `ApprovalStatus` | `tinyint NULL` |
+| `SubmittedAtUtc` | `datetime2 NULL` |
+| `SubmittedByUserId` | `nvarchar(450) NULL` |
+| `ReviewedAtUtc` | `datetime2 NULL` |
+| `ReviewedByUserId` | `nvarchar(450) NULL` |
+| `ReviewNotes` | `nvarchar(2000) NULL` |
+
+plus `IX_Activities_ApprovalStatus_SubmittedAtUtc` for the review queue. Nothing was duplicated —
+created/updated stamps continue to come from the `AuditableEntity` base.
+
+`Helpers/OfferingWorkflow.cs` holds the state labels, badge classes and the transition predicates
+(`PartnerCanEdit`, `PartnerCanSubmit`, `CanUnpublish`, `DscCanReview`) in one place, so the
+controllers that enforce the rules and the views that render them cannot drift apart.
+
+### 28.3 Legacy backfill — the exact rule
+
+Derived from each row's existing `ActivityStatus` and nothing else. No historical row was inspected,
+guessed at, or rejected:
+
+| Existing row | Backfilled to | Effect |
+| --- | --- | --- |
+| partner-owned, `Published` | `Approved` | **grandfathered — stays visible to clubs** |
+| partner-owned, `Draft` | `Draft` | stays invisible, stays editable |
+| partner-owned, `Closed` | `Unpublished` | already withdrawn, stays withdrawn |
+| partner-owned, `Cancelled` | `Unpublished` | as above |
+| DSC-created (no owning entity) | left `NULL` | outside the workflow |
+
+`Unpublished` rather than `Rejected` for Closed/Cancelled, because those rows were *withdrawn*, not
+refused — nothing in their history records a reviewer refusing them. Each statement is guarded by
+`ApprovalStatus IS NULL` so a re-run cannot overwrite a state a reviewer has since set.
+
+**Result on the development database: all 59 existing partner offerings grandfathered to `Approved`,
+none removed, none rejected, and the club catalogue was unaffected.**
+
+### 28.4 Partner actions
+
+Create as draft, edit a draft, submit for approval, edit and resubmit a returned or rejected
+offering, read the reviewer's notes, and unpublish an approved offering. The partner may unpublish
+their own content because that action only ever *removes* visibility — it can never create it, and
+restoring visibility needs a fresh submission and a fresh approval.
+
+The old "Publish" button is gone from the partner surface. Create now offers **Save Draft** and
+**Submit for Approval**; a new offering is created with `Status = Draft` whichever button is pressed.
+
+### 28.5 DSC actions
+
+Implemented inside the existing `Areas/Admin` Activities screen rather than as a second admin module.
+The Index gained filters for implementing entity, season, type and approval status, plus an
+**Awaiting approval** shortcut with a live count; the Details page gained a DSC Review panel with
+Approve, Return for correction, Reject and Unpublish.
+
+Notes are **required** for a return or a rejection, enforced server-side — a decision the partner
+cannot act on is not a decision. Approval clears the note, since it belonged to the correction round
+that just ended; the note is retained after a resubmission so the reviewer keeps context, but the
+partner's list only shows it while it is still actionable.
+
+These four actions are open to **DSC Admin as well as Super Admin**, unlike the create/edit/delete
+actions beside them. That is a deliberate departure from the "admin mutations are Super Admin only"
+convention: reviewing partner submissions is the DSC Admin's job and restricting it to Super Admin
+would leave the queue unworkable. Content authoring stays Super Admin only.
+
+One consistency hole was closed at the same time: the pre-existing admin **Publish** action set
+`Status` without touching `ApprovalStatus`, which would have produced a row that is published but not
+approved — listed on the partner directory yet unbookable. It now also approves a partner offering,
+with the reviewer stamps recorded.
+
+### 28.6 Club visibility
+
+Enforced in the shared server-side query, not the UI. `BookingsController.BookableOfferings()` — used
+by both the booking GET and POST — and the catalogue query both now require
+`ApprovalStatus == Approved` for any row with an owning entity. Draft, SubmittedForApproval,
+ReturnedForCorrection, Rejected and Unpublished offerings are excluded from the catalogue *and* from
+a hand-typed `activityId`, which returns 404 either way.
+
+DSC-created activities (`PartnerOrganizationId IS NULL`) are unaffected and keep working through
+`Status` alone, so the older `/partners/{id}/learning-programs` route behaves exactly as before.
+
+### 28.7 Notifications
+
+Reused, not rebuilt. Submission raises a **role-targeted** notification delivered to DSC Admins and
+Super Admins, following the convention already used for KPI submissions and contact enquiries so a
+site with no DSC Admin cannot lose a submission. Approve, return, reject and unpublish raise an
+**organization-targeted** notification whose deliveries resolve through the owning entity's admin
+links only.
+
+Verified in the database: the submission notification produced 5 deliveries, all to admin accounts;
+the three partner-facing notifications produced 1 delivery each, all to
+`partner-dubai-police@ghars.local`. No unrelated organization was addressed.
+
+### 28.8 Audit
+
+`SystemAuditLog` via the existing `BaseController.AuditAsync`. A full run recorded, in order:
+
+```
+OfferingDraftCreated            partner-dubai-police@ghars.local
+OfferingSubmitted               partner-dubai-police@ghars.local
+OfferingReturnedForCorrection   dscadmin@ghars.local
+OfferingUpdated                 partner-dubai-police@ghars.local
+OfferingResubmitted             partner-dubai-police@ghars.local
+OfferingApproved                dscadmin@ghars.local
+OfferingUnpublishedByDsc        dscadmin@ghars.local
+```
+
+`OfferingRejected` and `OfferingUnpublishedByPartner` are written by the same helpers and were
+exercised separately. No historical audit record was modified.
+
+### 28.9 Runtime verification
+
+The full 14-step lifecycle, each state read back from the database rather than inferred from the UI:
+
+| Step | Result |
+| --- | --- |
+| 1. Partner creates Draft | `approval=Draft, activityStatus=Draft` |
+| 2. Club cannot see it | absent from catalogue; direct `activityId` → **404** |
+| 3. Partner submits | `approval=Submitted, activityStatus=Draft`, submit stamp set; edit now **blocked** |
+| 4. Club still cannot see it | absent; direct `activityId` → **404** |
+| 5. DSC sees submission | appears in the Awaiting-approval queue; review panel renders |
+| 6. DSC returns with notes | note-less return **refused**; with notes → `approval=Returned`, notes stored, review stamp set |
+| 7. Partner edits and resubmits | notes shown on the form; → `approval=Submitted` |
+| 8. DSC approves | `approval=Approved, activityStatus=Published`, notes cleared |
+| 9. Club now sees it | in catalogue; booking form 200 |
+| 10. Club books it | booking 18 stored with `ActivityId=66` |
+| 11. Partner receives it | visible on the Partner Dashboard |
+| 12. DSC unpublishes | `approval=Unpublished, activityStatus=Draft` |
+| 13. Club can no longer see or book it | absent; direct `activityId` → **404** |
+| 14. Historical booking intact | row `18 \| 66 \| 30 \| 17 \| Pending` unchanged; club can still open it |
+
+Additional checks: rejecting works and a rejected offering is unreachable by direct id; DSC cannot
+re-review an already-decided offering (an Approve posted against a Rejected row left it Rejected); and
+an approved offering cannot be edited — a POST attempting to rename one to "SNEAKY EDIT" left the
+stored title untouched.
+
+**IDOR.** Partner B against Partner A's offering: edit → 404, submit → 404, unpublish → 404, and A's
+rows never appear in B's listing. Ownership remains server-derived from `OrganizationAdminLink`; the
+view model still has no `PartnerOrganizationId` property.
+
+### 28.10 Reporting
+
+Unchanged, and verified with the workflow exercised end to end:
+
+| Metric | Baseline | With the workflow exercised |
+| --- | --- | --- |
+| Agenda entries Submitted/Approved (delivered activity) | 10 | **10** |
+| KPI submissions | 14 | **14** |
+| Completed activities | 59 | **59** |
+| Booking requests | 15 | 16 (only because a booking was created) |
+
+Approving an offering moves no delivered-activity number. The distinction holds: **offering =
+available, BookingRequest = requested, Agenda = delivered.** No KPI definition was touched.
+
+### 28.11 Arabic
+
+All six workflow states, the reviewer-notes block, the submit/resubmit/unpublish buttons, the
+approval-status filter and the approval explanation carry Arabic text, verified under RTL with the
+culture cookie. The Arabic create form emits **zero** `data-val-*` attributes, so no English framework
+validation message can surface — the rule established in sections 26.4 and 27.11 still holds.
+
+### 28.12 Migration result
+
+Applied without `--no-build` at either step. The chain was first built from **empty** into a scratch
+database (`GharsScratchApprovalTest`, since dropped) to prove the whole sequence still constructs a
+database, then applied to the development database. Schema verified directly from
+`INFORMATION_SCHEMA` and `sys.indexes` afterwards: six nullable columns with the declared types and
+the new index present, 59 rows intact.
+
+### 28.13 Test data removed
+
+3 activities, 1 booking request, 1 booking audit trail, 8 notifications, 20 notification deliveries
+and 11 system audit log rows. Every metric returned to its exact pre-test value — 59 activities all
+`Approved`, 0 with a null approval state, agenda 11, bookings 15, KPI 14, attendance 8, certificates
+8 — with no orphaned rows.

@@ -97,6 +97,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .HasIndex(x => new { x.PartnerOrganizationId, x.Status, x.Type })
             .HasDatabaseName("IX_Activities_PartnerOrganizationId_Status_Type");
 
+        // The DSC review queue: submitted offerings, oldest first.
+        builder.Entity<Activity>()
+            .HasIndex(x => new { x.ApprovalStatus, x.SubmittedAtUtc })
+            .HasDatabaseName("IX_Activities_ApprovalStatus_SubmittedAtUtc");
+
         builder.Entity<AttendanceRecord>()
             .HasIndex(x => new { x.AttendanceSessionId, x.UserId })
             .IsUnique();

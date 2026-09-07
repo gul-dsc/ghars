@@ -1,9 +1,12 @@
 using GharsPlatform.Data;
+using GharsPlatform.Helpers;
+using GharsPlatform.Hubs;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
 using GharsPlatform.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 using System.Security.Claims;
@@ -23,27 +26,30 @@ namespace GharsPlatform.Controllers.Public;
 /// controller is scoped by <see cref="PartnerOrganizationIdsAsync"/> and a miss returns
 /// <see cref="NotFoundResult"/> rather than a distinguishable "forbidden".
 ///
-/// Note the ownership test used here is stricter than the one
-/// <see cref="PartnerDashboardController"/> uses for reading: that one also matches on
-/// CreatedByUserId, which is a reasonable fallback for display but would be a weak basis for edit
-/// rights. Management requires the explicit foreign key.
+/// Nothing here can make an offering visible to clubs. Publication is the exclusive result of a DSC
+/// approval in <c>Areas/Admin</c> — see <see cref="OfferingWorkflow"/> for the lifecycle.
 /// </summary>
 [Authorize(Roles = RoleNames.PartnerAdmin)]
 public class PartnerProgramsController : Controllers.BaseController
 {
-    public PartnerProgramsController(AppDbContext db) : base(db) { }
+    private readonly IHubContext<NotificationsHub> _hub;
+
+    public PartnerProgramsController(AppDbContext db, IHubContext<NotificationsHub> hub) : base(db)
+    {
+        _hub = hub;
+    }
 
     private bool IsAr => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
 
     [HttpGet("/partner/programs")]
-    public async Task<IActionResult> Index(ActivityType? type = null, ActivityStatus? status = null, string? q = null)
+    public async Task<IActionResult> Index(ActivityType? type = null, OfferingApprovalStatus? status = null, string? q = null)
     {
         var orgIds = await PartnerOrganizationIdsAsync();
         if (orgIds.Count == 0) return Forbid();
 
         var query = OwnedActivities(orgIds);
         if (type.HasValue) query = query.Where(x => x.Type == type.Value);
-        if (status.HasValue) query = query.Where(x => x.Status == status.Value);
+        if (status.HasValue) query = query.Where(x => x.ApprovalStatus == status.Value);
         if (!string.IsNullOrWhiteSpace(q))
             query = query.Where(x => x.TitleEn.Contains(q) || x.TitleAr.Contains(q));
 
@@ -99,14 +105,17 @@ public class PartnerProgramsController : Controllers.BaseController
             return View(vm);
         }
 
-        var publish = string.Equals(action, "publish", StringComparison.OrdinalIgnoreCase);
+        var submit = string.Equals(action, "submit", StringComparison.OrdinalIgnoreCase);
         var entity = new Activity
         {
             // Ownership is server-derived. This is the only place it is ever assigned.
             PartnerOrganizationId = orgIds[0],
             SeasonId = vm.SeasonId!.Value,
             Type = vm.Type!.Value,
-            Status = publish ? ActivityStatus.Published : ActivityStatus.Draft,
+            // A new offering is never published, whichever button was pressed. Publication happens
+            // only on DSC approval.
+            Status = ActivityStatus.Draft,
+            ApprovalStatus = OfferingApprovalStatus.Draft,
             CreatedByUserId = CurrentUserId ?? "",
             CreatedAtUtc = DateTime.UtcNow
         };
@@ -114,12 +123,18 @@ public class PartnerProgramsController : Controllers.BaseController
 
         Db.Activities.Add(entity);
         await Db.SaveChangesAsync();
-        await AuditAsync(publish ? "CreateAndPublish" : "Create", nameof(Activity), entity.Id.ToString(), null,
-            new { entity.PartnerOrganizationId, entity.SeasonId, entity.Type, entity.Status, entity.TitleEn, entity.TitleAr });
+        await AuditAsync("OfferingDraftCreated", nameof(Activity), entity.Id.ToString(), null,
+            new { entity.PartnerOrganizationId, entity.SeasonId, entity.Type, entity.Status, entity.ApprovalStatus, entity.TitleEn });
 
-        TempData["ToastSuccess"] = publish
-            ? (IsAr ? "تم إنشاء البرنامج ونشره." : "Program created and published.")
-            : (IsAr ? "تم حفظ البرنامج كمسودة." : "Program saved as a draft.");
+        if (submit)
+        {
+            await MarkSubmittedAsync(entity, "OfferingSubmitted");
+            TempData["ToastSuccess"] = IsAr ? "تم إرسال البرنامج إلى مجلس دبي الرياضي للاعتماد." : "Program submitted to DSC for approval.";
+        }
+        else
+        {
+            TempData["ToastSuccess"] = IsAr ? "تم حفظ البرنامج كمسودة." : "Program saved as a draft.";
+        }
         return RedirectToAction(nameof(Index));
     }
 
@@ -131,6 +146,12 @@ public class PartnerProgramsController : Controllers.BaseController
 
         var a = await OwnedActivities(orgIds).FirstOrDefaultAsync(x => x.Id == id);
         if (a is null) return NotFound();
+
+        if (!OfferingWorkflow.PartnerCanEdit(a.ApprovalStatus))
+        {
+            TempData["ToastWarning"] = EditLockMessage(a.ApprovalStatus);
+            return RedirectToAction(nameof(Index));
+        }
 
         await PopulateFormAsync(orgIds);
         ViewBag.Activity = a;
@@ -146,6 +167,14 @@ public class PartnerProgramsController : Controllers.BaseController
 
         var a = await OwnedActivities(orgIds).FirstOrDefaultAsync(x => x.Id == id);
         if (a is null) return NotFound();
+
+        // Re-checked on POST, not just on GET: a form rendered while the offering was editable must
+        // not still be postable after DSC has taken it into review.
+        if (!OfferingWorkflow.PartnerCanEdit(a.ApprovalStatus))
+        {
+            TempData["ToastWarning"] = EditLockMessage(a.ApprovalStatus);
+            return RedirectToAction(nameof(Index));
+        }
 
         var hasBookings = await HasBookingsAsync(a.Id);
         vm.Id = a.Id;
@@ -173,7 +202,7 @@ public class PartnerProgramsController : Controllers.BaseController
             return View(vm);
         }
 
-        var old = new { a.SeasonId, a.Type, a.TitleEn, a.TitleAr, a.DescriptionEn, a.DescriptionAr, a.Capacity, a.StartDateTime, a.EndDateTime, a.TargetAudienceCsv, a.AvailableFromUtc, a.AvailableUntilUtc, a.Status };
+        var old = new { a.SeasonId, a.Type, a.TitleEn, a.TitleAr, a.DescriptionEn, a.DescriptionAr, a.Capacity, a.StartDateTime, a.EndDateTime, a.TargetAudienceCsv, a.AvailableFromUtc, a.AvailableUntilUtc, a.Status, a.ApprovalStatus };
 
         if (!hasBookings)
         {
@@ -184,32 +213,27 @@ public class PartnerProgramsController : Controllers.BaseController
         a.UpdatedAtUtc = DateTime.UtcNow;
         a.UpdatedByUserId = CurrentUserId;
 
-        if (string.Equals(action, "publish", StringComparison.OrdinalIgnoreCase)) a.Status = ActivityStatus.Published;
-        else if (string.Equals(action, "unpublish", StringComparison.OrdinalIgnoreCase)) a.Status = ActivityStatus.Draft;
-
         await Db.SaveChangesAsync();
-        await AuditAsync("Update", nameof(Activity), a.Id.ToString(), old,
-            new { a.SeasonId, a.Type, a.TitleEn, a.TitleAr, a.DescriptionEn, a.DescriptionAr, a.Capacity, a.StartDateTime, a.EndDateTime, a.TargetAudienceCsv, a.AvailableFromUtc, a.AvailableUntilUtc, a.Status });
+        await AuditAsync("OfferingUpdated", nameof(Activity), a.Id.ToString(), old,
+            new { a.SeasonId, a.Type, a.TitleEn, a.TitleAr, a.DescriptionEn, a.DescriptionAr, a.Capacity, a.StartDateTime, a.EndDateTime, a.TargetAudienceCsv, a.AvailableFromUtc, a.AvailableUntilUtc, a.Status, a.ApprovalStatus });
 
-        TempData["ToastSuccess"] = IsAr ? "تم تحديث البرنامج." : "Program updated.";
+        if (string.Equals(action, "submit", StringComparison.OrdinalIgnoreCase))
+        {
+            var resubmission = old.ApprovalStatus != OfferingApprovalStatus.Draft;
+            await MarkSubmittedAsync(a, resubmission ? "OfferingResubmitted" : "OfferingSubmitted");
+            TempData["ToastSuccess"] = IsAr ? "تم إرسال البرنامج إلى مجلس دبي الرياضي للاعتماد." : "Program submitted to DSC for approval.";
+        }
+        else
+        {
+            TempData["ToastSuccess"] = IsAr ? "تم تحديث البرنامج." : "Program updated.";
+        }
         return RedirectToAction(nameof(Index));
     }
 
-    [HttpPost("/partner/programs/publish")]
+    /// <summary>Submit straight from the list, without opening the form.</summary>
+    [HttpPost("/partner/programs/submit")]
     [ValidateAntiForgeryToken]
-    public Task<IActionResult> Publish(int id) => SetStatusAsync(id, ActivityStatus.Published);
-
-    [HttpPost("/partner/programs/unpublish")]
-    [ValidateAntiForgeryToken]
-    public Task<IActionResult> Unpublish(int id) => SetStatusAsync(id, ActivityStatus.Draft);
-
-    /// <summary>
-    /// Publish and unpublish are the only status transitions offered. There is no delete: an
-    /// offering may already anchor booking requests, attendance sessions and certificates, and
-    /// removing it would break that history. Unpublishing withdraws it from the club catalogue,
-    /// which is what "no longer offered" actually means here.
-    /// </summary>
-    private async Task<IActionResult> SetStatusAsync(int id, ActivityStatus status)
+    public async Task<IActionResult> Submit(int id)
     {
         var orgIds = await PartnerOrganizationIdsAsync();
         if (orgIds.Count == 0) return Forbid();
@@ -217,20 +241,123 @@ public class PartnerProgramsController : Controllers.BaseController
         var a = await OwnedActivities(orgIds).FirstOrDefaultAsync(x => x.Id == id);
         if (a is null) return NotFound();
 
-        var old = new { a.Status };
-        a.Status = status;
+        if (!OfferingWorkflow.PartnerCanSubmit(a.ApprovalStatus))
+        {
+            TempData["ToastWarning"] = IsAr ? "لا يمكن إرسال هذا البرنامج في حالته الحالية." : "This program cannot be submitted in its current state.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        var resubmission = a.ApprovalStatus != OfferingApprovalStatus.Draft;
+        await MarkSubmittedAsync(a, resubmission ? "OfferingResubmitted" : "OfferingSubmitted");
+        TempData["ToastSuccess"] = IsAr ? "تم إرسال البرنامج إلى مجلس دبي الرياضي للاعتماد." : "Program submitted to DSC for approval.";
+        return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>
+    /// Withdraw an approved offering from the club catalogue. The partner may do this to their own
+    /// content because it only ever removes visibility — it can never create it. Making it visible
+    /// again requires a fresh submission and a fresh DSC approval.
+    ///
+    /// There is no delete: an offering may already anchor booking requests, attendance sessions and
+    /// certificates, and existing bookings keep pointing at the row after it is withdrawn.
+    /// </summary>
+    [HttpPost("/partner/programs/unpublish")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Unpublish(int id)
+    {
+        var orgIds = await PartnerOrganizationIdsAsync();
+        if (orgIds.Count == 0) return Forbid();
+
+        var a = await OwnedActivities(orgIds).FirstOrDefaultAsync(x => x.Id == id);
+        if (a is null) return NotFound();
+
+        if (!OfferingWorkflow.CanUnpublish(a.ApprovalStatus))
+        {
+            TempData["ToastWarning"] = IsAr ? "لا يمكن إلغاء نشر برنامج غير معتمد." : "Only an approved program can be unpublished.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        var old = new { a.Status, a.ApprovalStatus };
+        a.Status = ActivityStatus.Draft;
+        a.ApprovalStatus = OfferingApprovalStatus.Unpublished;
         a.UpdatedAtUtc = DateTime.UtcNow;
         a.UpdatedByUserId = CurrentUserId;
         await Db.SaveChangesAsync();
-        await AuditAsync(status == ActivityStatus.Published ? "Publish" : "Unpublish", nameof(Activity), a.Id.ToString(), old, new { a.Status });
+        await AuditAsync("OfferingUnpublishedByPartner", nameof(Activity), a.Id.ToString(), old, new { a.Status, a.ApprovalStatus });
 
-        TempData["ToastSuccess"] = status == ActivityStatus.Published
-            ? (IsAr ? "تم نشر البرنامج." : "Program published.")
-            : (IsAr ? "تم إلغاء نشر البرنامج." : "Program unpublished.");
+        TempData["ToastSuccess"] = IsAr ? "تم سحب البرنامج من كتالوج الأندية." : "Program withdrawn from the club catalogue.";
         return RedirectToAction(nameof(Index));
     }
 
     // ------------------------------------------------------------------ helpers
+
+    private string EditLockMessage(OfferingApprovalStatus? s) => s switch
+    {
+        OfferingApprovalStatus.SubmittedForApproval => IsAr
+            ? "البرنامج قيد مراجعة مجلس دبي الرياضي ولا يمكن تعديله حالياً."
+            : "This program is under DSC review and cannot be edited until a decision is made.",
+        OfferingApprovalStatus.Approved => IsAr
+            ? "البرنامج معتمد ومنشور. يرجى إلغاء نشره أولاً لتعديله، ثم إعادة إرساله للاعتماد."
+            : "This program is approved and live. Unpublish it first to edit, then resubmit it for approval.",
+        _ => IsAr ? "لا يمكن تعديل هذا البرنامج في حالته الحالية." : "This program cannot be edited in its current state."
+    };
+
+    /// <summary>
+    /// The single place a submission is recorded, so create-and-submit, edit-and-submit and
+    /// submit-from-the-list cannot diverge. Never touches <see cref="Activity.Status"/>: a submitted
+    /// offering is still invisible to clubs.
+    /// </summary>
+    private async Task MarkSubmittedAsync(Activity a, string auditAction)
+    {
+        var old = new { a.ApprovalStatus, a.SubmittedAtUtc, a.Status };
+        a.ApprovalStatus = OfferingApprovalStatus.SubmittedForApproval;
+        a.SubmittedAtUtc = DateTime.UtcNow;
+        a.SubmittedByUserId = CurrentUserId;
+        await Db.SaveChangesAsync();
+        await AuditAsync(auditAction, nameof(Activity), a.Id.ToString(), old, new { a.ApprovalStatus, a.SubmittedAtUtc, a.Status });
+
+        var entityName = await Db.Organizations.Where(x => x.Id == a.PartnerOrganizationId)
+            .Select(x => x.NameEn).FirstOrDefaultAsync() ?? "An implementing entity";
+        await NotifyReviewersAsync(
+            "Program submitted for approval", "برنامج بانتظار الاعتماد",
+            $"{entityName} submitted '{a.TitleEn}' for DSC approval.",
+            $"قدمت {entityName} البرنامج '{a.TitleAr}' لاعتماد مجلس دبي الرياضي.",
+            $"/Admin/Activities/Details/{a.Id}");
+    }
+
+    /// <summary>
+    /// Role-targeted notification to the reviewers, following the convention already used for KPI
+    /// submissions and contact enquiries: delivered to DSC Admins and Super Admins so a site with no
+    /// DSC Admin yet cannot lose a submission into a notification nobody receives. No other
+    /// organization is addressed.
+    /// </summary>
+    private async Task NotifyReviewersAsync(string titleEn, string titleAr, string messageEn, string messageAr, string linkUrl)
+    {
+        var n = new Notification
+        {
+            TitleEn = titleEn,
+            TitleAr = titleAr,
+            MessageEn = messageEn,
+            MessageAr = messageAr,
+            Type = NotificationType.Warning,
+            TargetType = NotificationTargetType.Role,
+            TargetRoleName = RoleNames.DscAdmin,
+            LinkUrl = linkUrl,
+            CreatedAtUtc = DateTime.UtcNow,
+            CreatedByUserId = CurrentUserId
+        };
+        Db.Notifications.Add(n);
+        await Db.SaveChangesAsync();
+
+        var roleNames = new[] { RoleNames.DscAdmin, RoleNames.SuperAdmin };
+        var roleIds = await Db.Roles.Where(r => r.Name != null && roleNames.Contains(r.Name)).Select(r => r.Id).ToListAsync();
+        var userIds = await Db.UserRoles.Where(ur => roleIds.Contains(ur.RoleId)).Select(ur => ur.UserId).Distinct().ToListAsync();
+        foreach (var uid in userIds)
+            Db.NotificationDeliveries.Add(new NotificationDelivery { NotificationId = n.Id, UserId = uid, DeliveredAtUtc = DateTime.UtcNow });
+        await Db.SaveChangesAsync();
+
+        await _hub.Clients.All.SendAsync("notificationReceived", new { title = titleEn, message = messageEn, linkUrl });
+    }
 
     /// <summary>The implementing entities this user administers. Copied in shape from
     /// <see cref="PartnerDashboardController"/> so both surfaces agree on who a partner is.</summary>
@@ -263,8 +390,9 @@ public class PartnerProgramsController : Controllers.BaseController
         ViewBag.Organization = await Db.Organizations.FirstOrDefaultAsync(x => x.Id == orgIds[0]);
     }
 
-    /// <summary>Writes every field a partner may change. Ownership, status and audit stamps are
-    /// handled by the caller so that this can never be the thing that reassigns an offering.</summary>
+    /// <summary>Writes every field a partner may change. Ownership, publication state, approval state
+    /// and audit stamps are handled by the caller so that this can never be the thing that reassigns
+    /// an offering or makes it visible.</summary>
     private static void ApplyEditableFields(Activity entity, PartnerProgramVm vm)
     {
         entity.TitleEn = vm.TitleEn!.Trim();

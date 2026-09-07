@@ -365,7 +365,13 @@ public class BookingsController : Controller
                             || (x.PartnerOrganization != null
                                 && x.PartnerOrganization.Status == ApprovalStatus.Approved
                                 && (x.PartnerOrganization.OrganizationType == OrganizationType.GovernmentAuthority
-                                    || x.PartnerOrganization.OrganizationType == OrganizationType.OtherPartner))));
+                                    || x.PartnerOrganization.OrganizationType == OrganizationType.OtherPartner)
+                                // DSC review gate. A partner offering reaches a club only once a
+                                // reviewer has approved it; Draft, SubmittedForApproval,
+                                // ReturnedForCorrection, Rejected and Unpublished are all excluded.
+                                // Enforced here rather than in the view, so a hand-typed activityId
+                                // fails the same way a hidden card does.
+                                && x.ApprovalStatus == OfferingApprovalStatus.Approved)));
     }
 
     private async Task<List<Organization>> UserClubsAsync(string userId)

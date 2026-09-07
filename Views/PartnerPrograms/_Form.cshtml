@@ -1,0 +1,149 @@
+@model GharsPlatform.ViewModels.PartnerProgramVm
+@using GharsPlatform.Models.Core
+@using GharsPlatform.ViewModels
+@using System.Globalization
+@{
+ var ar=CultureInfo.CurrentUICulture.TwoLetterISOLanguageName=="ar"; string T(string e,string a)=>ar?a:e;
+ var seasons=ViewBag.Seasons as List<Season> ?? new();
+ var org=ViewBag.Organization as Organization;
+ string AudienceText(string a)=>a switch{"Players"=>T("Players","لاعبون"),"Coaches"=>T("Coaches","مدربون"),"Staff"=>T("Staff","موظفون"),"Administrators"=>T("Administrators","إداريون"),"Parents"=>T("Parents","أولياء أمور"),"Others"=>T("Others","أخرى"),_=>a};
+ var locked=Model.HasBookings;
+}
+
+<div asp-validation-summary="All" class="alert alert-danger" role="alert"></div>
+
+@if(locked)
+{
+    <div class="required-action-banner">
+        <i class="bi bi-lock me-2"></i>@T("Clubs have already requested this program, so its season and type are locked to keep those booking records accurate. Everything else remains editable.",
+                                          "توجد طلبات حجز على هذا البرنامج، لذلك تم تثبيت الموسم والنوع للحفاظ على دقة سجلات الحجز. أما بقية الحقول فتبقى قابلة للتعديل.")
+    </div>
+}
+
+<div class="card shadow-sm border-0 rounded-4 mb-3">
+    <div class="card-body">
+        <h2 class="h5 mb-3">@T("Program details","تفاصيل البرنامج")</h2>
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">@T("Implementing Entity","الجهة المنفذة")</label>
+                @* Ownership is server-derived and shown read-only. There is deliberately no input
+                   here: the posted form carries no organization id at all. *@
+                <div class="booking-readonly-value">@(org is null ? "—" : (ar && !string.IsNullOrWhiteSpace(org.NameAr) ? org.NameAr : org.NameEn))</div>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">@T("Sports Season","الموسم الرياضي")</label>
+                @if(locked)
+                {
+                    <div class="booking-readonly-value">@(seasons.FirstOrDefault(s=>s.Id==Model.SeasonId) is Season s0 ? (ar?s0.TitleAr:s0.TitleEn) : "—")</div>
+                }
+                else
+                {
+                    <select class="form-select" asp-for="SeasonId">
+                        <option value="0">@T("Select a season","اختر الموسم")</option>
+                        @foreach(var s in seasons){<option value="@s.Id" selected="@(Model.SeasonId==s.Id)">@(ar?s.TitleAr:s.TitleEn)</option>}
+                    </select>
+                }
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">@T("Type","النوع")</label>
+                @if(locked)
+                {
+                    <div class="booking-readonly-value">@(Model.Type==ActivityType.Workshop ? T("Workshop","ورشة عمل") : T("Training","تدريب"))</div>
+                }
+                else
+                {
+                    <select class="form-select" asp-for="Type">
+                        <option value="@ActivityType.TrainingProgram" selected="@(Model.Type==ActivityType.TrainingProgram)">@T("Training","تدريب")</option>
+                        <option value="@ActivityType.Workshop" selected="@(Model.Type==ActivityType.Workshop)">@T("Workshop","ورشة عمل")</option>
+                    </select>
+                }
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">@T("Title (English)","العنوان بالإنجليزية")</label>
+                <input class="form-control" asp-for="TitleEn" dir="ltr" maxlength="250" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">@T("Title (Arabic)","العنوان بالعربية")</label>
+                <input class="form-control" asp-for="TitleAr" dir="rtl" maxlength="250" />
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">@T("Description (English)","الوصف بالإنجليزية")</label>
+                <textarea class="form-control" asp-for="DescriptionEn" rows="4" dir="ltr" maxlength="3000"></textarea>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">@T("Description (Arabic)","الوصف بالعربية")</label>
+                <textarea class="form-control" asp-for="DescriptionAr" rows="4" dir="rtl" maxlength="3000"></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 rounded-4 mb-3">
+    <div class="card-body">
+        <h2 class="h5 mb-3">@T("Target Audience","الفئة المستهدفة")</h2>
+        <div class="d-flex flex-wrap gap-3">
+            @foreach(var a in PartnerProgramVm.AllowedAudiences)
+            {
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="TargetAudiences" value="@a" id="aud-@a" checked="@(Model.TargetAudiences.Contains(a))" />
+                    <label class="form-check-label" for="aud-@a">@AudienceText(a)</label>
+                </div>
+            }
+        </div>
+        <div class="mt-3">
+            <label class="form-label">@T("If Others, please describe","إذا اخترتم أخرى، يرجى التوضيح")</label>
+            <input class="form-control" asp-for="OtherTargetAudience" maxlength="150" />
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 rounded-4 mb-3">
+    <div class="card-body">
+        <h2 class="h5 mb-3">@T("Delivery and availability","التنفيذ والإتاحة")</h2>
+        <p class="text-muted small">
+            @T("The session date and time are indicative — a club may propose a different slot when it requests this program.",
+               "تاريخ الجلسة ووقتها استرشاديان — ويمكن للنادي اقتراح موعد مختلف عند طلب البرنامج.")
+        </p>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">@T("Indicative session date","تاريخ الجلسة الاسترشادي")</label>
+                <input class="form-control" type="date" asp-for="SessionDate" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">@T("Start time","وقت البداية")</label>
+                <input class="form-control" type="time" asp-for="SessionStartTime" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">@T("End time","وقت النهاية")</label>
+                <input class="form-control" type="time" asp-for="SessionEndTime" />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">@T("Capacity","السعة")</label>
+                <input class="form-control" type="number" min="1" max="5000" asp-for="Capacity" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">@T("Available from (optional)","متاح من (اختياري)")</label>
+                <input class="form-control" type="date" asp-for="AvailableFrom" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">@T("Available until (optional)","متاح حتى (اختياري)")</label>
+                <input class="form-control" type="date" asp-for="AvailableUntil" />
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">@T("Location (English, optional)","الموقع بالإنجليزية (اختياري)")</label>
+                <input class="form-control" asp-for="LocationEn" dir="ltr" maxlength="300" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">@T("Location (Arabic, optional)","الموقع بالعربية (اختياري)")</label>
+                <input class="form-control" asp-for="LocationAr" dir="rtl" maxlength="300" />
+            </div>
+        </div>
+    </div>
+</div>

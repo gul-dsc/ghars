@@ -1,0 +1,99 @@
+@model List<GharsPlatform.Models.Core.Activity>
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+ var ar=CultureInfo.CurrentUICulture.TwoLetterISOLanguageName=="ar"; string T(string e,string a)=>ar?a:e;
+ string TypeText(ActivityType t)=>t switch{ActivityType.Lecture=>T("Lecture","محاضرة"),ActivityType.Event=>T("Event","فعالية"),ActivityType.Workshop=>T("Workshop","ورشة عمل"),ActivityType.TrainingProgram=>T("Training","تدريب"),ActivityType.Course=>T("Course","دورة"),ActivityType.Activity=>T("Activity","نشاط"),_=>t.ToString()};
+ string StatusText(ActivityStatus s)=>s switch{ActivityStatus.Draft=>T("Draft","مسودة"),ActivityStatus.Published=>T("Published","منشور"),ActivityStatus.Closed=>T("Closed","مغلق"),ActivityStatus.Cancelled=>T("Cancelled","ملغى"),_=>s.ToString()};
+ string StatusClass(ActivityStatus s)=>s switch{ActivityStatus.Published=>"text-bg-success",ActivityStatus.Draft=>"text-bg-secondary",ActivityStatus.Cancelled=>"text-bg-danger",_=>"text-bg-warning"};
+ var counts=ViewBag.BookingCounts as Dictionary<int,int> ?? new();
+ var org=ViewBag.Organization as Organization;
+ var selectedType=ViewBag.Type as ActivityType?;
+ var selectedStatus=ViewBag.Status as ActivityStatus?;
+ var query=ViewBag.Query as string;
+ var drafts=Model.Count(x=>x.Status==ActivityStatus.Draft);
+ ViewData["Title"]=T("My Programs","برامجي");
+
+ string Availability(Activity a)
+ {
+     if(a.AvailableFromUtc is null && a.AvailableUntilUtc is null) return T("Always","دائماً");
+     var from=a.AvailableFromUtc?.ToString("yyyy-MM-dd") ?? T("Any","أي");
+     var until=a.AvailableUntilUtc?.ToString("yyyy-MM-dd") ?? T("Any","أي");
+     return $"{from} → {until}";
+ }
+}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+        <h1 class="mb-1">@T("My Programs","برامجي")</h1>
+        <div class="text-muted">
+            @T("The training sessions and workshops your entity offers to clubs.","الدورات التدريبية وورش العمل التي تقدمها جهتكم للأندية.")
+            @if(org is not null){<text> — @(ar && !string.IsNullOrWhiteSpace(org.NameAr) ? org.NameAr : org.NameEn)</text>}
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="/partner"><i class="bi bi-inbox me-1"></i>@T("Booking Requests","طلبات الحجز")</a>
+        <a class="btn btn-success" href="/partner/programs/create"><i class="bi bi-plus-lg me-1"></i>@T("New Program","برنامج جديد")</a>
+    </div>
+</div>
+
+@if(drafts>0)
+{
+    <div class="required-action-banner"><i class="bi bi-pencil-square me-2"></i>@T($"You have {drafts} draft program(s) that clubs cannot see until you publish them.", $"لديكم {drafts} برنامج في حالة مسودة لا تظهر للأندية حتى يتم نشرها.")</div>
+}
+
+<form method="get" class="ghars-filter-card row g-2 align-items-end">
+    <div class="col-md-3"><label class="form-label">@T("Type","النوع")</label><select class="form-select" name="type"><option value="">@T("All","الكل")</option><option value="@ActivityType.TrainingProgram" selected="@(selectedType==ActivityType.TrainingProgram)">@T("Training","تدريب")</option><option value="@ActivityType.Workshop" selected="@(selectedType==ActivityType.Workshop)">@T("Workshop","ورشة عمل")</option></select></div>
+    <div class="col-md-3"><label class="form-label">@T("Status","الحالة")</label><select class="form-select" name="status"><option value="">@T("All","الكل")</option><option value="@ActivityStatus.Published" selected="@(selectedStatus==ActivityStatus.Published)">@T("Published","منشور")</option><option value="@ActivityStatus.Draft" selected="@(selectedStatus==ActivityStatus.Draft)">@T("Draft","مسودة")</option></select></div>
+    <div class="col-md-3"><label class="form-label">@T("Search","بحث")</label><input class="form-control" name="q" value="@query" placeholder="@T("Program title","عنوان البرنامج")" /></div>
+    <div class="col-md-3 d-flex gap-2"><button class="btn btn-primary">@T("Filter","تصفية")</button><a class="btn btn-outline-secondary" href="/partner/programs">@T("Reset","إعادة تعيين")</a></div>
+</form>
+
+<div class="card shadow-sm border-0 rounded-4"><div class="table-responsive"><table class="table align-middle mb-0">
+<thead><tr><th>@T("Title","العنوان")</th><th>@T("Type","النوع")</th><th>@T("Season","الموسم")</th><th>@T("Availability","الإتاحة")</th><th>@T("Booking Requests","طلبات الحجز")</th><th>@T("Status","الحالة")</th><th></th></tr></thead>
+<tbody>
+@foreach(var x in Model)
+{
+    var bookings = counts.TryGetValue(x.Id, out var c) ? c : 0;
+    <tr>
+        <td>
+            <div class="fw-semibold">@(ar && !string.IsNullOrWhiteSpace(x.TitleAr) ? x.TitleAr : x.TitleEn)</div>
+            <div class="text-muted small">@x.StartDateTime.ToString("yyyy-MM-dd HH:mm") · @T("Capacity","السعة") @x.Capacity</div>
+        </td>
+        <td>@TypeText(x.Type)</td>
+        <td>@(ar?x.Season?.TitleAr:x.Season?.TitleEn)</td>
+        <td>@Availability(x)</td>
+        <td>@bookings</td>
+        <td><span class="badge @StatusClass(x.Status)">@StatusText(x.Status)</span></td>
+        <td class="text-end">
+            <div class="d-flex gap-2 justify-content-end">
+                <a class="btn btn-sm btn-outline-primary" href="/partner/programs/edit/@x.Id">@T("Edit","تعديل")</a>
+                @if(x.Status==ActivityStatus.Published)
+                {
+                    <form method="post" action="/partner/programs/unpublish" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@x.Id" />
+                        <button class="btn btn-sm btn-outline-secondary" type="submit">@T("Unpublish","إلغاء النشر")</button>
+                    </form>
+                }
+                else if(x.Status==ActivityStatus.Draft)
+                {
+                    <form method="post" action="/partner/programs/publish" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@x.Id" />
+                        <button class="btn btn-sm btn-success" type="submit">@T("Publish","نشر")</button>
+                    </form>
+                }
+            </div>
+        </td>
+    </tr>
+}
+@if(!Model.Any())
+{
+    <tr><td colspan="7">
+        <div class="empty-state">
+            <div class="mb-3">@T("You have not created any programs yet.","لم تقم بإنشاء أي برامج بعد.")</div>
+            <a class="btn btn-success" href="/partner/programs/create"><i class="bi bi-plus-lg me-1"></i>@T("Create Your First Program","أنشئ برنامجك الأول")</a>
+        </div>
+    </td></tr>
+}
+</tbody></table></div></div>

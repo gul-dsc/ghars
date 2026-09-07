@@ -1,0 +1,24 @@
+@model GharsPlatform.ViewModels.PartnerProgramVm
+@using System.Globalization
+@{
+ var ar=CultureInfo.CurrentUICulture.TwoLetterISOLanguageName=="ar"; string T(string e,string a)=>ar?a:e;
+ ViewData["Title"]=T("New Program","برنامج جديد");
+}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+        <h1 class="mb-1">@T("New Program","برنامج جديد")</h1>
+        <div class="text-muted">@T("Publish a training session or workshop that clubs can request.","انشر تدريباً أو ورشة عمل يمكن للأندية طلبها.")</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="/partner/programs">@T("Back to My Programs","العودة إلى برامجي")</a>
+</div>
+
+<form method="post" action="/partner/programs/create">
+    @Html.AntiForgeryToken()
+    @await Html.PartialAsync("_Form", Model)
+
+    <div class="d-flex gap-2 mb-5">
+        <button class="btn btn-outline-primary" type="submit" name="action" value="draft">@T("Save Draft","حفظ كمسودة")</button>
+        <button class="btn btn-success" type="submit" name="action" value="publish">@T("Publish","نشر")</button>
+        <a class="btn btn-outline-secondary" href="/partner/programs">@T("Cancel","إلغاء")</a>
+    </div>
+</form>

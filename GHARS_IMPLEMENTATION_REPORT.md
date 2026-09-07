@@ -1397,3 +1397,235 @@ server discarded the posted value. Posting a club id as the implementing entity 
 All rows created by this pass were deleted: 4 contact messages, 1 booking request, 1 booking audit
 trail, 5 notifications and 21 notification deliveries. The 15 pre-existing bookings and 14
 pre-existing notifications were left untouched, and no orphaned deliveries remain.
+
+---
+
+## 27. Partner Programs / Offerings Workflow (2026-09-07)
+
+### 27.1 Business purpose
+
+Implementing entities previously had no way to say what they offer. Clubs saw a grid of entity logos
+and had to describe from scratch whatever they wanted, and the 59 seeded "learning programs" were
+reachable only through `/partners/{id}/learning-programs`, a page nothing linked to prominently.
+
+This pass gives the partner a catalogue to manage and the club a catalogue to browse:
+
+> Partner Admin creates and publishes Training/Workshop offerings -> Club Admin browses published
+> offerings grouped by implementing entity -> Club requests a booking -> Partner processes the
+> request through the existing Partner Dashboard.
+
+The direct/custom booking flow is untouched and remains available as a clearly secondary action.
+
+### 27.2 Data model decision — `Activity` reused, no new entity
+
+`Activity` was already almost exactly the required shape, so no `PartnerOffering` table was created:
+
+| Requirement | Already present |
+| --- | --- |
+| Owning implementing entity | `Activity.PartnerOrganizationId` (nullable FK, added by its own migration `20260503173000_AddActivityPartnerOrganization`) |
+| Publication state | `Activity.Status` — `ActivityStatus.Draft` / `Published` / `Closed` / `Cancelled` |
+| Offering types | `ActivityType.TrainingProgram` (3) and `ActivityType.Workshop` (2) |
+| Season | `Activity.SeasonId` |
+| Bilingual title/description | `TitleEn/Ar`, `DescriptionEn/Ar` |
+| Capacity, location | `Capacity`, `LocationEn/Ar` |
+| Booking relationship | `BookingRequest.ActivityId`, already nullable, whose own comment anticipates program-anchored bookings |
+| Audit stamps | `AuditableEntity` base |
+
+The database confirmed the fit rather than the code alone: all 59 existing activity rows already
+carry a `PartnerOrganizationId` and were created by `partner-*@ghars.local` users. Partner-created
+offerings are not a new concept in this schema — they are what the table already holds.
+
+**Ownership is `PartnerOrganizationId` and nothing else.** The distinction demanded by the
+requirement to keep partner and system records apart already exists and needed no new discriminator
+column: the admin `ActivitiesController.Create`/`Edit` never assign `PartnerOrganizationId`, so a
+DSC-created activity has it `NULL` and is invisible to every partner query.
+
+Note the partner management surface uses a **stricter** ownership test than the partner *dashboard*
+does for reading. `PartnerDashboardController` and `/partners/{id}/learning-programs` also match on
+`CreatedByUserId`, a reasonable fallback for display; `PartnerProgramsController` requires the
+explicit foreign key, because a creator-based match is too weak a basis for edit and publish rights.
+
+### 27.3 Schema change — `20260907162752_AddActivityOfferingFields`
+
+Four nullable columns and one index. Additive, safe on the populated database, no historical row
+altered and no back-fill required:
+
+| Column | Type | Why it could not be reused |
+| --- | --- | --- |
+| `TargetAudienceCsv` | `nvarchar(250) NULL` | No audience concept existed on `Activity`. Uses the identical vocabulary and CSV convention as `BookingRequest.TargetAudienceCsv`, so the value carries into a booking with no mapping. |
+| `OtherTargetAudience` | `nvarchar(150) NULL` | Required when "Others" is selected, mirroring `BookingRequest`. |
+| `AvailableFromUtc` | `datetime2 NULL` | `StartDateTime`/`EndDateTime` are a real scheduled slot for 59 existing rows and feed attendance and the admin dashboard. Overloading them as an availability window would have changed the meaning of existing data. |
+| `AvailableUntilUtc` | `datetime2 NULL` | As above. |
+
+The migration also replaces `IX_Activities_PartnerOrganizationId` with
+`IX_Activities_PartnerOrganizationId_Status_Type`, which leads with the same column and therefore
+still serves the foreign key while also covering both new queries (one entity's rows; published rows
+of a type across all entities). `Down` restores the original index.
+
+Deliberately **not** added: delivery mode (no such concept exists anywhere in the application, and
+inventing an enum and a column for it was not justified) and a duration column (duration is derived
+from the session start and end and displayed on the club card).
+
+Verified against `INFORMATION_SCHEMA` after applying, not from migration history: four columns with
+the declared types and nullability, the composite index present, and all 59 rows intact.
+
+> The first attempt at this migration was scaffolded with `dotnet ef migrations add --no-build` and
+> produced an **empty** `Up`/`Down` — the stale-assembly trap recorded in section 26. It was removed
+> and regenerated after a real build.
+
+### 27.4 Partner "My Programs"
+
+`Controllers/Public/PartnerProgramsController.cs`, `[Authorize(Roles = PartnerAdmin)]`, routes
+`/partner/programs`, `/partner/programs/create`, `/partner/programs/edit/{id}`, and POST
+`/partner/programs/publish` and `/unpublish`. It inherits `BaseController` to reuse the existing
+`AuditAsync` helper, so Create, Update, Publish and Unpublish write `SystemAuditLog` rows exactly as
+the admin Activities screen does. No new audit framework.
+
+- Ownership is written once, from `OrganizationAdminLink`, and is never model-bound.
+  `PartnerProgramVm` has no `PartnerOrganizationId` property at all — the posted form carries no
+  organization id, so there is nothing to tamper with.
+- Creation and editing are restricted to `TrainingProgram` and `Workshop`. `Lecture`, `Course`,
+  `Event` and `Activity` remain valid enum values and are untouched on historical rows.
+- Every query is scoped by organization and a miss returns `NotFound()`, so a foreign id is
+  indistinguishable from a non-existent one.
+- **There is no delete.** An offering may already anchor bookings, attendance sessions and
+  certificates. Unpublishing withdraws it from the club catalogue, which is what "no longer offered"
+  actually means.
+- **Once bookings exist, season and type are locked** (the descriptive fields stay editable), because
+  changing them would silently rewrite what those bookings were made against. The lock is enforced in
+  the controller by overwriting the posted values, not merely by disabling the inputs — verified by
+  posting a changed season and type directly and confirming the stored row was unchanged.
+
+Booking counts on the list come from a single grouped query over `BookingRequest.ActivityId`, not a
+count per row.
+
+### 27.5 Club booking catalogue
+
+`/Home/Booking` now lists published offerings grouped under each implementing entity's logo and name,
+with filters for entity, type, season and title, and the existing entity logos retained as the group
+headers. Visibility requires: `Status == Published`, an owning entity that is approved and is an
+implementing entity, type Training or Workshop, and today inside any availability window.
+
+Custom booking remains, deliberately secondary: a single "Can't find what you need? -> Request Custom
+Booking" strip below the catalogue, and inside the empty state.
+
+Anonymous visitors browse the catalogue and get "Sign in to request", with `returnUrl` pointing at
+`/bookings/create?activityId=...` so sign-in continues into the selected offering.
+
+Partner Admins are **redirected** from this page to `/partner` rather than shown disabled "Clubs
+only" tiles, and the club-oriented Booking link is hidden from their navigation entirely. Their two
+links are Partner Dashboard and My Programs.
+
+### 27.6 Requesting a booking from an offering
+
+No new booking path was written: `/bookings/create?activityId=N` already existed and already stored
+`BookingRequest.ActivityId`, derived the partner organization server-side and pre-filled subject,
+season, type and times. Two changes were made to it:
+
+1. Target audience is now carried from the offering into the form, since both sides use the same
+   vocabulary. The club can change it, and the posted value is what is validated and stored.
+2. Validation was tightened into a shared `BookableOfferings()` filter used by both GET and POST, so
+   an id arriving from the browser is re-checked against publication state, entity approval, season
+   and availability window on every request.
+
+Type is deliberately **not** restricted on the booking path. The catalogue surfaces only Training and
+Workshop, but 27 published `Course` and 2 `Lecture` programs are bookable today through
+`/partners/{id}/learning-programs`, and filtering by type here would have silently withdrawn them.
+Type restriction belongs at creation, and that is where it is enforced.
+
+### 27.7 Security verification
+
+Partner A is Dubai Police (organization 17); Partner B is Dubai Sports Council (organization 19).
+
+| Attempt | Result |
+| --- | --- |
+| B `GET /partner/programs/edit/{A draft}` and `{A published}` | `404` |
+| B `POST /partner/programs/publish` with A's draft id | `404` |
+| B `POST /partner/programs/unpublish` with A's published id | `404` |
+| B `POST /partner/programs/edit/{A id}` with a hijacked title | `404`, A's row unchanged |
+| B's own listing | Contains none of A's programs |
+| Club Admin `GET /partner/programs`, `/create`, `/edit/{id}` | `AccessDenied` on all three |
+| Club Admin `GET /bookings/create?activityId={draft}` | `404` — an unpublished offering is not bookable |
+| Partner creating type `Course` | Rejected: "Choose either a training programme or a workshop." |
+| Partner creating against the inactive season | Rejected: "not valid or not active" |
+
+Ownership was confirmed in the database, not inferred: every offering created through the partner
+form persisted with `PartnerOrganizationId = 17`, a value the form never posted.
+
+DSC authority is unchanged — `/Admin/Activities` still lists every row regardless of owner, and now
+also shows an Implementing Entity column so partner-managed offerings are identifiable.
+
+### 27.8 End-to-end result
+
+Partner created a Training draft and a published Workshop -> the draft stayed invisible to clubs and
+the Workshop appeared under "Dubai Police" in the catalogue -> the club requested it -> booking 17
+persisted with `ActivityId=63`, `SeasonId=1`, club 30 (server-derived), entity 17 (from the
+offering), status Pending, audience `Coaches` -> the partner saw it on the dashboard and confirmed it
+with a lecturer name -> the existing booking-confirmation flow created its Draft agenda entry as
+before.
+
+### 27.9 Reporting impact
+
+Baseline was measured before any test data and again after cleanup; the two match exactly.
+
+| Metric | Before | With a published offering and one booking | Verdict |
+| --- | --- | --- | --- |
+| Activities | 59 | 65 | Catalogue rows, as expected |
+| Completed activities (`EndDateTime < now`) | 59 | **59** | Publishing an offering did **not** increase delivered activity |
+| Agenda entries Submitted/Approved — the source reports use for delivered activity | 10 | **10** | Unchanged |
+| KPI submissions | 14 | **14** | Unchanged |
+| Booking requests | 15 | 16 | Increased only when a `BookingRequest` was created |
+
+`ReportsController` already derives delivered activity from `AgendaEntry` rows with status Submitted
+or Approved, never from `Activity` — so published offerings cannot reach a delivered-activity report.
+No KPI definition was changed.
+
+Two honest caveats, documented rather than silently fixed:
+
+- The admin dashboard's `totalCapacity` sums `Activity.Capacity` across all activities and is the
+  denominator of its attendance-rate tile, so publishing offerings dilutes that percentage. This is
+  pre-existing: all 59 rows are already partner offerings, so the tile already means "capacity of the
+  catalogue". Changing it would alter an existing metric definition, which this task explicitly
+  forbids.
+- `completedActivities` counts activities whose end date has passed, which for a catalogue row means
+  "its indicative session date is in the past" rather than "it was delivered". Also pre-existing, and
+  unchanged by this work.
+
+### 27.10 A seeder behaviour worth knowing
+
+After the end-to-end test, `AttendanceRecords` rose by 2 and `Certificates` by 2 for the new
+offering. This is **not** done by any code in this feature. `DbSeeder.cs:692` seeds attendance
+sessions, records and certificates for approved or confirmed bookings that have an `ActivityId`, so
+confirming the test booking caused the next Development startup to generate demo attendance for it.
+It is Development-only under the hardened seeder and cannot occur in production. Nothing in the
+offering workflow creates attendance sessions, certificates, or agenda entries.
+
+### 27.11 Bilingual verification
+
+Verified with the `.AspNetCore.Culture` cookie, in both languages, across My Programs, the create
+form, the club catalogue and the booking form: RTL applied, Arabic titles preferred over English when
+present, all labels, badges, filters, buttons, empty states and validation messages translated, and
+no English UI string left in the Arabic renders.
+
+One defect was found and fixed during this verification, the same class as section 26.4: MVC emits
+English `data-val-*` messages for non-nullable value types and for `[MaxLength]`/`[Range]`
+annotations, and no request culture can change them. `PartnerProgramVm` therefore carries **no
+message-bearing DataAnnotations at all** — `SeasonId`, `Type` and `Capacity` are nullable and every
+rule lives in `IValidatableObject`, which is evaluated per request. Confirmed by inspecting the
+rendered Arabic form: zero `data-val-*` attributes remain, and the server-side summary is entirely
+Arabic.
+
+### 27.12 Open policy question
+
+No DSC approval workflow exists for partner content, and none was invented. A Partner Admin publishes
+their own Training and Workshop offerings under their own organization directly. DSC retains full
+oversight and can edit or unpublish anything through `/Admin/Activities`. **If Ghars business rules
+require DSC approval before partner content becomes publicly visible, that rule is not implemented
+and would need to be specified.**
+
+### 27.13 Test data removed
+
+All rows created by this pass were deleted: 6 activities, 1 booking request, 2 booking audit trails,
+1 agenda entry, 1 attendance session, 2 attendance records, 2 certificates, 2 notifications, 3
+notification deliveries and 7 system audit log rows. Every metric returned to its exact pre-test
+value and no orphaned rows remain.

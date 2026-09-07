@@ -16,7 +16,11 @@ public class ActivitiesController : Controllers.BaseController
 
     public async Task<IActionResult> Index()
     {
-        var list = await Db.Activities.Include(x => x.Season)
+        // PartnerOrganization is included so the list identifies which implementing entity owns each
+        // row. Partner-managed offerings appear here alongside DSC-created activities; admin
+        // authority over them is unchanged and deliberately not narrowed by the ownership filter
+        // that scopes the partner's own screen.
+        var list = await Db.Activities.Include(x => x.Season).Include(x => x.PartnerOrganization)
             .OrderByDescending(x => x.StartDateTime)
             .ToListAsync();
         return View(list);

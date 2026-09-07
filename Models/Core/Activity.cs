@@ -45,6 +45,35 @@ public class Activity : AuditableEntity
 
     public bool AllowWalkIn { get; set; } = false;
 
+    // ------------------------------------------------------------------ Partner offering fields
+    //
+    // An Activity owned by an implementing entity (PartnerOrganizationId set) doubles as a bookable
+    // offering in the club catalogue. These four columns are what that role needs and the rest of
+    // the entity did not already provide. All are nullable, so every pre-existing row stays valid
+    // and nothing has to be back-filled.
+
+    /// <summary>
+    /// Comma-separated audiences this offering is aimed at, using the same vocabulary and storage
+    /// convention as <see cref="BookingRequest.TargetAudienceCsv"/> so the value can be carried
+    /// straight into a booking request without translation.
+    /// </summary>
+    [MaxLength(250)]
+    public string? TargetAudienceCsv { get; set; }
+
+    [MaxLength(150)]
+    public string? OtherTargetAudience { get; set; }
+
+    /// <summary>
+    /// Optional window during which clubs may request this offering. This is deliberately separate
+    /// from <see cref="StartDateTime"/>/<see cref="EndDateTime"/>, which are an indicative session
+    /// slot: those already carry scheduling meaning for attendance and the admin dashboard, so
+    /// overloading them as an availability window would change the meaning of 59 existing rows.
+    /// Null at either end means "no bound in that direction".
+    /// </summary>
+    public DateTime? AvailableFromUtc { get; set; }
+
+    public DateTime? AvailableUntilUtc { get; set; }
+
     public ActivityStatus Status { get; set; } = ActivityStatus.Draft;
 
     [Required, MaxLength(450)]

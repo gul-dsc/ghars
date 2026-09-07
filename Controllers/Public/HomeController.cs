@@ -81,13 +81,53 @@ public class HomeController : Controller
     /// list is public information and hiding it would make the page useless before sign-in.
     /// </summary>
     [AllowAnonymous]
-    public async Task<IActionResult> Booking()
+    public async Task<IActionResult> Booking(int? entityId = null, ActivityType? type = null, int? seasonId = null, string? q = null)
     {
+        // This page is a club's request catalogue. For an implementing entity every action on it is
+        // one they cannot take, so they are sent to their own workflow rather than shown a wall of
+        // disabled buttons.
+        if (User.IsInRole(RoleNames.PartnerAdmin) && !User.IsInRole(RoleNames.ClubAdmin))
+            return RedirectToAction("Index", "PartnerDashboard");
+
         var entities = await _db.Organizations
             .Where(x => x.Status == ApprovalStatus.Approved &&
                         (x.OrganizationType == OrganizationType.GovernmentAuthority || x.OrganizationType == OrganizationType.OtherPartner))
             .OrderBy(x => x.NameEn)
             .ToListAsync();
+
+        var entityIds = entities.Select(x => x.Id).ToList();
+        var now = DateTime.UtcNow;
+
+        // The catalogue shows only what a club may actually request: published offerings of a
+        // bookable type, owned by an approved implementing entity, inside their availability window.
+        // The same conditions are re-checked server-side when the booking is posted — this query is
+        // for display and is not what authorises anything.
+        var offerings = _db.Activities
+            .Include(x => x.Season)
+            .Where(x => x.Status == ActivityStatus.Published
+                        && x.PartnerOrganizationId != null
+                        && entityIds.Contains(x.PartnerOrganizationId.Value)
+                        && (x.Type == ActivityType.TrainingProgram || x.Type == ActivityType.Workshop)
+                        && (x.AvailableFromUtc == null || x.AvailableFromUtc <= now)
+                        && (x.AvailableUntilUtc == null || x.AvailableUntilUtc >= now));
+
+        if (entityId.HasValue) offerings = offerings.Where(x => x.PartnerOrganizationId == entityId.Value);
+        if (type is ActivityType.TrainingProgram or ActivityType.Workshop) offerings = offerings.Where(x => x.Type == type!.Value);
+        if (seasonId.HasValue) offerings = offerings.Where(x => x.SeasonId == seasonId.Value);
+        if (!string.IsNullOrWhiteSpace(q)) offerings = offerings.Where(x => x.TitleEn.Contains(q) || x.TitleAr.Contains(q));
+
+        var list = await offerings.OrderBy(x => x.TitleEn).ToListAsync();
+
+        ViewBag.Offerings = list
+            .GroupBy(x => x.PartnerOrganizationId!.Value)
+            .OrderBy(g => entities.First(e => e.Id == g.Key).NameEn)
+            .ToDictionary(g => g.Key, g => g.ToList());
+        ViewBag.Seasons = await _db.Seasons.Where(x => x.IsActive).OrderByDescending(x => x.StartDate).ToListAsync();
+        ViewBag.EntityId = entityId;
+        ViewBag.Type = type;
+        ViewBag.SeasonId = seasonId;
+        ViewBag.Query = q;
+        ViewBag.TotalOfferings = list.Count;
 
         return View(entities);
     }

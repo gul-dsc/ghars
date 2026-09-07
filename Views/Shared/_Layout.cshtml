@@ -80,13 +80,29 @@
                         </li>
 
                         @* Booking replaces the former "Partners" information link: the implementing
-                           entities are now presented as a booking entry point, not a directory. *@
-                        <li class="nav-item">
-                            <a class="nav-link" asp-area="" asp-controller="Home" asp-action="Booking">@(isRtl ? "الحجز" : "Booking")</a>
-                        </li>
+                           entities are now presented as a booking entry point, not a directory.
+
+                           It is hidden from Partner Admins: the page is a club catalogue of their
+                           own offerings, and every action on it is one they cannot take. Their
+                           equivalent entry points are Partner Dashboard and My Programs below. *@
+                        @if (!isPartner)
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link" asp-area="" asp-controller="Home" asp-action="Booking">@(isRtl ? "الحجز" : "Booking")</a>
+                            </li>
+                        }
 
                         @if (isAuthenticated)
                         {
+                            @if (isPartner)
+                            {
+                                @* Two distinct partner responsibilities, kept as two links: the
+                                   dashboard processes incoming booking requests, My Programs manages
+                                   the offerings that attract them. *@
+                                <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="PartnerDashboard" asp-action="Index">@(isRtl ? "لوحة الشريك" : "Partner Dashboard")</a></li>
+                                <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="PartnerPrograms" asp-action="Index">@(isRtl ? "برامجي" : "My Programs")</a></li>
+                            }
+
                             <li class="nav-item">
                                 <a class="nav-link" asp-area="" asp-controller="Library" asp-action="Index">@(isRtl ? "المكتبة الرقمية" : "Digital Library")</a>
                             </li>

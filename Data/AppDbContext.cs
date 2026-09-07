@@ -91,6 +91,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .HasForeignKey(x => x.PartnerOrganizationId)
             .OnDelete(DeleteBehavior.NoAction);
 
+        // Covers both directions of the offering workflow: the club catalogue reads published
+        // offerings of a given type across all entities, and My Programs reads one entity's rows.
+        builder.Entity<Activity>()
+            .HasIndex(x => new { x.PartnerOrganizationId, x.Status, x.Type })
+            .HasDatabaseName("IX_Activities_PartnerOrganizationId_Status_Type");
+
         builder.Entity<AttendanceRecord>()
             .HasIndex(x => new { x.AttendanceSessionId, x.UserId })
             .IsUnique();

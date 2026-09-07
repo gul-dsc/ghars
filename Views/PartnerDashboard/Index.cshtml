@@ -22,7 +22,15 @@
     var upcoming = activities.Count(x=>x.StartDateTime>=DateTime.UtcNow);
     var lowCap = activities.Count(x=>x.Capacity<=10);
 }
-<div class="dashboard-hero"><h1 class="h3 mb-1">@(O(partner)==""?T("Partner Dashboard","لوحة الشريك"):O(partner))</h1><div>@T("Review club requests, manage pending actions, and monitor programs.", "مراجعة طلبات الأندية وإدارة الإجراءات ومتابعة البرامج.")</div></div>
+<div class="dashboard-hero d-flex flex-wrap justify-content-between align-items-center gap-3">
+    <div>
+        <h1 class="h3 mb-1">@(O(partner)==""?T("Partner Dashboard","لوحة الشريك"):O(partner))</h1>
+        <div>@T("Review club requests, manage pending actions, and monitor programs.", "مراجعة طلبات الأندية وإدارة الإجراءات ومتابعة البرامج.")</div>
+    </div>
+    @* Shortcut into the separate content-management surface. The two are kept apart on purpose:
+       this page is the request inbox, My Programs is the offering catalogue. *@
+    <a class="btn btn-light" href="/partner/programs"><i class="bi bi-collection me-1"></i>@T("Manage My Programs","إدارة برامجي")</a>
+</div>
 <form class="ghars-filter-card row g-2 align-items-end" method="get">
     <div class="col-md-2"><label class="form-label">@T("From","من")</label><input class="form-control" type="date" name="from" value="@ViewBag.From" /></div>
     <div class="col-md-2"><label class="form-label">@T("To","إلى")</label><input class="form-control" type="date" name="to" value="@ViewBag.To" /></div>

@@ -41,10 +41,7 @@ public class BookingsController : Controller
         Activity? activity = null;
         if (activityId.HasValue && activityId.Value > 0)
         {
-            activity = await _db.Activities
-                .Include(x => x.Season)
-                .Include(x => x.PartnerOrganization)
-                .FirstOrDefaultAsync(x => x.Id == activityId.Value && x.Status == ActivityStatus.Published);
+            activity = await BookableOfferings().FirstOrDefaultAsync(x => x.Id == activityId.Value);
             if (activity is null) return NotFound();
         }
 
@@ -63,6 +60,13 @@ public class BookingsController : Controller
                 ProposedDate = DateOnly.FromDateTime(activity.StartDateTime),
                 ProposedStartTime = TimeOnly.FromDateTime(activity.StartDateTime),
                 ProposedEndTime = TimeOnly.FromDateTime(activity.EndDateTime),
+                // Carried over from the offering because both sides use the same audience
+                // vocabulary. The club can change it — this is a starting point, and the posted
+                // value is what is validated and stored.
+                TargetAudiences = string.IsNullOrWhiteSpace(activity.TargetAudienceCsv)
+                    ? []
+                    : activity.TargetAudienceCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+                OtherTargetAudience = activity.OtherTargetAudience,
                 ExpectedParticipants = 1
             });
         }
@@ -114,10 +118,10 @@ public class BookingsController : Controller
 
         if (vm.ActivityId.HasValue && vm.ActivityId.Value > 0)
         {
-            activity = await _db.Activities
-                .Include(x => x.Season)
-                .Include(x => x.PartnerOrganization)
-                .FirstOrDefaultAsync(x => x.Id == vm.ActivityId.Value && x.Status == ActivityStatus.Published);
+            // Re-validated from the database on every post. The offering id arrives from the browser
+            // and is never trusted: a draft, withdrawn, expired or foreign-entity offering fails
+            // here exactly as it would if it had never been rendered.
+            activity = await BookableOfferings().FirstOrDefaultAsync(x => x.Id == vm.ActivityId.Value);
             if (activity is null)
             {
                 ModelState.AddModelError(nameof(vm.ActivityId), isAr ? "البرنامج غير متاح للحجز حالياً." : "Program is not available for booking.");
@@ -332,6 +336,37 @@ public class BookingsController : Controller
         return RedirectToAction(nameof(Details), new { id = bookingId });
     }
 
+
+    /// <summary>
+    /// Every condition an offering must satisfy before a club may request it: it is published, its
+    /// owning implementing entity is approved and is actually an implementing entity, it belongs to
+    /// a season, and today falls inside any availability window the partner set.
+    ///
+    /// Type is deliberately not restricted here. The club catalogue surfaces only Training and
+    /// Workshop, but 27 published Course-type and 2 Lecture-type programs are bookable today through
+    /// <c>/partners/{id}/learning-programs</c>, and filtering by type at this point would silently
+    /// withdraw them. Creation is where the type restriction belongs, and that is enforced in
+    /// <see cref="PartnerProgramsController"/>.
+    /// </summary>
+    private IQueryable<Activity> BookableOfferings()
+    {
+        var now = DateTime.UtcNow;
+        return _db.Activities
+            .Include(x => x.Season)
+            .Include(x => x.PartnerOrganization)
+            .Where(x => x.Status == ActivityStatus.Published
+                        && x.Season != null
+                        && (x.AvailableFromUtc == null || x.AvailableFromUtc <= now)
+                        && (x.AvailableUntilUtc == null || x.AvailableUntilUtc >= now)
+                        // An offering with no explicit owner is still reachable through the older
+                        // learning-programs route, where ownership resolves from the creator's
+                        // organization link; those keep working unchanged.
+                        && (x.PartnerOrganizationId == null
+                            || (x.PartnerOrganization != null
+                                && x.PartnerOrganization.Status == ApprovalStatus.Approved
+                                && (x.PartnerOrganization.OrganizationType == OrganizationType.GovernmentAuthority
+                                    || x.PartnerOrganization.OrganizationType == OrganizationType.OtherPartner))));
+    }
 
     private async Task<List<Organization>> UserClubsAsync(string userId)
         => await _db.OrganizationAdminLinks.Include(x => x.Organization)

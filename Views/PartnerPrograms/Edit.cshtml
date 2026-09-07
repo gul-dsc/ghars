@@ -1,0 +1,39 @@
+@model GharsPlatform.ViewModels.PartnerProgramVm
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+ var ar=CultureInfo.CurrentUICulture.TwoLetterISOLanguageName=="ar"; string T(string e,string a)=>ar?a:e;
+ var activity=ViewBag.Activity as Activity;
+ var isPublished=activity?.Status==ActivityStatus.Published;
+ ViewData["Title"]=T("Edit Program","تعديل البرنامج");
+}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+        <h1 class="mb-1">@T("Edit Program","تعديل البرنامج")</h1>
+        <div class="text-muted">
+            @if(isPublished){<span class="badge text-bg-success">@T("Published","منشور")</span>}
+            else{<span class="badge text-bg-secondary">@T("Draft","مسودة")</span>}
+        </div>
+    </div>
+    <a class="btn btn-outline-secondary" href="/partner/programs">@T("Back to My Programs","العودة إلى برامجي")</a>
+</div>
+
+<form method="post" action="/partner/programs/edit/@Model.Id">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Id" />
+    <input type="hidden" asp-for="HasBookings" />
+    @await Html.PartialAsync("_Form", Model)
+
+    <div class="d-flex gap-2 mb-5">
+        <button class="btn btn-primary" type="submit" name="action" value="save">@T("Save Changes","حفظ التعديلات")</button>
+        @if(isPublished)
+        {
+            <button class="btn btn-outline-secondary" type="submit" name="action" value="unpublish">@T("Save and Unpublish","حفظ وإلغاء النشر")</button>
+        }
+        else
+        {
+            <button class="btn btn-success" type="submit" name="action" value="publish">@T("Save and Publish","حفظ ونشر")</button>
+        }
+        <a class="btn btn-outline-secondary" href="/partner/programs">@T("Cancel","إلغاء")</a>
+    </div>
+</form>

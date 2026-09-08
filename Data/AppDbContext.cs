@@ -65,6 +65,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<GalleryItem> GalleryItems => Set<GalleryItem>();
     public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
     public DbSet<GharsAnnualReport> GharsAnnualReports => Set<GharsAnnualReport>();
+    public DbSet<ActivityAttachment> ActivityAttachments => Set<ActivityAttachment>();
 
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -199,6 +200,19 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<KpiSubmission>()
             .HasIndex(x => new { x.SeasonId, x.OrganizationId })
             .IsUnique();
+
+        // Supporting documents belong to their offering and have no meaning without it, so unlike the
+        // historical records elsewhere in this model they cascade: deleting an activity that never
+        // attracted a booking must not leave rows pointing at nothing. The stored files are removed by
+        // the delete action itself - a cascade reaches the rows, never the file system.
+        builder.Entity<ActivityAttachment>()
+            .HasOne(x => x.Activity)
+            .WithMany(x => x.Attachments)
+            .HasForeignKey(x => x.ActivityId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<ActivityAttachment>()
+            .HasIndex(x => x.ActivityId);
 
         builder.Entity<GalleryItem>()
             .HasIndex(x => new { x.SeasonId, x.OrganizationId, x.MediaDate });

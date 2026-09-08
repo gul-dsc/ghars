@@ -143,6 +143,16 @@
                             <label class="form-label">@T("Original program date/time", "تاريخ / وقت البرنامج الأصلي")</label>
                             <div class="booking-readonly-value">@(activity is null ? T("Not available", "غير متاح") : $"{activity.StartDateTime:g} - {activity.EndDateTime:g}")</div>
                         </div>
+
+                        @* The implementing entity's own material about this program. Rendered only
+                           when there is some: an empty "Documents" heading tells a club nothing. *@
+                        @if (activity?.Attachments is { Count: > 0 })
+                        {
+                            <div class="col-12">
+                                <label class="form-label">@T("Program documents", "مستندات البرنامج")</label>
+                                @await Html.PartialAsync("~/Views/Shared/_ProgramAttachments.cshtml", activity.Attachments.ToList())
+                            </div>
+                        }
                     }
                 </div>
             </div>

@@ -37,6 +37,20 @@ public static class FileValidationHelper
         25 * 1024 * 1024);
 
     /// <summary>
+    /// Documents a partner attaches to an offering: programme outlines, brochures, session plans,
+    /// trainer profiles, posters. Its own profile rather than a reuse of <see cref="Evidence"/> —
+    /// the two answer to different business rules, and changing what counts as KPI evidence should
+    /// not silently change what a partner may publish alongside a bookable programme.
+    ///
+    /// Presentations are included because a programme outline is routinely one; archives, scripts and
+    /// anything else executable are not, and there is no wildcard here to let one in later by accident.
+    /// </summary>
+    public static readonly ValidationProfile ProgramAttachment = new(
+        new[] { ".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx", ".png", ".jpg", ".jpeg" },
+        new[] { "application/", "image/" },
+        25 * 1024 * 1024);
+
+    /// <summary>
     /// Validates an upload against a profile. Returns null when valid, otherwise a bilingual error message.
     /// </summary>
     public static string? Validate(IFormFile? file, ValidationProfile profile, bool isArabic)

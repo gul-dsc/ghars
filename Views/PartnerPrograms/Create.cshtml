@@ -13,7 +13,9 @@
     <a class="btn btn-outline-secondary" href="/partner/programs">@T("Back to My Programs","العودة إلى برامجي")</a>
 </div>
 
-<form method="post" action="/partner/programs/create">
+@* enctype is required for the supporting-document input in _Form: without it the browser posts the
+   file names and no file content, and the upload fails silently. *@
+<form method="post" action="/partner/programs/create" enctype="multipart/form-data">
     @Html.AntiForgeryToken()
     @await Html.PartialAsync("_Form", Model)
 

@@ -115,10 +115,19 @@ else
             </dl>
         </div></section>
 
-        <section class="card shadow-sm border-0 rounded-4"><div class="card-body">
+        <section class="card shadow-sm border-0 rounded-4 mb-3"><div class="card-body">
             <h2 class="h5 mb-3">@T("Description","الوصف")</h2>
             <p dir="ltr">@(string.IsNullOrWhiteSpace(Model.DescriptionEn) ? T("Not provided","غير متوفر") : Model.DescriptionEn)</p>
             <p class="text-muted mb-0" dir="rtl">@(string.IsNullOrWhiteSpace(Model.DescriptionAr) ? T("Not provided","غير متوفر") : Model.DescriptionAr)</p>
+        </div></section>
+
+        <section class="card shadow-sm border-0 rounded-4"><div class="card-body">
+            <h2 class="h5 mb-3">@T("Supporting Documents","المستندات الداعمة")</h2>
+            @await Html.PartialAsync("_ProgramAttachments", ViewBag.Attachments as List<ActivityAttachment> ?? new List<ActivityAttachment>())
+            @if(OfferingWorkflow.PartnerCanEdit(Model.ApprovalStatus))
+            {
+                <div class="form-text mt-2">@T("Add or remove documents from the Edit form.","يمكنكم إضافة المستندات أو إزالتها من نموذج التعديل.")</div>
+            }
         </div></section>
     </div>
 

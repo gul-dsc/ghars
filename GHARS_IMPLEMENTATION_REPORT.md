@@ -2592,3 +2592,166 @@ indexes created, and **all 9 pre-existing gallery rows preserved with `ApprovalS
 
 `dotnet build --no-incremental` → **0 errors, 1 warning**, the retained `CS0108` on
 `Activity.CreatedByUserId`, not suppressed.
+
+---
+
+## 32. Program Attachments & Header Navigation (2026-09-08)
+
+Two reported gaps, unrelated to each other: an implementing entity had no way to attach documents to a
+program it was creating, and after signing in some header controls could not be reached.
+
+### 32.1 Supporting documents on a partner offering
+
+**The gap.** `New Program` collected title, description, audience, capacity, schedule and availability,
+but nothing else. A partner with a programme outline, brochure, session plan or trainer profile had
+nowhere to put it, so the material reached DSC — and the clubs deciding whether to request the
+programme — outside the platform or not at all.
+
+**The record.** A new `ActivityAttachment` entity, shaped after `KpiDocument` because it is the same
+kind of record: a row that owns a stored file. It hangs off `Activity` rather than off a booking,
+because the same document answers the same question for every club that considers the programme.
+
+There is deliberately **no bilingual title**. The label a reader sees is the uploaded file's own name,
+which the partner already controls and already writes in whichever language the document is in.
+Requiring a translated caption per attachment would be entry work with no business rule behind it.
+`OriginalFileName` is display metadata only — the name on disk is always a GUID.
+
+**Storage.** `ProtectedFileStore` gains a `programs` category, so the files live at
+`<ContentRoot>/protected-uploads/programs/` — outside `wwwroot`, unreachable by the static-file
+middleware. These rows are born protected: none ever carried a legacy `/uploads/...` path, so
+`ProtectedFileMigrator` has nothing to migrate and deliberately does not walk the category.
+
+**Accepted types.** A dedicated `FileValidationHelper.ProgramAttachment` profile rather than a reuse of
+`Evidence`: `.pdf .doc .docx .ppt .pptx .xls .xlsx .png .jpg .jpeg`, 25 MB each, 10 per programme.
+Presentations are included because a programme outline routinely is one. The two profiles answer to
+different business rules, and changing what counts as KPI evidence must not silently change what a
+partner may publish alongside a bookable programme.
+
+**Visibility — the rule, in one place.** `/protected-files/program-attachment/{id}` re-derives who may
+read each file from the offering's own state:
+
+| Reader | While Draft / Submitted / Returned / Rejected / Unpublished | Once Approved + Published |
+|---|---|---|
+| The owning implementing entity | Yes — it can check what it uploaded | Yes |
+| DSC Admin / Super Admin | Yes — the approval decision rests on this material | Yes |
+| Any other signed-in user (a club) | **404** | Yes |
+| Anonymous | **404** (never served) | **404** (never served) |
+
+The availability window is deliberately *not* part of this test, unlike
+`BookingsController.BookableOfferings()`. That window governs whether a club may still *request* the
+programme; a club that already booked it must not lose the session plan the day the window closes.
+Publication and approval are the confidentiality question, and those are what this checks.
+
+**Lifecycle.** Attachments are optional at every stage, including submission — a programme that needs
+no brochure is not an incomplete programme, so nothing here can block sending it for approval. They may
+be added or removed exactly while the rest of the form is editable (`OfferingWorkflow.PartnerCanEdit`),
+re-checked on POST and not merely hidden in the view. Removal is a checkbox that takes effect on save,
+not an instant delete, so a partner who changes their mind simply does not save. Every removal id is
+re-scoped to the offering before anything is deleted.
+
+Write order is deliberate in both directions: on upload the **file** is written before the row, so a
+failed write cannot leave a row pointing at nothing; on removal the **row** goes before the file,
+because an orphaned file is recoverable housekeeping whereas a row pointing at a deleted file is a
+broken download nobody can explain. Admin hard-delete of an activity collects the storage keys *before*
+the cascade removes the rows, then deletes the files — a cascade reaches rows, never the file system.
+
+Both add and remove are recorded through the existing audit trail
+(`OfferingAttachmentsAdded` / `OfferingAttachmentsRemoved`) and narrated by `OfferingWorkflow`, so they
+appear in the workflow history the partner and DSC already read. No new audit system.
+
+**Where they surface.** One shared partial, `Views/Shared/_ProgramAttachments.cshtml`, renders the list
+on the partner's details page, the DSC review screen and the club's booking form, so the three cannot
+drift into describing the same file differently. From `Areas/Admin` it is referenced by full path — a
+bare partial name resolves against the area's own Views folder and is not found.
+
+> Razor gotcha worth keeping: inside a view, a bare `Path` is `RazorPage.Path` (the view's own
+> location), which shadows `System.IO.Path` and does not compile. The partial spells the type in full.
+
+**Verification — 33 checks, 0 failures.** The form carries `enctype="multipart/form-data"` (without it
+the browser posts file names and no content, and the upload fails silently); a `.txt` is refused with a
+bilingual message naming the type and nothing is created; a draft's documents return 200 for the owner
+and DSC and 404 for another entity, for a club and for an anonymous caller; the download is the actual
+uploaded bytes with `nosniff` and the original name in `Content-Disposition`; after approval the club
+can read them and sees them on the booking form; removing one leaves the other downloadable, returns
+404 for the removed id, and **deletes the file from disk** (verified by comparing the folder against the
+table).
+
+### 32.2 Header navigation — links that were clipped, not merely cramped
+
+**The symptom, measured.** A signed-in partner had ten top-level links and a club eleven, beside a 96px
+brand logo and four action controls. `.navbar-nav` is a flex row that defaults to `flex-wrap: nowrap`
+and `.ghars-main-nav .nav-link` is `white-space: nowrap`, so the row could not shrink and overflowed its
+container — and because `html, body { overflow-x: hidden }`, the excess was **clipped with no
+scrollbar**.
+
+Reproducing the old geometry in the live page and measuring per-element bounding boxes:
+
+| Width | Partner — controls off-screen | Club — controls off-screen |
+|---|---|---|
+| 1920 | 0 | 0 |
+| 1600 | 1 (user menu) | 0 |
+| 1440 | 2 (bell, user menu) | 1 (user menu) |
+| 1366 | 1 (user menu) | 1 (user menu) |
+| 1280 | 3 (Partner button, bell, user menu) | 1 (user menu) |
+| 1200 | 4 (language switch, Partner button, bell, user menu) | 1 (user menu) |
+
+What fell off was the **right-hand action strip**, not the nav links — at 1366px, a very ordinary laptop
+width, the user menu was unreachable and with it **Logout**.
+
+This is worth recording as a measurement lesson: `documentElement.scrollWidth - clientWidth` reported
+**0px** throughout, because `overflow-x: hidden` clips the overflow away. The page-overflow metric that
+found the admin-shell defects (§30) cannot see this one. Only a per-element bounding-box check against
+`window.innerWidth` catches a control pushed out of a clipped container.
+
+**The fix, in two parts.**
+
+1. *Structure.* The links that belong to the signed-in person — their own dashboard, their own
+   programmes, their own club's returns — collapse into one **My Workspace** dropdown, grouped under a
+   heading naming whose work each group is (`Implementing Entity`, `My Club`, `Administration`). The
+   public spine (Home, About Us, Vision & Objectives, Booking, Contact) stays at the top level, so the
+   navigation no longer reshapes itself when someone signs in.
+
+   **Ghars content stays at the top level** — Ghars Channel, Digital Library and Surveys are published
+   by the Ghars team for everyone, not work belonging to the person signed in, and filing them under a
+   personal-workspace heading would misdescribe them.
+
+   No visibility rule moved and no destination was added or removed: the same links appear under
+   exactly the same role conditions. A divider is emitted only *between* two groups, so a user holding
+   one role does not get a rule dangling under the last item.
+
+2. *Safety net.* `.ghars-main-nav` gains `flex-wrap: wrap` and `min-width: 0`, so any future overflow
+   wraps onto a second line **in view** instead of being swallowed. A narrow band rule
+   (`1400–1599.98px`) tightens link padding only, leaving the logo and header height alone, so a club's
+   nine items fit on one row down to 1366px.
+
+**Verification — 239 checks, 0 failures.** Four roles (anonymous, partner, club, DSC) × two languages ×
+nine widths from 1920 to 390: **zero page overflow and zero header controls outside the viewport**,
+against 1–4 clipped controls before. Every destination that used to be a top-level link is still
+reachable from the header for the same role, the dropdown opens, and its toggle maintains
+`aria-expanded`. A separate sweep loaded 74 pages across all roles and both languages with no error
+page and no off-screen control.
+
+Below 1400px the nav wraps to two rows at 1280 and 1200 rather than clipping — the header height does
+not grow, and nothing is hidden. That is the intended behaviour: at those widths there genuinely is not
+room for nine links plus the action strip, and wrapping is the honest outcome.
+
+### 32.3 Migration and build
+
+`20260908092255_AddActivityAttachments` — purely additive: one new table `ActivityAttachments` with a
+cascade FK to `Activities` and an index on `ActivityId`. Nothing existing is dropped, renamed or made
+non-nullable, and no historical migration was edited. Verified from `INFORMATION_SCHEMA` after applying:
+9 columns with the intended nullability, primary key and index present, and all 59 existing activities
+untouched.
+
+> Applying it hit the trap the README documents: `dotnet ef database update --no-build` reported
+> `Done.` while applying **nothing**, because the compiled assembly predated the migration. Build first.
+
+`dotnet build` → **0 errors, 1 warning** — the retained `CS0108` on `Activity.CreatedByUserId`, not
+suppressed. Test data was removed afterwards and every business metric returned to baseline: 59
+activities, 0 attachments, 11 agenda entries, 14 KPI submissions, 9 gallery items, 9 audit rows, and no
+orphaned files in `protected-uploads/programs/`.
+
+`BookingRequests` stands at 16 rather than the 15 recorded earlier in this document. The extra row is
+booking 20 against activity 35, created during this work by a person exercising the booking flow — the
+test harness only ever renders `/bookings/create` and never posts it. It is ordinary data and was
+deliberately left in place.

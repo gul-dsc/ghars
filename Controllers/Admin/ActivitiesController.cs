@@ -17,10 +17,12 @@ namespace GharsPlatform.Controllers.Admin;
 public class ActivitiesController : Controllers.BaseController
 {
     private readonly IHubContext<NotificationsHub> _hub;
+    private readonly IWebHostEnvironment _env;
 
-    public ActivitiesController(AppDbContext db, IHubContext<NotificationsHub> hub) : base(db)
+    public ActivitiesController(AppDbContext db, IHubContext<NotificationsHub> hub, IWebHostEnvironment env) : base(db)
     {
         _hub = hub;
+        _env = env;
     }
 
     private static bool IsAr() => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
@@ -72,6 +74,13 @@ public class ActivitiesController : Controllers.BaseController
         if (activity is null) return NotFound();
 
         ViewBag.People = await ResolveDisplayNamesAsync(new[] { activity.SubmittedByUserId, activity.ReviewedByUserId });
+
+        // The partner's supporting documents, so the reviewer decides on the same material the
+        // partner submitted rather than on the form fields alone.
+        ViewBag.Attachments = await Db.ActivityAttachments
+            .Where(x => x.ActivityId == activity.Id)
+            .OrderBy(x => x.CreatedAtUtc).ThenBy(x => x.Id)
+            .ToListAsync();
 
         // The same workflow timeline the partner sees, read from the audit log rather than a second
         // store. Action name and timestamp only — the stored JSON payload stays internal.
@@ -261,6 +270,11 @@ public class ActivitiesController : Controllers.BaseController
     {
         var a = await Db.Activities.FirstOrDefaultAsync(x => x.Id == id);
         if (a is null) return NotFound();
+
+        // Collected before the delete: the attachment rows cascade away with the activity, and once
+        // they are gone nothing records where their files lived. A cancelled activity keeps both.
+        var orphanedFiles = new List<string>();
+
         if (await Db.BookingRequests.AnyAsync(x => x.ActivityId == id))
         {
             a.Status = ActivityStatus.Cancelled;
@@ -269,9 +283,18 @@ public class ActivitiesController : Controllers.BaseController
         }
         else
         {
+            orphanedFiles = await Db.ActivityAttachments
+                .Where(x => x.ActivityId == id)
+                .Select(x => x.FilePath)
+                .ToListAsync();
             Db.Activities.Remove(a);
         }
         await Db.SaveChangesAsync();
+
+        // Only after the rows are actually gone, so a failed delete never leaves rows pointing at
+        // files that no longer exist.
+        foreach (var key in orphanedFiles) ProtectedFileStore.TryDelete(key, _env);
+
         await AuditAsync("Delete", nameof(Activity), id.ToString(), a, null);
         TempData["ToastWarning"] = "Activity deleted or cancelled when linked records exist.";
         return RedirectToAction(nameof(Index));

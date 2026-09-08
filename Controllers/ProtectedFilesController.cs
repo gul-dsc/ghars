@@ -81,6 +81,51 @@ public class ProtectedFilesController : Controller
     }
 
     /// <summary>
+    /// A supporting document attached to a partner offering — CONDITIONAL, and the condition is the
+    /// offering's own visibility rather than anything stored on the document.
+    ///
+    ///   • the owning implementing entity's linked admins — always, including while it is a draft, so
+    ///     a partner can check what they uploaded before submitting it;
+    ///   • DSC Admin / Super Admin — always, because reviewing this material is precisely what the
+    ///     approval decision rests on;
+    ///   • any other signed-in user (a club deciding whether to request the programme) — only once the
+    ///     offering is published AND approved, which is the same pair of fields that puts it in the
+    ///     club catalogue. A draft, submitted, returned, rejected or withdrawn programme's documents
+    ///     are not readable by clubs even when the id is known.
+    ///
+    /// The availability window is deliberately NOT part of this test, unlike
+    /// <c>BookingsController.BookableOfferings()</c>. That window governs whether a club may still
+    /// *request* the programme; a club that already booked it must not lose the session plan the day
+    /// the window closes. Publication and approval are the confidentiality question, and those are
+    /// what this checks.
+    ///
+    /// Anonymous callers get nothing at all: the class-level [Authorize] applies, so unlike channel
+    /// media this is never public.
+    /// </summary>
+    [HttpGet("program-attachment/{id:int}")]
+    public async Task<IActionResult> ProgramAttachment(int id)
+    {
+        var doc = await _db.ActivityAttachments
+            .Include(x => x.Activity)
+            .FirstOrDefaultAsync(x => x.Id == id);
+
+        if (doc?.Activity is null) return NotFound();
+
+        var activity = doc.Activity;
+        var visibleToClubs = activity.Status == ActivityStatus.Published
+                             && activity.ApprovalStatus is null or OfferingApprovalStatus.Approved;
+
+        if (!visibleToClubs && !IsDscAdmin)
+        {
+            // Not yet visible: only the entity that owns the offering may read its own material.
+            if (activity.PartnerOrganizationId is null) return NotFound();
+            if (!await BelongsToUserOrgAsync(activity.PartnerOrganizationId.Value)) return NotFound();
+        }
+
+        return Stream(doc.FilePath, doc.OriginalFileName);
+    }
+
+    /// <summary>
     /// Official (external) survey analysis report — CONDITIONAL: readable by any signed-in user once DSC
     /// has published it, and by DSC reviewers only while it is still unpublished/under review.
     /// </summary>

@@ -38,6 +38,7 @@ path. The bytes live on disk under `protected-uploads/`. The two are useless apa
 <ContentRoot>/protected-uploads/
 ├── kpi/          KPI supporting evidence uploaded by clubs
 ├── org/          Organization licences and supporting registration documents
+├── programs/     Supporting documents attached to partner offerings
 └── surveys/      Official Program Survey analysed reports (PDF)
 ```
 
@@ -53,6 +54,7 @@ Defined in `Helpers/ProtectedFileStore.cs` (`RootFolderName`, category constants
 |---|---|---|---|
 | `kpi/` | Club evidence for KPI submissions — medical aggregates, attendance records, participation reports | Organization-confidential; visible only to the owning club and DSC | **No.** Uploaded once by the club; there is no second copy |
 | `org/` | Licences and registration documents | Legal documents supporting an approval decision | **No** |
+| `programs/` | Programme outlines, brochures, session plans and trainer profiles attached to partner offerings | Visible to the owning entity and DSC while under review; readable by any signed-in user once the offering is approved and published. Never anonymous | **No.** Uploaded once by the implementing entity |
 | `surveys/` | Analysed official survey reports | Public *only after* DSC publishes them; confidential while under review | Possibly from the external authority, but not on any defined timeline |
 
 None of this content is reproducible by the platform. Losing it means asking every club to re-upload

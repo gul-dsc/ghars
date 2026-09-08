@@ -19,7 +19,18 @@ a { color: var(--primary); text-decoration: none; }
 
     .ghars-dsc-brand img { height: 96px; width: auto; display: block; object-fit: contain; }
 
-.ghars-main-nav { align-items: center; gap: 2px; }
+/* flex-wrap is the safety net, not the layout. A flex row defaults to nowrap, so before this the nav
+   could grow past the container; and because html/body carry overflow-x: hidden (see the rule near
+   the end of this file), the excess was clipped with NO scrollbar — links became unreachable rather
+   than merely cramped. Wrapping makes any future overflow visible on a second line instead of
+   silently swallowing it. min-width: 0 lets the flex item actually shrink to its container.
+   The grouped "My Workspace" dropdown in _Layout is what keeps the row short enough that this
+   never triggers in practice. */
+.ghars-main-nav { align-items: center; gap: 2px; flex-wrap: wrap; justify-content: center; min-width: 0; }
+
+.ghars-workspace-dropdown { min-width: 260px; border-radius: 14px; border: 1px solid var(--border); box-shadow: var(--shadow); padding-top: 8px; padding-bottom: 8px; }
+
+    .ghars-workspace-dropdown .dropdown-header { font-size: .72rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #6b7280; }
 
     .ghars-main-nav .nav-link { color: rgba(53,53,53,.85) !important; font-weight: 600; padding: .5rem .7rem !important; line-height: 1.25; white-space: nowrap; }
 
@@ -138,6 +149,14 @@ html[dir="rtl"] .ghars-top-actions { margin-left: 0; margin-right: auto; }
 html[dir="rtl"] .ghars-user-dropdown { text-align: right; }
 
 html[dir="rtl"] .booking-section-head { text-align: right; }
+
+/* A club signs in with nine top-level items, which at 1440-1599 lands one link on a second row while
+   the rest of the header still has room. Only the link padding is tightened here — the logo, the
+   header height and the font size all stay as they are above 1400px, because this is a fit
+   adjustment, not the compact treatment that starts below it. */
+@media (min-width: 1400px) and (max-width: 1599.98px) {
+    .ghars-main-nav .nav-link { padding: .5rem .45rem !important; }
+}
 
 @media (max-width: 1399.98px) {
     .navbar { min-height: 110px; }

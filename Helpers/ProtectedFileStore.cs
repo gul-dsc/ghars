@@ -22,7 +22,14 @@ public static class ProtectedFileStore
     public const string OrganizationDocuments = "org";
     public const string SurveyReports = "surveys";
 
-    public static readonly string[] AllCategories = { KpiEvidence, OrganizationDocuments, SurveyReports };
+    /// <summary>
+    /// Supporting documents attached to a partner offering. Born protected — no row of this kind ever
+    /// carried a legacy <c>/uploads/…</c> path, so <see cref="ProtectedFileMigrator"/> has nothing to
+    /// migrate here and deliberately does not walk this category.
+    /// </summary>
+    public const string ProgramAttachments = "programs";
+
+    public static readonly string[] AllCategories = { KpiEvidence, OrganizationDocuments, SurveyReports, ProgramAttachments };
 
     public static string Root(IWebHostEnvironment env) => Path.Combine(env.ContentRootPath, RootFolderName);
 
@@ -100,6 +107,8 @@ public static class ProtectedFileStore
         ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         ".doc" => "application/msword",
         ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".ppt" => "application/vnd.ms-powerpoint",
+        ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         _ => "application/octet-stream"
     };
 

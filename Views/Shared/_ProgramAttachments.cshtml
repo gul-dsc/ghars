@@ -1,0 +1,62 @@
+@model List<GharsPlatform.Models.Core.ActivityAttachment>
+@using System.Globalization
+@*
+    The one way a program's supporting documents are rendered. Used by the partner's own details
+    page, by the DSC review screen and by the club's booking form, so the three cannot drift into
+    describing the same file differently.
+
+    Every link points at /protected-files/program-attachment/{id}, which re-checks who may read the
+    file on each request. Nothing here decides visibility — a caller that renders this partial has
+    already established that the reader may see the offering.
+
+    Referenced by full path from Areas/Admin, where a bare partial name resolves against the area's
+    own Views folder and is not found.
+*@
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+
+    @* System.IO.Path in full: inside a Razor view, a bare "Path" is RazorPage.Path — the view's own
+       location — which shadows the type and does not compile. *@
+    string IconFor(string? name) => System.IO.Path.GetExtension(name ?? "").ToLowerInvariant() switch
+    {
+        ".pdf" => "bi-file-earmark-pdf",
+        ".doc" or ".docx" => "bi-file-earmark-word",
+        ".ppt" or ".pptx" => "bi-file-earmark-slides",
+        ".xls" or ".xlsx" => "bi-file-earmark-spreadsheet",
+        ".png" or ".jpg" or ".jpeg" => "bi-file-earmark-image",
+        _ => "bi-file-earmark"
+    };
+
+    // Sizes are rendered with the invariant culture on purpose: an Arabic page still shows Western
+    // digits everywhere else in this application, and a mixed convention reads as a defect.
+    string SizeOf(long bytes) => bytes >= 1024 * 1024
+        ? string.Format(CultureInfo.InvariantCulture, "{0:0.0} MB", bytes / 1024d / 1024d)
+        : string.Format(CultureInfo.InvariantCulture, "{0:0} KB", Math.Max(1, bytes / 1024d));
+
+    // The stored name is display metadata supplied by an uploader, so it is rendered as text (Razor
+    // encodes it) and never used to build a path.
+    string LabelOf(GharsPlatform.Models.Core.ActivityAttachment a)
+        => string.IsNullOrWhiteSpace(a.OriginalFileName) ? T("Document", "مستند") : a.OriginalFileName!;
+}
+
+@if (Model is null || Model.Count == 0)
+{
+    <div class="text-muted">@T("No documents attached.", "لا توجد مستندات مرفقة.")</div>
+}
+else
+{
+    <ul class="list-unstyled mb-0">
+        @foreach (var a in Model)
+        {
+            <li class="border-bottom py-2 d-flex align-items-center justify-content-between gap-3">
+                <a class="d-flex align-items-center gap-2 text-decoration-none text-break"
+                   href="/protected-files/program-attachment/@a.Id">
+                    <i class="bi @IconFor(a.OriginalFileName) fs-5" aria-hidden="true"></i>
+                    <span>@LabelOf(a)</span>
+                </a>
+                <span class="text-muted small text-nowrap flex-shrink-0">@SizeOf(a.FileSizeBytes)</span>
+            </li>
+        }
+    </ul>
+}

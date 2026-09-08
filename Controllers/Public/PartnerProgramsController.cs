@@ -33,10 +33,12 @@ namespace GharsPlatform.Controllers.Public;
 public class PartnerProgramsController : Controllers.BaseController
 {
     private readonly IHubContext<NotificationsHub> _hub;
+    private readonly IWebHostEnvironment _env;
 
-    public PartnerProgramsController(AppDbContext db, IHubContext<NotificationsHub> hub) : base(db)
+    public PartnerProgramsController(AppDbContext db, IHubContext<NotificationsHub> hub, IWebHostEnvironment env) : base(db)
     {
         _hub = hub;
+        _env = env;
     }
 
     private bool IsAr => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
@@ -103,6 +105,7 @@ public class PartnerProgramsController : Controllers.BaseController
             .FirstOrDefaultAsync(x => x.Id == id);
         if (a is null) return NotFound();
 
+        ViewBag.Attachments = await AttachmentsAsync(a.Id);
         ViewBag.BookingCount = await Db.BookingRequests.CountAsync(x => x.ActivityId == a.Id);
         ViewBag.People = await ResolveDisplayNamesAsync(a.SubmittedByUserId, a.ReviewedByUserId);
 
@@ -144,6 +147,7 @@ public class PartnerProgramsController : Controllers.BaseController
         if (orgIds.Count == 0) return Forbid();
 
         await ValidateSeasonAsync(vm);
+        ValidateAttachments(vm, alreadyStored: 0);
 
         if (!ModelState.IsValid)
         {
@@ -171,6 +175,10 @@ public class PartnerProgramsController : Controllers.BaseController
         await Db.SaveChangesAsync();
         await AuditAsync("OfferingDraftCreated", nameof(Activity), entity.Id.ToString(), null,
             new { entity.PartnerOrganizationId, entity.SeasonId, entity.Type, entity.Status, entity.ApprovalStatus, entity.TitleEn });
+
+        // Stored before any submission is recorded, so a reviewer opening the queue never sees a
+        // programme whose documents have not landed yet.
+        await SaveAttachmentsAsync(entity, vm.Attachments);
 
         if (submit)
         {
@@ -201,7 +209,9 @@ public class PartnerProgramsController : Controllers.BaseController
 
         await PopulateFormAsync(orgIds);
         ViewBag.Activity = a;
-        return View(ToVm(a, await HasBookingsAsync(a.Id)));
+        var vm = ToVm(a, await HasBookingsAsync(a.Id));
+        vm.ExistingAttachments = await AttachmentsAsync(a.Id);
+        return View(vm);
     }
 
     [HttpPost("/partner/programs/edit/{id:int}")]
@@ -241,10 +251,18 @@ public class PartnerProgramsController : Controllers.BaseController
             await ValidateSeasonAsync(vm);
         }
 
+        // Only attachments that actually belong to this offering may be removed, and only those count
+        // towards the limit. An id from another entity's programme is dropped here rather than being
+        // allowed to reach the delete.
+        var stored = await AttachmentsAsync(a.Id);
+        var removing = stored.Where(x => vm.RemoveAttachmentIds.Contains(x.Id)).ToList();
+        ValidateAttachments(vm, alreadyStored: stored.Count - removing.Count);
+
         if (!ModelState.IsValid)
         {
             await PopulateFormAsync(orgIds);
             ViewBag.Activity = a;
+            vm.ExistingAttachments = stored;
             return View(vm);
         }
 
@@ -262,6 +280,9 @@ public class PartnerProgramsController : Controllers.BaseController
         await Db.SaveChangesAsync();
         await AuditAsync("OfferingUpdated", nameof(Activity), a.Id.ToString(), old,
             new { a.SeasonId, a.Type, a.TitleEn, a.TitleAr, a.DescriptionEn, a.DescriptionAr, a.Capacity, a.StartDateTime, a.EndDateTime, a.TargetAudienceCsv, a.AvailableFromUtc, a.AvailableUntilUtc, a.Status, a.ApprovalStatus });
+
+        await RemoveAttachmentsAsync(a, removing);
+        await SaveAttachmentsAsync(a, vm.Attachments);
 
         if (string.Equals(action, "submit", StringComparison.OrdinalIgnoreCase))
         {
@@ -333,6 +354,95 @@ public class PartnerProgramsController : Controllers.BaseController
 
         TempData["ToastSuccess"] = IsAr ? "تم سحب البرنامج من كتالوج الأندية." : "Program withdrawn from the club catalogue.";
         return RedirectToAction(nameof(Index));
+    }
+
+    // ------------------------------------------------------------------ supporting documents
+    //
+    // Attachments follow the KPI evidence pattern exactly: validated against a named profile, written
+    // to the protected store outside wwwroot under a GUID name, and recorded as a row that carries the
+    // storage key. Nothing here ever produces a publicly fetchable URL —
+    // /protected-files/program-attachment/{id} re-derives who may read each file from the offering's
+    // own state, so a document is exactly as visible as the programme it describes.
+
+    private Task<List<ActivityAttachment>> AttachmentsAsync(int activityId)
+        => Db.ActivityAttachments
+            .Where(x => x.ActivityId == activityId)
+            .OrderBy(x => x.CreatedAtUtc).ThenBy(x => x.Id)
+            .ToListAsync();
+
+    /// <summary>
+    /// Checks the files on this post before anything is written. Absence is never an error: an
+    /// offering has never required a document, and refusing to submit a programme over a missing
+    /// brochure would be a rule nobody asked for.
+    /// </summary>
+    private void ValidateAttachments(PartnerProgramVm vm, int alreadyStored)
+    {
+        var files = vm.Attachments?.Where(f => f is { Length: > 0 }).ToList() ?? [];
+        if (files.Count == 0) return;
+
+        foreach (var file in files)
+        {
+            var error = FileValidationHelper.Validate(file, FileValidationHelper.ProgramAttachment, IsAr);
+            if (error != null) ModelState.AddModelError(nameof(vm.Attachments), error);
+        }
+
+        if (alreadyStored + files.Count > PartnerProgramVm.MaxAttachments)
+        {
+            ModelState.AddModelError(nameof(vm.Attachments), IsAr
+                ? $"لا يمكن إرفاق أكثر من {PartnerProgramVm.MaxAttachments} مستندات لكل برنامج."
+                : $"A program may carry at most {PartnerProgramVm.MaxAttachments} documents.");
+        }
+    }
+
+    /// <summary>
+    /// Stores validated uploads against an offering the caller has already proved they own. Writes the
+    /// file first and the row second, so a failed write can never leave a row pointing at nothing.
+    /// </summary>
+    private async Task SaveAttachmentsAsync(Activity activity, List<IFormFile>? files)
+    {
+        var accepted = files?.Where(f => f is { Length: > 0 }).ToList() ?? [];
+        if (accepted.Count == 0) return;
+
+        foreach (var file in accepted)
+        {
+            var key = await ProtectedFileStore.SaveAsync(file, _env, ProtectedFileStore.ProgramAttachments);
+            Db.ActivityAttachments.Add(new ActivityAttachment
+            {
+                ActivityId = activity.Id,
+                FilePath = key,
+                // Display metadata only. The name on disk is a GUID, and this value is sanitised again
+                // by ProtectedFileStore.SafeDownloadName before it reaches a response header.
+                OriginalFileName = Path.GetFileName(file.FileName),
+                FileSizeBytes = file.Length,
+                CreatedAtUtc = DateTime.UtcNow,
+                CreatedByUserId = CurrentUserId
+            });
+        }
+
+        await Db.SaveChangesAsync();
+        await AuditAsync("OfferingAttachmentsAdded", nameof(Activity), activity.Id.ToString(), null,
+            new { Count = accepted.Count, Files = accepted.Select(f => Path.GetFileName(f.FileName)).ToArray() });
+    }
+
+    /// <summary>
+    /// Removes attachments the caller has already been proved to own. The row goes first and the file
+    /// second: an orphaned file is recoverable housekeeping, whereas a row left pointing at a deleted
+    /// file is a broken download nobody can explain.
+    /// </summary>
+    private async Task RemoveAttachmentsAsync(Activity activity, List<ActivityAttachment> removing)
+    {
+        if (removing.Count == 0) return;
+
+        var names = removing.Select(x => x.OriginalFileName).ToArray();
+        var keys = removing.Select(x => x.FilePath).ToList();
+
+        Db.ActivityAttachments.RemoveRange(removing);
+        await Db.SaveChangesAsync();
+
+        foreach (var key in keys) ProtectedFileStore.TryDelete(key, _env);
+
+        await AuditAsync("OfferingAttachmentsRemoved", nameof(Activity), activity.Id.ToString(),
+            new { Count = removing.Count, Files = names }, null);
     }
 
     // ------------------------------------------------------------------ helpers

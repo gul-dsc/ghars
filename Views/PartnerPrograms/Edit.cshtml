@@ -29,7 +29,8 @@
     </div>
 }
 
-<form method="post" action="/partner/programs/edit/@Model.Id">
+@* enctype is required for the supporting-document input in _Form — see the note on Create. *@
+<form method="post" action="/partner/programs/edit/@Model.Id" enctype="multipart/form-data">
     @Html.AntiForgeryToken()
     <input type="hidden" asp-for="Id" />
     <input type="hidden" asp-for="HasBookings" />

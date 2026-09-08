@@ -104,4 +104,10 @@ public class Activity : AuditableEntity
 
     public ICollection<ActivitySpeaker> Speakers { get; set; } = new List<ActivitySpeaker>();
     public ICollection<BookingRequest> BookingRequests { get; set; } = new List<BookingRequest>();
+
+    /// <summary>
+    /// Supporting documents describing this offering. Empty for every pre-existing row and optional
+    /// on every new one — an offering has never required a document and still does not.
+    /// </summary>
+    public ICollection<ActivityAttachment> Attachments { get; set; } = new List<ActivityAttachment>();
 }

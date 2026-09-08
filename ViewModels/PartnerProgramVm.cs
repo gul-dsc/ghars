@@ -81,6 +81,30 @@ public class PartnerProgramVm : IValidatableObject
     /// would rewrite the meaning of those bookings. Display-only: the controller re-derives it.</summary>
     public bool HasBookings { get; set; }
 
+    // ------------------------------------------------------------------ supporting documents
+    //
+    // Attachments are optional at every stage, including submission. A programme that needs no
+    // brochure is not an incomplete programme, and blocking submission over a missing file would
+    // invent a rule the business never asked for.
+
+    /// <summary>Files chosen on this post. Type, MIME and size are validated in the controller
+    /// against <see cref="Helpers.FileValidationHelper.ProgramAttachment"/>, which is where every
+    /// other upload in this project is checked — the rules belong with the storage profile, not
+    /// duplicated into a view model.</summary>
+    public List<IFormFile>? Attachments { get; set; }
+
+    /// <summary>Ids of already-stored attachments the partner ticked for removal. Every id is
+    /// re-scoped to this offering in the controller before anything is deleted.</summary>
+    public List<int> RemoveAttachmentIds { get; set; } = [];
+
+    /// <summary>What is already attached, for rendering only. Never bound from the request: the
+    /// controller reloads it from the database on every GET and on every invalid POST.</summary>
+    public List<ActivityAttachment> ExistingAttachments { get; set; } = [];
+
+    /// <summary>How many documents one offering may carry. A limit the form states plainly rather
+    /// than a silent truncation on the server.</summary>
+    public const int MaxAttachments = 10;
+
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";

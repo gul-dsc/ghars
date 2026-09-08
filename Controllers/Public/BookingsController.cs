@@ -360,6 +360,10 @@ public class BookingsController : Controller
         return _db.Activities
             .Include(x => x.Season)
             .Include(x => x.PartnerOrganization)
+            // The offering's supporting documents, so a club sees the programme outline on the same
+            // screen where it decides to request it. Both callers resolve a single row by id, so this
+            // costs one extra join and never fans out over a list.
+            .Include(x => x.Attachments)
             .Where(x => x.Status == ActivityStatus.Published
                         && x.Season != null
                         && x.Season.IsActive

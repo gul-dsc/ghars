@@ -92,33 +92,82 @@
                             </li>
                         }
 
+                        @* The links that belong to the person signed in — their own dashboard, their own
+                           programmes, their own club's returns — collapse into ONE dropdown.
+
+                           The reason is not tidiness. A signed-in partner had ten top-level links and a
+                           club eleven, beside a 96px brand logo and four action controls; the row could
+                           not fit that at any desktop width, so it overflowed the container — and
+                           because html/body carry overflow-x: hidden, the excess was CLIPPED WITH NO
+                           SCROLLBAR. What fell off was the right-hand action strip: measured on this
+                           build, a partner at 1366px lost the user menu (and with it Logout), and at
+                           1200px also the notification bell, the Partner button and the language
+                           switch. Those controls were not merely cramped, they were unreachable.
+
+                           No visibility rule moved: the same links appear under the same role
+                           conditions, one click deeper, grouped under a heading that names whose work
+                           each group is. Ghars content is deliberately NOT in here — see below. *@
                         @if (isAuthenticated)
                         {
-                            @if (isPartner)
-                            {
-                                @* Two distinct partner responsibilities, kept as two links: the
-                                   dashboard processes incoming booking requests, My Programs manages
-                                   the offerings that attract them. *@
-                                <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="PartnerDashboard" asp-action="Index">@(isRtl ? "لوحة الشريك" : "Partner Dashboard")</a></li>
-                                <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="PartnerPrograms" asp-action="Index">@(isRtl ? "برامجي" : "My Programs")</a></li>
-                                @* Channel content is separate from My Programs on purpose: a program is a
-                                   bookable offering, channel content is published material. *@
-                                <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="ChannelContent" asp-action="Index">@(isRtl ? "محتواي في القناة" : "My Channel Content")</a></li>
-                            }
+                            @* A divider only earns its place between two groups. A user holding two
+                               roles gets one; a user holding one gets none, rather than a rule dangling
+                               under the last item. *@
+                            var priorGroup = false;
 
-                            <li class="nav-item">
-                                <a class="nav-link" asp-area="" asp-controller="Library" asp-action="Index">@(isRtl ? "المكتبة الرقمية" : "Digital Library")</a>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="gharsWorkspaceMenu" role="button"
+                                   data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-grid-1x2 me-1" aria-hidden="true"></i>@(isRtl ? "مساحة العمل" : "My Workspace")
+                                </a>
+                                <ul class="dropdown-menu ghars-workspace-dropdown" aria-labelledby="gharsWorkspaceMenu">
+
+                                    @if (isPartner)
+                                    {
+                                        <li><h6 class="dropdown-header">@(isRtl ? "الجهة المنفذة" : "Implementing Entity")</h6></li>
+                                        @* Two distinct partner responsibilities, kept as two links: the
+                                           dashboard processes incoming booking requests, My Programs manages
+                                           the offerings that attract them. *@
+                                        <li><a class="dropdown-item" asp-area="" asp-controller="PartnerDashboard" asp-action="Index"><i class="bi bi-speedometer2 me-2" aria-hidden="true"></i>@(isRtl ? "لوحة الشريك" : "Partner Dashboard")</a></li>
+                                        <li><a class="dropdown-item" asp-area="" asp-controller="PartnerPrograms" asp-action="Index"><i class="bi bi-journal-text me-2" aria-hidden="true"></i>@(isRtl ? "برامجي" : "My Programs")</a></li>
+                                        @* Channel content is separate from My Programs on purpose: a program is a
+                                           bookable offering, channel content is published material. *@
+                                        <li><a class="dropdown-item" asp-area="" asp-controller="ChannelContent" asp-action="Index"><i class="bi bi-camera-video me-2" aria-hidden="true"></i>@(isRtl ? "محتواي في القناة" : "My Channel Content")</a></li>
+                                        priorGroup = true;
+                                    }
+
+                                    @if (isClub)
+                                    {
+                                        @if (priorGroup) { <li><hr class="dropdown-divider" /></li> }
+                                        <li><h6 class="dropdown-header">@(isRtl ? "ناديي" : "My Club")</h6></li>
+                                        <li><a class="dropdown-item" asp-area="" asp-controller="ClubDashboard" asp-action="Index"><i class="bi bi-speedometer2 me-2" aria-hidden="true"></i>@(isRtl ? "لوحة النادي" : "Club Dashboard")</a></li>
+                                        <li><a class="dropdown-item" asp-area="" asp-controller="Agenda" asp-action="Index"><i class="bi bi-calendar-week me-2" aria-hidden="true"></i>@(isRtl ? "الأجندة" : "Agenda")</a></li>
+                                        <li><a class="dropdown-item" asp-area="" asp-controller="Kpi" asp-action="Index"><i class="bi bi-graph-up me-2" aria-hidden="true"></i>@(isRtl ? "مؤشرات الأداء" : "KPI")</a></li>
+                                        <li><a class="dropdown-item" asp-area="" asp-controller="AnnualReports" asp-action="Index"><i class="bi bi-file-earmark-text me-2" aria-hidden="true"></i>@(isRtl ? "التقرير السنوي" : "Annual Report")</a></li>
+                                        priorGroup = true;
+                                    }
+
+                                    @if (isAdmin)
+                                    {
+                                        @if (priorGroup) { <li><hr class="dropdown-divider" /></li> }
+                                        <li><h6 class="dropdown-header">@(isRtl ? "الإدارة" : "Administration")</h6></li>
+                                        @* Mirrors the Dashboard button already in the action strip, the
+                                           same way the club and partner groups do. No destination is
+                                           introduced here that the header did not already offer. *@
+                                        <li><a class="dropdown-item" asp-area="Admin" asp-controller="Dashboard" asp-action="Index"><i class="bi bi-speedometer2 me-2" aria-hidden="true"></i>@(isRtl ? "لوحة الإدارة" : "Admin Dashboard")</a></li>
+                                    }
+                                </ul>
                             </li>
 
-                            @if (isClub)
-                            {
-                                <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="Agenda" asp-action="Index">@(isRtl ? "الأجندة" : "Agenda")</a></li>
-                                <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="Kpi" asp-action="Index">@(isRtl ? "مؤشرات الأداء" : "KPI")</a></li>
-                                <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="AnnualReports" asp-action="Index">@(isRtl ? "التقرير السنوي" : "Annual Report")</a></li>
-                            }
+                            @* Ghars content stays at the TOP LEVEL, deliberately outside My Workspace.
+                               It is published by the Ghars team for everyone, not work belonging to the
+                               person signed in, and burying it under a personal-workspace heading would
+                               misfile it. The workspace dropdown is what keeps the row short enough to
+                               afford these three. *@
+
                             @* Formerly "Gallery". The section is now the programme's content channel and
                                carries partner awareness material as well as club activity media. *@
                             <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="Gallery" asp-action="Index">@(isRtl ? "قناة غرس" : "Ghars Channel")</a></li>
+                            <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="Library" asp-action="Index">@(isRtl ? "المكتبة الرقمية" : "Digital Library")</a></li>
                             <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="Surveys" asp-action="Index">@(isRtl ? "الاستبيانات" : "Surveys")</a></li>
                         }
 

@@ -106,6 +106,8 @@ public static class OfferingWorkflow
     {
         "OfferingDraftCreated" => IsAr ? "أُنشئت المسودة" : "Draft created",
         "OfferingUpdated" => IsAr ? "تم تعديل البرنامج" : "Program edited",
+        "OfferingAttachmentsAdded" => IsAr ? "أُضيفت مستندات" : "Documents attached",
+        "OfferingAttachmentsRemoved" => IsAr ? "أُزيلت مستندات" : "Documents removed",
         "OfferingSubmitted" => IsAr ? "أُرسل للاعتماد" : "Submitted for approval",
         "OfferingResubmitted" => IsAr ? "أُعيد الإرسال للاعتماد" : "Resubmitted for approval",
         "OfferingReturnedForCorrection" => IsAr ? "أُعيد للتعديل" : "Returned for correction",

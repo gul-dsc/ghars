@@ -231,9 +231,14 @@ endpoint in the application.
 
 ## Protected files
 
-Sensitive uploads — KPI evidence, organization licences and official survey reports — are stored in
-`protected-uploads/` at the **content root, outside `wwwroot`**, and are reachable only through
-`ProtectedFilesController`, which re-checks authorization on every request.
+Sensitive uploads — KPI evidence, organization licences, official survey reports and the supporting
+documents attached to partner offerings — are stored in `protected-uploads/` at the **content root,
+outside `wwwroot`**, and are reachable only through `ProtectedFilesController`, which re-checks
+authorization on every request.
+
+A program attachment is exactly as visible as the program it describes: the owning implementing
+entity and DSC reviewers can open it at any stage, and everyone else only once DSC has approved and
+published the offering. It is never served anonymously.
 
 `protected-uploads/` is deliberately **not** in source control. It is live business data, not source,
 and the application creates the directories it needs on first use.

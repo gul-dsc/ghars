@@ -52,6 +52,11 @@ Work through this during a deployment. Background and the reasoning behind each 
       nullable columns on `GalleryItems`. No existing column is dropped, renamed or made non-nullable,
       so existing gallery rows keep working unchanged — a null `ApprovalStatus` means "outside the
       implementing-entity review workflow", which is every pre-existing row
+- [ ] **Program attachments release only** — `20260908092255_AddActivityAttachments` applied. Purely
+      additive: one new table (`ActivityAttachments`) with a cascade FK to `Activities` and an index on
+      `ActivityId`. No existing table or column is touched, and every existing offering simply has no
+      attachments. Its files live in the new `protected-uploads/programs/` folder — create it with the
+      same permissions as the other categories (§2.3 of `GHARS_PRODUCTION_OPERATIONS.md`)
 
 ## Files
 

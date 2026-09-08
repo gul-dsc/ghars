@@ -2933,3 +2933,169 @@ the legitimate row noted in §32 — was left untouched.
   untouched.** The only shared surfaces changed are the booking lists and the two filters above, and
   only so custom requests stop disappearing from them.
 * **Ghars Channel, Digital Library and Surveys remain top-level navigation**, unchanged from §32.
+
+---
+
+## 34. Runtime Test Fixture Safety (2026-09-08)
+
+Verification passes create rows in the development database and remove them afterwards. During the
+dual-booking pass (§33) the removal step matched two legitimate notification rows belonging to
+booking 20 and deleted them; they were reconstructed from the booking and its intact audit trail,
+but the near miss is the point. This section covers the tooling added so that cannot recur.
+
+No application behaviour changed. Nothing in `tools/testing/` is compiled into `GharsPlatform`,
+referenced by it, or shipped with it.
+
+### 34.1 What went wrong, precisely
+
+`Notifications` has **no foreign key** to the booking or activity it describes. Its only link is the
+`LinkUrl` string:
+
+```
+FK check: Notifications -> (nothing)
+          NotificationDeliveries.NotificationId -> Notifications  [CASCADE]
+```
+
+So cleanup could not join its way to the right rows and reached for a pattern instead. The pattern
+`LinkUrl LIKE '%/bookings/details/2[0-9]'` was written to catch fixture bookings 28 and 29. It also
+catches `/bookings/details/20`, `21`, `22` … and booking 20 was real.
+
+The failure was not a typo. It was identifying a row by what it *looks like* instead of by what it
+*is*.
+
+### 34.2 Risky patterns found in the existing scripts
+
+Every cleanup script from previous passes was audited. All of them identify fixtures by matching
+text, and each carries the same latent fault:
+
+| Script | Identifies fixtures by | Why it can over-match |
+|---|---|---|
+| `cleanup.sql` | `Subject LIKE '%QA-VERIFY-20260906%'`, `FullName LIKE …` | any legitimate row containing the stamp |
+| `cleanup-programs.sql` | `TitleEn LIKE 'QA-PROG-%' OR TitleEn = 'QA Probe'` | a real program named "QA Probe" |
+| `cleanup-approval.sql` | `TitleEn LIKE 'QA-APPR%'`, **plus** `LinkUrl = '/partner/programs' AND CreatedAtUtc > DATEADD(hour, -4, GETUTCDATE())` | the date window sweeps up every partner notification raised in four hours, from any source |
+| `cleanup-ux.sql` | `TitleEn LIKE 'QA-%'`, **plus** `MessageEn LIKE '%' + TitleEn + '%'` | broadest of all: any title beginning "QA-", and a substring match of a title inside message text |
+| ad-hoc `sqlcmd` (the incident) | `LinkUrl LIKE '%/bookings/details/2[0-9]'` | matched booking 20 |
+
+Two further hazards, unrelated to text:
+
+* **`SCOPE_IDENTITY()` read from a later batch.** During §33 it reported organization id 38 where the
+  row written was 37, so a probe tested a non-existent id and a fixture was nearly left behind. An id
+  must be captured from the statement that created it, not inferred afterwards.
+* **PowerShell array unrolling.** A helper returning a one-element array yields a bare string, so a
+  caller reading `$result[0]` for a scalar gets the first *character* — a count of 12 read as 1. The
+  new helpers return `,$array` for that reason.
+
+### 34.3 Exact-id fixtures
+
+`tools/testing/fixture-manifest.mjs` records every row a run creates, by id, at the moment it is
+created, and writes through to disk on each record so a crashed run still leaves an accurate list:
+
+```js
+const run = createRun('dual-booking');
+run.recordBookingFromRedirect(res.headers['location'], 'existing-program E2E');
+run.recordModification('Activities', 35, 'IsPublished', true);   // value captured BEFORE the change
+```
+
+The preferred capture is the id the application itself hands back — the `Location` header of the
+redirect that follows a successful POST. No later lookup can be as certain.
+
+Recording an id at or below the baseline high-water mark throws **immediately**, at record time.
+That case means the id was captured wrongly, and failing at the point of capture is far better than
+handing cleanup an id that points at somebody else's row.
+
+### 34.4 Baseline high-water marks
+
+`New-GharsBaseline.ps1` records, per table, the row count and `MAX(Id)`. The high-water mark is the
+load-bearing half: any row created afterwards necessarily has a higher id, so cleanup can refuse,
+arithmetically, to delete anything that pre-dates the run.
+
+On the current development database the mark for `BookingRequests` is **20** — the very row that was
+damaged. Under this rule it is now undeletable by construction, and so are notifications 99 and 100,
+which sit at or below the `Notifications` mark of 100.
+
+Counts are a **verification signal only**. Cleanup never consults them, and
+`Compare-GharsBaseline.ps1` has no delete path at all. A table above its baseline means *go and look*
+— never *remove the difference*. The excess may be seeder output, another developer's work, or a
+fixture the manifest failed to record; deleting it unseen is how the original incident happened in
+the first place.
+
+### 34.5 Dependency-ordered cleanup
+
+`Remove-GharsFixtures.ps1` understands a fixed set of fixture kinds with fixed dependency chains. It
+is deliberately **not** a general-purpose cleaner and refuses any kind it does not know.
+
+| Kind | Removed with it |
+|---|---|
+| `booking` | agenda entries and media, audit trail, proposed time options, notifications whose `LinkUrl` is **exactly** `/bookings/details/<id>`, their deliveries |
+| `activity` | attachments, speakers, surveys, certificates, attendance sessions and records, `/Admin/Activities/Details/<id>` notifications, `Activity` audit-log rows |
+| `organization` | admin links, contacts, documents, partner profile |
+| `contactMessage` | `/Admin/ContactMessages/Details/<id>` notifications and deliveries |
+| `notification`, `agendaEntry` | deliveries; agenda media |
+
+Notification matching is exact string equality against the fixture id. `'/bookings/details/20'`
+cannot equal `'/bookings/details/28'`, so the incident's failure mode is unreachable — and the
+watermark guard would stop it independently even if the match were wrong.
+
+Deletion order comes from one declared list in `GharsTestSafety.ps1`, children before parents, not
+from the order fixtures happen to appear in a manifest. A table with no declared position aborts the
+run rather than being guessed at. Each `DELETE` asserts its own row count inside the transaction and
+rolls back on a mismatch.
+
+### 34.6 Guards
+
+* **Development only.** An environment that is not `Development` is refused — and an *unset*
+  environment is refused too, rather than assumed. A machine that has never been told it is a
+  development box is exactly the machine where a destructive script should decline.
+* **Database allow-list.** Only `GharsPlatformDb` and `GharsPlatformDb_Scratch*`.
+* **Local server** unless `-AllowRemoteServer` is passed explicitly.
+* **Protected rows** abort the run. `BookingRequests:20` is protected by default.
+* **Pre-existing ids** abort the run — it stops rather than skipping, because an unexpected id means
+  the manifest is wrong, and a wrong manifest is not something to work around silently.
+* **Unclaimed dependants block.** A row referencing a fixture that is not itself in the manifest
+  halts the run instead of being cascaded into.
+* **Dry run is the default.** The exact ids are printed; `-Execute` is required to delete anything.
+
+### 34.7 Scratch databases
+
+`New-GharsScratchDatabase.ps1` builds a throwaway database from the migration chain, so it matches
+production schema exactly and no migration is invented for testing. A pass that does not need the
+seeded organizations, role links, demo accounts or existing approved offerings should use one:
+nothing it does can damage anything, and teardown is a `DROP`.
+
+The populated development database remains necessary for tests that genuinely depend on its data —
+organization scoping, approved-offering gates, the demo accounts — which is most end-to-end booking
+work. Scratch databases must be dropped when the run finishes.
+
+### 34.8 Audit integrity and seeder side effects
+
+`BookingAuditTrails` rows are evidence. They are removed only as part of a booking the manifest
+names — a booking that by definition did not exist before the run. A legitimate booking's audit trail
+is never touched, and history is never rewritten to make counts look tidier. Where cleanup leaves a
+discrepancy, the discrepancy is reported rather than edited away.
+
+Development seeding can create attendance and certificate rows when the application restarts. Those
+belong to the application, not to any test run. `Compare-GharsBaseline.ps1` reports those tables
+separately so a restart during a pass is recorded as a restart, not mistaken for leftover fixtures.
+
+### 34.9 Verification
+
+The tooling was exercised rather than assumed to work.
+
+| Check | Result |
+|---|---|
+| Baseline capture against the development database | 24 tables; marks `BookingRequests=20`, `Activities=59`, `Notifications=100` |
+| Manifest naming **booking 20** (the incident, replayed) | aborted: `PROTECTED` **and** `PRE-EXISTING`; nothing deleted |
+| Booking 20's notifications 99/100 | never entered the plan — excluded by the watermark |
+| Environment unset / `Production` / non-allow-listed database | all three refused |
+| `fixture-manifest.mjs` self-test | 6/6 — refuses booking 20, unknown kinds, non-numeric ids, malformed redirects |
+| Full destructive round-trip on a scratch database | fixture booking and its 6 dependent rows deleted; legitimate booking 1, its notification and delivery survived; modified row restored and verified by read-back |
+| `Compare-GharsBaseline.ps1` after cleanup | all tracked tables match baseline; protected row present |
+| Scratch database dropped | only `GharsPlatformDb` remains |
+| Development database after all of it | 16 bookings, 59 activities, 21 notifications, 33 deliveries, 11 agenda, 20 audit rows, 36 organizations, 14 KPI — unchanged; booking 20 intact with both notifications and both audit rows |
+
+**Build** — `dotnet build --no-incremental` → **0 errors, 1 warning**, the retained `CS0108` on
+`Activity.CreatedByUserId`, not suppressed. **No migration** was created or applied.
+
+> The first build failed with `MSB3027`/`MSB3021`. That is the running application holding
+> `bin/Debug/net8.0/GharsPlatform.exe`, not a compile error; the C# was clean throughout. Stop the
+> app before building.

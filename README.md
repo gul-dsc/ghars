@@ -189,6 +189,17 @@ accounts. Account names, and how to recover a forgotten demo password with
 > permanently exposed. Any database seeded before 2026-09-06 should have its demo passwords rotated —
 > see the notice at the top of `SEED_CREDENTIALS.md`.
 
+### Runtime verification and test fixtures
+
+A verification pass that creates rows in the development database must be able to remove exactly
+those rows again. [`tools/testing/`](tools/testing/README.md) holds the tooling for that: a baseline
+snapshot taken before the run, a manifest recording each created id as it happens, and a cleanup
+utility that deletes only those ids — dry-run by default, Development-only, and unable to touch any
+row that existed before the run.
+
+Fixtures are never identified by subject text, program name, notification wording or date range.
+Section 34 of `GHARS_IMPLEMENTATION_REPORT.md` explains why, and what it cost to learn.
+
 ## Contact page
 
 `/Home/Contact` carries a public enquiry form. **This platform sends no email** — there is no SMTP

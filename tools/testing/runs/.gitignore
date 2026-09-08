@@ -1,0 +1,5 @@
+# Baselines and run manifests are per-machine, per-run artefacts describing the state of one
+# developer's database at one moment. The folder is tracked so the tooling has somewhere to write;
+# nothing inside it ever is.
+*
+!.gitignore

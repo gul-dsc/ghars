@@ -1,135 +1,267 @@
 @model List<GharsPlatform.Models.Core.MediaAlbum>
+@using GharsPlatform.Helpers
 @using GharsPlatform.Models.Core
 @using System.Globalization
 @{
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
-    string T(string e,string a)=>ar?a:e;
-    string N(Organization? o)=>ar?(o?.NameAr??o?.NameEn??""):(o?.NameEn??o?.NameAr??"");
-    string A(Activity? a)=>ar?(a?.TitleAr??a?.TitleEn??""):(a?.TitleEn??a?.TitleAr??"");
+    string T(string e, string a) => ar ? a : e;
+    string N(Organization? o) => ar ? (o?.NameAr ?? o?.NameEn ?? "") : (o?.NameEn ?? o?.NameAr ?? "");
+    string A(Activity? a) => ar ? (a?.TitleAr ?? a?.TitleEn ?? "") : (a?.TitleEn ?? a?.TitleAr ?? "");
     var seasons = ViewBag.Seasons as List<Season> ?? new();
     var clubs = ViewBag.Clubs as List<Organization> ?? new();
     var mediaItems = ViewBag.MediaItems as List<GalleryItem> ?? new();
     var selectedSeasonId = ViewBag.SelectedSeasonId as int?;
     var selectedClubId = ViewBag.SelectedClubId as int?;
+    var selectedCategory = ViewBag.SelectedCategory as ChannelCategory?;
+    var categoryCounts = ViewBag.CategoryCounts as Dictionary<ChannelCategory, int> ?? new();
+    var canContribute = ViewBag.CanContribute as bool? ?? false;
 
-    // Origin is derived from existing data - no schema change required.
-    string SourceLabel(GalleryItem g) => g.AgendaEntryId.HasValue
-        ? T("Agenda", "الأجندة")
-        : (g.MediaType == GalleryMediaType.PressCoverage || g.MediaType == GalleryMediaType.NewspaperCoverage
-            ? T("Press", "تغطية صحفية")
-            : T("DSC", "المجلس"));
-    string SourceClass(GalleryItem g) => g.AgendaEntryId.HasValue
-        ? "text-bg-success"
-        : (g.MediaType == GalleryMediaType.PressCoverage || g.MediaType == GalleryMediaType.NewspaperCoverage ? "text-bg-warning" : "text-bg-primary");
-    string MediaTypeText(GalleryMediaType t)=>t switch{
-        GalleryMediaType.Photo=>T("Photo","صورة"),
-        GalleryMediaType.Video=>T("Video","فيديو"),
-        GalleryMediaType.PressCoverage=>T("Press coverage","تغطية صحفية"),
-        GalleryMediaType.NewspaperCoverage=>T("Newspaper coverage","تغطية في الصحف"),
-        GalleryMediaType.OfficialPhoto=>T("Official photo","صورة رسمية"),
-        GalleryMediaType.OfficialVideo=>T("Official video","فيديو رسمي"),
-        _=>t.ToString()};
-    bool IsVideo(GalleryItem g) => g.MediaType == GalleryMediaType.Video || g.MediaType == GalleryMediaType.OfficialVideo;
-    ViewData["Title"] = T("Ghars Gallery","معرض غرس");
+    string MediaTypeText(GalleryMediaType t) => t switch
+    {
+        GalleryMediaType.Photo => T("Photo", "صورة"),
+        GalleryMediaType.Video => T("Video", "فيديو"),
+        GalleryMediaType.PressCoverage => T("Press coverage", "تغطية صحفية"),
+        GalleryMediaType.NewspaperCoverage => T("Newspaper coverage", "تغطية في الصحف"),
+        GalleryMediaType.OfficialPhoto => T("Official photo", "صورة رسمية"),
+        GalleryMediaType.OfficialVideo => T("Official video", "فيديو رسمي"),
+        _ => t.ToString()
+    };
+
+    ViewData["Title"] = ChannelWorkflow.ChannelName;
+
+    // The filter strip. "All" plus every category that actually has content, so the page never offers a
+    // filter that would return nothing.
+    var categories = Enum.GetValues(typeof(ChannelCategory)).Cast<ChannelCategory>()
+        .Where(c => categoryCounts.ContainsKey(c) || selectedCategory == c).ToList();
+
+    string FilterUrl(ChannelCategory? c) => Url.Action("Index", new
+    {
+        seasonId = selectedSeasonId,
+        clubId = selectedClubId,
+        from = ViewBag.From,
+        to = ViewBag.To,
+        category = c?.ToString()
+    }) ?? "/channel";
 }
-<h1 class="mb-3">@ViewData["Title"]</h1>
-<p class="text-muted mb-4">@T("Photos, videos, official media and press coverage of Ghars activities. Media uploaded by clubs through the agenda appears here automatically.","صور وفيديوهات ووسائط رسمية وتغطيات صحفية لأنشطة غرس. تظهر الوسائط التي يرفعها النادي عبر الأجندة هنا تلقائياً.")</p>
 
-<form method="get" class="card p-3 rounded-4 border-0 shadow-sm mb-4">
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+    <h1 class="mb-0">@ChannelWorkflow.ChannelName</h1>
+    @if (canContribute)
+    {
+        <a class="btn btn-success" asp-controller="Gallery" asp-action="Contribute">
+            <i class="bi bi-cloud-arrow-up me-1" aria-hidden="true"></i>@T("Add activity media", "إضافة وسائط نشاط")
+        </a>
+    }
+</div>
+
+<p class="text-muted mb-4">
+    @T("Photos, videos and awareness material from across the Ghars Program. Media your club uploads through the Agenda appears here automatically, alongside awareness and educational content published by implementing entities and government partners.",
+       "صور وفيديوهات ومواد توعوية من برنامج غرس. تظهر هنا تلقائياً الوسائط التي يرفعها ناديكم عبر الأجندة، إلى جانب المحتوى التوعوي والتعليمي الذي تنشره الجهات المنفذة والشركاء الحكوميون.")
+</p>
+
+@* The Digital Library is a different thing, and saying so here prevents the two being confused. *@
+<div class="alert alert-light border small d-flex flex-wrap align-items-center gap-2">
+    <i class="bi bi-info-circle" aria-hidden="true"></i>
+    <span>
+        @T("Looking for booklets, publications or educational documents? Those live in the Digital Library.",
+           "تبحثون عن كتيبات أو إصدارات أو وثائق تعليمية؟ تجدونها في المكتبة الرقمية.")
+    </span>
+    <a class="ms-auto" asp-controller="Library" asp-action="Index">@T("Open the Digital Library", "فتح المكتبة الرقمية")</a>
+</div>
+
+<form method="get" class="card p-3 rounded-4 border-0 shadow-sm mb-3">
+    <input type="hidden" name="category" value="@selectedCategory" />
     <div class="row g-2">
-        <div class="col-md-3"><label class="form-label">@T("Sports season","الموسم الرياضي")</label><select class="form-select" name="seasonId"><option value="">@T("All seasons","كل المواسم")</option>@foreach(var s in seasons){<option value="@s.Id" selected="@(selectedSeasonId==s.Id)">@(ar?s.TitleAr:s.TitleEn)</option>}</select></div>
-        <div class="col-md-3"><label class="form-label">@T("Club","النادي")</label><select class="form-select" name="clubId"><option value="">@T("All clubs","كل الأندية")</option>@foreach(var c in clubs){<option value="@c.Id" selected="@(selectedClubId==c.Id)">@N(c)</option>}</select></div>
-        <div class="col-md-2"><label class="form-label">@T("From","من")</label><input class="form-control" type="date" name="from" value="@ViewBag.From" /></div>
-        <div class="col-md-2"><label class="form-label">@T("To","إلى")</label><input class="form-control" type="date" name="to" value="@ViewBag.To" /></div>
-        <div class="col-md-2 d-flex align-items-end gap-2"><button class="btn btn-success w-100">@T("Filter","تصفية")</button></div>
+        <div class="col-md-3">
+            <label class="form-label" for="ch-season">@T("Sports season", "الموسم الرياضي")</label>
+            <select class="form-select" id="ch-season" name="seasonId">
+                <option value="">@T("All seasons", "كل المواسم")</option>
+                @foreach (var s in seasons)
+                {
+                    <option value="@s.Id" selected="@(selectedSeasonId == s.Id)">@(ar ? s.TitleAr : s.TitleEn)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="ch-club">@T("Club", "النادي")</label>
+            <select class="form-select" id="ch-club" name="clubId">
+                <option value="">@T("All clubs", "كل الأندية")</option>
+                @foreach (var c in clubs)
+                {
+                    <option value="@c.Id" selected="@(selectedClubId == c.Id)">@N(c)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="ch-from">@T("From", "من")</label>
+            <input class="form-control" id="ch-from" type="date" name="from" value="@ViewBag.From" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="ch-to">@T("To", "إلى")</label>
+            <input class="form-control" id="ch-to" type="date" name="to" value="@ViewBag.To" />
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-success w-100">@T("Filter", "تصفية")</button>
+        </div>
     </div>
 </form>
 
-<h2 class="h5 mb-3"><i class="bi bi-images me-2"></i>@T("Activity & Program Media","وسائط الأنشطة والبرنامج") <span class="badge text-bg-light border">@mediaItems.Count</span></h2>
+<nav class="mb-4" aria-label="@T("Content categories", "تصنيفات المحتوى")">
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-sm @(selectedCategory is null ? "btn-success" : "btn-outline-secondary")" href="@FilterUrl(null)">
+            @T("All", "الكل") <span class="badge text-bg-light border ms-1">@mediaItems.Count</span>
+        </a>
+        @foreach (var c in categories)
+        {
+            categoryCounts.TryGetValue(c, out var n);
+            <a class="btn btn-sm @(selectedCategory == c ? "btn-success" : "btn-outline-secondary")" href="@FilterUrl(c)">
+                <i class="bi @ChannelWorkflow.CategoryIcon(c) me-1" aria-hidden="true"></i>@ChannelWorkflow.CategoryLabel(c)
+                <span class="badge text-bg-light border ms-1">@n</span>
+            </a>
+        }
+    </div>
+</nav>
+
+<h2 class="h5 mb-3">
+    <i class="bi bi-collection-play me-2" aria-hidden="true"></i>@T("Channel content", "محتوى القناة")
+    <span class="badge text-bg-light border">@mediaItems.Count</span>
+</h2>
 <div class="row g-4 mb-5">
-@foreach(var item in mediaItems)
-{
-    var title = ar ? item.TitleAr : item.TitleEn;
-    // Stored media is fetched by gallery record id, never by file path: the endpoint re-checks publication
-    // so hiding an item in the admin gallery actually withdraws the file too.
-    var src =!string.IsNullOrWhiteSpace(item.FilePath) ? $"/protected-files/gallery/{item.Id}" : (item.ExternalUrl ?? "");
-    <div class="col-md-4 col-lg-3">
-        <div class="card h-100 rounded-4 shadow-sm border-0 overflow-hidden">
-            @if(IsVideo(item))
-            {
-                <button type="button" class="btn p-0 border-0 text-start gallery-open-video" data-title="@title" data-src="@src">
-                    <div class="bg-dark d-flex align-items-center justify-content-center" style="height:170px;"><i class="bi bi-play-circle-fill text-white" style="font-size:3rem"></i></div>
-                </button>
-            }
-            else if(!string.IsNullOrWhiteSpace(item.FilePath))
-            {
-                <button type="button" class="btn p-0 border-0 text-start gallery-open-image" data-title="@title" data-src="@src">
-                    <img src="@src" alt="@title" style="width:100%;height:170px;object-fit:cover" />
-                </button>
-            }
-            else
-            {
-                <div class="bg-light d-flex align-items-center justify-content-center" style="height:170px;"><i class="bi bi-newspaper" style="font-size:3rem"></i></div>
-            }
-            <div class="card-body">
-                <div class="d-flex flex-wrap gap-1 mb-2">
-                    <span class="badge @SourceClass(item)">@SourceLabel(item)</span>
-                    <span class="badge text-bg-light border">@MediaTypeText(item.MediaType)</span>
-                </div>
-                <h6 class="mb-1">@title</h6>
-                <div class="small text-muted">@N(item.Organization) @if(item.Organization!=null){<span>·</span>} @item.MediaDate.ToString("yyyy-MM-dd")</div>
-                @if(string.IsNullOrWhiteSpace(item.FilePath) && !string.IsNullOrWhiteSpace(item.ExternalUrl))
+    @foreach (var item in mediaItems)
+    {
+        var title = ar ? item.TitleAr : item.TitleEn;
+        var category = ChannelWorkflow.ResolveCategory(item);
+        // Stored media is fetched by record id, never by file path: the endpoint re-checks visibility, so
+        // hiding or withdrawing an item actually withdraws the file too.
+        var src = !string.IsNullOrWhiteSpace(item.FilePath) ? $"/protected-files/gallery/{item.Id}" : (item.ExternalUrl ?? "");
+        var isVideo = ChannelWorkflow.IsVideo(item);
+        <div class="col-md-4 col-lg-3">
+            <div class="card h-100 rounded-4 shadow-sm border-0 overflow-hidden">
+                @if (isVideo && !string.IsNullOrWhiteSpace(src))
                 {
-                    <a class="btn btn-sm btn-outline-success mt-2" href="@item.ExternalUrl" target="_blank" rel="noopener noreferrer">@T("Open link","فتح الرابط")</a>
+                    <button type="button" class="btn p-0 border-0 text-start gallery-open-video" data-title="@title" data-src="@src">
+                        <div class="bg-dark d-flex align-items-center justify-content-center" style="height:170px;">
+                            <i class="bi bi-play-circle-fill text-white" style="font-size:3rem" aria-hidden="true"></i>
+                            <span class="visually-hidden">@T("Play", "تشغيل") @title</span>
+                        </div>
+                    </button>
                 }
+                else if (!string.IsNullOrWhiteSpace(item.FilePath))
+                {
+                    <button type="button" class="btn p-0 border-0 text-start gallery-open-image" data-title="@title" data-src="@src">
+                        <img src="@src" alt="@title" style="width:100%;height:170px;object-fit:cover" />
+                    </button>
+                }
+                else
+                {
+                    <div class="bg-light d-flex align-items-center justify-content-center" style="height:170px;">
+                        <i class="bi @ChannelWorkflow.CategoryIcon(category)" style="font-size:3rem" aria-hidden="true"></i>
+                    </div>
+                }
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-1 mb-2">
+                        @* Source and category are text, never colour alone. *@
+                        <span class="badge @ChannelWorkflow.SourceBadgeClass(item)">@ChannelWorkflow.SourceLabel(item, item.Organization?.OrganizationType)</span>
+                        <span class="badge text-bg-light border">
+                            <i class="bi @ChannelWorkflow.CategoryIcon(category) me-1" aria-hidden="true"></i>@ChannelWorkflow.CategoryLabel(category)
+                        </span>
+                        <span class="badge text-bg-light border">@MediaTypeText(item.MediaType)</span>
+                    </div>
+                    <h3 class="h6 mb-1">@title</h3>
+                    <div class="small text-muted">
+                        @N(item.Organization)@if (item.Organization != null) {<span> · </span>}@item.MediaDate.ToString("yyyy-MM-dd")
+                    </div>
+
+                    @if (item.LibraryItem is not null)
+                    {
+                        @* A publication is not duplicated into the channel; the card links to the library copy. *@
+                        <a class="btn btn-sm btn-outline-success mt-2" asp-controller="Library" asp-action="Index">
+                            <i class="bi bi-journal-text me-1" aria-hidden="true"></i>@T("Open in Digital Library", "فتح في المكتبة الرقمية")
+                        </a>
+                    }
+                    else if (string.IsNullOrWhiteSpace(item.FilePath) && !string.IsNullOrWhiteSpace(item.ExternalUrl))
+                    {
+                        <a class="btn btn-sm btn-outline-success mt-2" href="@item.ExternalUrl" target="_blank" rel="noopener noreferrer">
+                            @T("Open link", "فتح الرابط")
+                        </a>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(item.FilePath))
+                    {
+                        <a class="btn btn-sm btn-outline-secondary mt-2" href="@src" download>
+                            <i class="bi bi-download me-1" aria-hidden="true"></i>@T("Download", "تنزيل")
+                        </a>
+                    }
+                </div>
             </div>
         </div>
-    </div>
-}
-@if(!mediaItems.Any())
-{
-    <div class="col-12"><div class="empty-state">@T("No activity media found for the selected filters.","لا توجد وسائط أنشطة وفق خيارات التصفية المحددة.")</div></div>
-}
+    }
+    @if (!mediaItems.Any())
+    {
+        <div class="col-12">
+            <div class="empty-state">
+                @T("No content found in the Ghars Channel for the selected filters.", "لا يوجد محتوى في قناة غرس وفق خيارات التصفية المحددة.")
+            </div>
+        </div>
+    }
 </div>
 
-<h2 class="h5 mb-3"><i class="bi bi-collection me-2"></i>@T("Curated Albums","الألبومات المنسّقة") <span class="badge text-bg-light border">@Model.Count</span></h2>
+<h2 class="h5 mb-3">
+    <i class="bi bi-collection me-2" aria-hidden="true"></i>@T("Curated albums", "الألبومات المنسّقة")
+    <span class="badge text-bg-light border">@Model.Count</span>
+</h2>
 <div class="row g-4">
-@foreach(var album in Model)
-{
-    var title = ar ? album.TitleAr : album.TitleEn;
-    var desc = ar ? album.DescriptionAr : album.DescriptionEn;
-    var cover = !string.IsNullOrWhiteSpace(album.CoverImagePath) ? album.CoverImagePath : album.Items.FirstOrDefault(i=>i.MediaType==MediaType.Image && !string.IsNullOrWhiteSpace(i.FilePath))?.FilePath;
-    <div class="col-md-4">
-        <div class="card h-100 rounded-4 shadow-sm border-0 overflow-hidden">
-            @if(!string.IsNullOrWhiteSpace(cover))
-            {
-                <img class="card-img-top" src="@cover" alt="@title" style="height:220px;object-fit:cover" />
-            }
-            else
-            {
-                <div class="bg-light d-flex align-items-center justify-content-center" style="height:220px;"><i class="bi bi-images" style="font-size:4rem"></i></div>
-            }
-            <div class="card-body d-flex flex-column">
-                <div class="d-flex gap-2 mb-2"><span class="badge text-bg-success">@album.Items.Count @T("items","عنصر")</span>@if(album.Activity!=null){<span class="badge text-bg-light">@A(album.Activity)</span>}</div>
-                <h5>@title</h5>
-                <p class="text-muted flex-grow-1">@desc</p>
-                <div class="small text-muted mb-3">@(N(album.Organization)) @if(album.Organization!=null){<span> · </span>} @album.AlbumDate.ToString("yyyy-MM-dd")</div>
-                <a class="btn btn-outline-success" asp-controller="Gallery" asp-action="Details" asp-route-id="@album.Id">@T("Open Album","فتح الألبوم")</a>
+    @foreach (var album in Model)
+    {
+        var title = ar ? album.TitleAr : album.TitleEn;
+        var desc = ar ? album.DescriptionAr : album.DescriptionEn;
+        var cover = !string.IsNullOrWhiteSpace(album.CoverImagePath)
+            ? album.CoverImagePath
+            : album.Items.FirstOrDefault(i => i.MediaType == MediaType.Image && !string.IsNullOrWhiteSpace(i.FilePath))?.FilePath;
+        <div class="col-md-4">
+            <div class="card h-100 rounded-4 shadow-sm border-0 overflow-hidden">
+                @if (!string.IsNullOrWhiteSpace(cover))
+                {
+                    <img class="card-img-top" src="@cover" alt="@title" style="height:220px;object-fit:cover" />
+                }
+                else
+                {
+                    <div class="bg-light d-flex align-items-center justify-content-center" style="height:220px;">
+                        <i class="bi bi-images" style="font-size:4rem" aria-hidden="true"></i>
+                    </div>
+                }
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <span class="badge text-bg-success">@album.Items.Count @T("items", "عنصر")</span>
+                        @if (album.Activity != null) { <span class="badge text-bg-light border">@A(album.Activity)</span> }
+                    </div>
+                    <h3 class="h5">@title</h3>
+                    <p class="text-muted flex-grow-1">@desc</p>
+                    <div class="small text-muted mb-3">
+                        @N(album.Organization)@if (album.Organization != null) {<span> · </span>}@album.AlbumDate.ToString("yyyy-MM-dd")
+                    </div>
+                    <a class="btn btn-outline-success" asp-controller="Gallery" asp-action="Details" asp-route-id="@album.Id">
+                        @T("Open album", "فتح الألبوم")
+                    </a>
+                </div>
             </div>
         </div>
-    </div>
-}
-@if(!Model.Any())
-{
-    <div class="col-12"><div class="empty-state">@T("No gallery albums found.","لا توجد ألبومات في المعرض.")</div></div>
-}
+    }
+    @if (!Model.Any())
+    {
+        <div class="col-12"><div class="empty-state">@T("No albums yet.", "لا توجد ألبومات بعد.")</div></div>
+    }
 </div>
 
-<div class="modal fade" id="galleryMediaModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered"><div class="modal-content rounded-4">
-        <div class="modal-header"><h5 class="modal-title" id="galleryMediaTitle">@T("Media","وسائط")</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="@T("Close","إغلاق")"></button></div>
-        <div class="modal-body" id="galleryMediaBody"></div>
-    </div></div>
+<div class="modal fade" id="galleryMediaModal" tabindex="-1" aria-hidden="true" aria-labelledby="galleryMediaTitle">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content rounded-4">
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="galleryMediaTitle">@T("Media", "وسائط")</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="@T("Close", "إغلاق")"></button>
+            </div>
+            <div class="modal-body" id="galleryMediaBody"></div>
+        </div>
+    </div>
 </div>
 
 @section Scripts {
@@ -140,28 +272,49 @@
     const body = document.getElementById('galleryMediaBody');
     if(!modalEl || !body || !window.bootstrap) return;
     const modal = new bootstrap.Modal(modalEl);
+
+    // Only the two hosts the platform actually links to are turned into embeds. Anything else is played
+    // as a plain video element, so no arbitrary markup from a stored URL ever reaches the page.
     function youtubeEmbed(src){
         let url = src;
         if(src.includes('youtu.be/')) url = 'https://www.youtube.com/embed/' + src.split('youtu.be/')[1].split(/[?&]/)[0];
         if(src.includes('watch?v=')) url = src.replace('watch?v=', 'embed/');
         return url;
     }
-    function openMedia(title, html, dark){
+    function openMedia(title, build, dark){
         titleEl.textContent = title || 'Media';
         body.className = dark ? 'modal-body bg-dark' : 'modal-body';
-        body.innerHTML = html;
+        body.replaceChildren(build());
         modal.show();
     }
-    document.querySelectorAll('.gallery-open-image').forEach(btn=>btn.addEventListener('click',function(){
-        const src=this.dataset.src||''; const title=this.dataset.title||'';
-        openMedia(title, `<img src="${src}" alt="${title}" style="width:100%;max-height:78vh;object-fit:contain" />`, false);
+    document.querySelectorAll('.gallery-open-image').forEach(btn => btn.addEventListener('click', function(){
+        const src = this.dataset.src || '', title = this.dataset.title || '';
+        openMedia(title, () => {
+            const img = document.createElement('img');
+            img.src = src; img.alt = title;
+            img.style.cssText = 'width:100%;max-height:78vh;object-fit:contain';
+            return img;
+        }, false);
     }));
-    document.querySelectorAll('.gallery-open-video').forEach(btn=>btn.addEventListener('click',function(){
-        const src=this.dataset.src||''; const title=this.dataset.title||'';
-        if(src.includes('youtube.com') || src.includes('youtu.be')) openMedia(title, `<div class="ratio ratio-16x9"><iframe src="${youtubeEmbed(src)}" title="${title}" allowfullscreen></iframe></div>`, true);
-        else openMedia(title, `<video src="${src}" controls autoplay style="width:100%;max-height:78vh;background:#000"></video>`, true);
+    document.querySelectorAll('.gallery-open-video').forEach(btn => btn.addEventListener('click', function(){
+        const src = this.dataset.src || '', title = this.dataset.title || '';
+        const isYouTube = src.includes('youtube.com') || src.includes('youtu.be');
+        openMedia(title, () => {
+            if(isYouTube){
+                const wrap = document.createElement('div');
+                wrap.className = 'ratio ratio-16x9';
+                const frame = document.createElement('iframe');
+                frame.src = youtubeEmbed(src); frame.title = title; frame.allowFullscreen = true;
+                wrap.appendChild(frame);
+                return wrap;
+            }
+            const video = document.createElement('video');
+            video.src = src; video.controls = true; video.autoplay = true;
+            video.style.cssText = 'width:100%;max-height:78vh;background:#000';
+            return video;
+        }, true);
     }));
-    modalEl.addEventListener('hidden.bs.modal', function(){ body.innerHTML=''; });
+    modalEl.addEventListener('hidden.bs.modal', () => body.replaceChildren());
 })();
 </script>
 }

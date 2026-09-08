@@ -221,46 +221,33 @@ public class KpiController : Controller
     /// <summary>
     /// Agenda-derived indicator values for the selected club/season (docs: the number of lectures is
     /// extracted automatically from the Agenda). Only Submitted/Approved entries count as delivered.
+    ///
+    /// The query itself lives in <see cref="SeasonClubStatistics"/> because the Ghars Annual Report
+    /// reports the same four indicators: two copies of this logic is precisely how the two surfaces
+    /// would come to disagree about how many activities a club delivered.
     /// </summary>
-    private async Task<DerivedKpi> GetDerivedAsync(int organizationId, int seasonId)
-    {
-        if (organizationId <= 0 || seasonId <= 0) return new DerivedKpi(false, 0, 0, 0, 0);
-
-        var entries = await _db.AgendaEntries
-            .Where(x => x.OrganizationId == organizationId && x.SeasonId == seasonId
-                        && (x.Status == AgendaEntryStatus.Submitted || x.Status == AgendaEntryStatus.Approved))
-            .Select(x => new { x.NumberOfParticipants, x.LecturerName, x.DepartmentOrOrganization })
-            .ToListAsync();
-
-        if (entries.Count == 0) return new DerivedKpi(false, 0, 0, 0, 0);
-
-        return new DerivedKpi(
-            true,
-            entries.Count,
-            entries.Sum(x => x.NumberOfParticipants),
-            entries.Where(x => !string.IsNullOrWhiteSpace(x.LecturerName)).Select(x => x.LecturerName!.Trim().ToLowerInvariant()).Distinct().Count(),
-            entries.Where(x => !string.IsNullOrWhiteSpace(x.DepartmentOrOrganization)).Select(x => x.DepartmentOrOrganization!.Trim().ToLowerInvariant()).Distinct().Count());
-    }
+    private Task<SeasonClubStats> GetDerivedAsync(int organizationId, int seasonId)
+        => SeasonClubStatistics.GetAsync(_db, organizationId, seasonId);
 
     private async Task ApplyDerivedValuesAsync(KpiVm vm)
     {
         var derived = await GetDerivedAsync(vm.OrganizationId, vm.SeasonId);
         ViewBag.HasDerivedData = derived.HasData;
         if (!derived.HasData) return;
-        vm.NumberOfLecturesActivities = derived.Activities;
+        vm.NumberOfLecturesActivities = derived.DeliveredActivities;
         vm.NumberOfParticipants = derived.Participants;
         vm.NumberOfLecturers = derived.Lecturers;
-        vm.NumberOfImplementingEntities = derived.Entities;
+        vm.NumberOfImplementingEntities = derived.ImplementingEntities;
     }
 
     private async Task ApplyDerivedValuesToEntityAsync(KpiSubmission entity)
     {
         var derived = await GetDerivedAsync(entity.OrganizationId, entity.SeasonId);
         if (!derived.HasData) return; // no authoritative agenda data: keep the club's manual entry
-        entity.NumberOfLecturesActivities = derived.Activities;
+        entity.NumberOfLecturesActivities = derived.DeliveredActivities;
         entity.NumberOfParticipants = derived.Participants;
         entity.NumberOfLecturers = derived.Lecturers;
-        entity.NumberOfImplementingEntities = derived.Entities;
+        entity.NumberOfImplementingEntities = derived.ImplementingEntities;
     }
 
     private static void ApplyVmToEntity(KpiVm vm, KpiSubmission e)
@@ -393,8 +380,6 @@ public class KpiController : Controller
             .Where(x => x.UserId == (User.FindFirstValue(ClaimTypes.NameIdentifier) ?? ""))
             .Select(x => x.OrganizationId)
             .ToListAsync();
-
-    private sealed record DerivedKpi(bool HasData, int Activities, int Participants, int Lecturers, int Entities);
 
     public class KpiVm
     {

@@ -72,7 +72,11 @@
   function ensureFilters(){
     const page = document.querySelector('.admin-page');
     if(!page || page.querySelector('.ghars-filter-panel')) return;
-    const table = page.querySelector('table');
+    // The first table that is actually a list. A table can opt out with data-filterable="false":
+    // some admin pages render a document rather than a list -- the Ghars Annual Report reproduces an
+    // official form -- and a keyword filter there would hide rows of the record being reviewed.
+    const table = Array.from(page.querySelectorAll('table'))
+      .find(t => t.getAttribute('data-filterable') !== 'false');
     if(!table) return;
     const rows = Array.from(table.querySelectorAll('tbody tr'));
     if(!rows.length) return;

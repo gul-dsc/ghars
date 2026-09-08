@@ -1,9 +1,11 @@
 using GharsPlatform.Data;
 using GharsPlatform.Helpers;
+using GharsPlatform.Hubs;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
@@ -17,7 +19,10 @@ public class GalleryController : Controller
 {
     private readonly AppDbContext _db;
     private readonly IWebHostEnvironment _env;
-    public GalleryController(AppDbContext db, IWebHostEnvironment env){_db=db;_env=env;}
+    private readonly IHubContext<NotificationsHub> _hub;
+    public GalleryController(AppDbContext db, IWebHostEnvironment env, IHubContext<NotificationsHub> hub){_db=db;_env=env;_hub=hub;}
+
+    private static bool IsAr() => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
 
     public async Task<IActionResult> Index(string? keyword, int? seasonId, int? organizationId, int? activityId, bool? isPublic)
     {
@@ -236,18 +241,97 @@ public class GalleryController : Controller
     // plus the club media aggregated automatically from Agenda entries.
     // ---------------------------------------------------------------------
 
-    public async Task<IActionResult> MediaItems(int? seasonId, int? organizationId, GalleryMediaType? mediaType, string? source)
+    public async Task<IActionResult> MediaItems(int? seasonId, int? organizationId, GalleryMediaType? mediaType, string? source, ChannelApprovalStatus? approvalStatus)
     {
-        var q = _db.GalleryItems.Include(x => x.Organization).Include(x => x.Season).Include(x => x.AgendaEntry).AsQueryable();
+        var q = _db.GalleryItems.Include(x => x.Organization).Include(x => x.Season).Include(x => x.AgendaEntry).Include(x => x.LibraryItem).AsQueryable();
         if (seasonId.HasValue) q = q.Where(x => x.SeasonId == seasonId);
         if (organizationId.HasValue) q = q.Where(x => x.OrganizationId == organizationId);
         if (mediaType.HasValue) q = q.Where(x => x.MediaType == mediaType);
+        if (approvalStatus.HasValue) q = q.Where(x => x.ApprovalStatus == approvalStatus);
+        // "partner" is the third stream alongside club agenda media and DSC uploads: anything carrying a
+        // channel approval state belongs to an implementing entity.
         if (source == "agenda") q = q.Where(x => x.AgendaEntryId != null);
-        if (source == "dsc") q = q.Where(x => x.AgendaEntryId == null);
+        if (source == "partner") q = q.Where(x => x.ApprovalStatus != null);
+        if (source == "dsc") q = q.Where(x => x.AgendaEntryId == null && x.ApprovalStatus == null);
         await Lookups();
         ViewBag.SelectedSeasonId = seasonId; ViewBag.SelectedOrganizationId = organizationId;
         ViewBag.SelectedMediaType = mediaType; ViewBag.SelectedSource = source;
+        ViewBag.SelectedApprovalStatus = approvalStatus;
+        ViewBag.PendingReviewCount = await _db.GalleryItems
+            .CountAsync(x => x.ApprovalStatus == ChannelApprovalStatus.SubmittedForApproval);
         return View(await q.OrderByDescending(x => x.MediaDate).Take(300).ToListAsync());
+    }
+
+    // ---------------------------------------------------------------------
+    // Ghars Channel review: partner and government content submitted for DSC approval.
+    //
+    // Deliberately the same interaction as the partner offering review — a details page and one Review
+    // action — rather than a third style. Approval is the ONLY transition that sets IsPublished, so a
+    // partner can never make its own content visible.
+    // ---------------------------------------------------------------------
+
+    [HttpGet("/Admin/Gallery/ChannelReview/{id:int}")]
+    public async Task<IActionResult> ChannelReview(int id)
+    {
+        var item = await _db.GalleryItems
+            .Include(x => x.Organization).Include(x => x.Season).Include(x => x.LibraryItem)
+            .FirstOrDefaultAsync(x => x.Id == id && x.ApprovalStatus != null);
+        if (item == null) return NotFound();
+
+        var key = item.Id.ToString();
+        ViewBag.History = await _db.SystemAuditLogs
+            .Where(x => x.EntityName == nameof(GalleryItem) && x.EntityId == key)
+            .OrderByDescending(x => x.AtUtc)
+            .Select(x => new OfferingHistoryEntry(x.Action, x.AtUtc))
+            .ToListAsync();
+        return View(item);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReviewChannelContent(int id, ChannelApprovalStatus status, string? notes)
+    {
+        var item = await _db.GalleryItems.Include(x => x.Organization)
+            .FirstOrDefaultAsync(x => x.Id == id && x.ApprovalStatus != null);
+        if (item == null) return NotFound();
+
+        var isAr = IsAr();
+
+        if (status is not (ChannelApprovalStatus.Approved or ChannelApprovalStatus.ReturnedForCorrection or ChannelApprovalStatus.Rejected))
+        {
+            TempData["ToastWarning"] = isAr ? "قرار المراجعة غير صالح." : "Invalid review decision.";
+            return RedirectToAction(nameof(ChannelReview), new { id });
+        }
+
+        if (!ChannelWorkflow.DscCanReview(item.ApprovalStatus))
+        {
+            TempData["ToastWarning"] = isAr
+                ? "لا يمكن اتخاذ قرار على محتوى ليس قيد المراجعة."
+                : "A decision can only be recorded on content that is under review.";
+            return RedirectToAction(nameof(ChannelReview), new { id });
+        }
+
+        var old = new { item.ApprovalStatus, item.IsPublished, item.ReviewNotes };
+        item.ApprovalStatus = status;
+        // Publication and approval move together. This is the only place either is set for partner
+        // content, so the two fields can never disagree about whether it is visible.
+        item.IsPublished = status == ChannelApprovalStatus.Approved;
+        item.ReviewNotes = status == ChannelApprovalStatus.Approved || string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        item.ReviewedAtUtc = DateTime.UtcNow;
+        item.ReviewedByUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await _db.SaveChangesAsync();
+
+        var action = status switch
+        {
+            ChannelApprovalStatus.Approved => "ChannelContentApproved",
+            ChannelApprovalStatus.ReturnedForCorrection => "ChannelContentReturnedForCorrection",
+            _ => "ChannelContentRejected"
+        };
+        await AuditAsync(action, item.Id, old, new { item.ApprovalStatus, item.IsPublished, item.ReviewNotes });
+        await NotifyOwnerAsync(item, status, notes);
+
+        TempData["ToastSuccess"] = isAr ? "تم تسجيل قرار المراجعة." : "Review decision recorded.";
+        return RedirectToAction(nameof(ChannelReview), new { id });
     }
 
     [Authorize(Roles = RoleNames.SuperAdmin)]
@@ -303,6 +387,15 @@ public class GalleryController : Controller
         return RedirectToAction(nameof(MediaItems));
     }
 
+    /// <summary>
+    /// DSC moderation of channel content: hide anything, restore what DSC itself hid.
+    ///
+    /// For partner content the two visibility fields must stay in step, so hiding also records
+    /// <see cref="ChannelApprovalStatus.Unpublished"/> and restoring records
+    /// <see cref="ChannelApprovalStatus.Approved"/>. Content that is still a draft, awaiting review,
+    /// returned or rejected cannot be published by a toggle — it has not been approved, and this is not
+    /// the approval action.
+    /// </summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Roles = RoleNames.SuperAdmin)]
@@ -310,12 +403,108 @@ public class GalleryController : Controller
     {
         var item = await _db.GalleryItems.FirstOrDefaultAsync(x => x.Id == id);
         if (item == null) return NotFound();
-        item.IsPublished = !item.IsPublished;
+
+        var isAr = IsAr();
+        var publishing = !item.IsPublished;
+
+        if (publishing && item.ApprovalStatus is not null and not ChannelApprovalStatus.Unpublished)
+        {
+            TempData["ToastWarning"] = isAr
+                ? "لا يمكن نشر محتوى لم يُعتمد بعد. استخدموا شاشة مراجعة قناة غرس."
+                : "Content that has not been approved cannot be published here. Use the Ghars Channel review screen.";
+            return RedirectToAction(nameof(MediaItems));
+        }
+
+        var old = new { item.IsPublished, item.ApprovalStatus };
+        item.IsPublished = publishing;
+        if (item.ApprovalStatus is not null)
+            item.ApprovalStatus = publishing ? ChannelApprovalStatus.Approved : ChannelApprovalStatus.Unpublished;
         item.UpdatedAtUtc = DateTime.UtcNow;
         item.UpdatedByUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         await _db.SaveChangesAsync();
-        TempData["ToastSuccess"] = item.IsPublished ? "Media published." : "Media hidden.";
+
+        await AuditAsync(publishing ? "ChannelContentPublishedByDsc" : "ChannelContentHiddenByDsc",
+            item.Id, old, new { item.IsPublished, item.ApprovalStatus });
+
+        TempData["ToastSuccess"] = publishing
+            ? (isAr ? "تم نشر الوسائط." : "Media published.")
+            : (isAr ? "تم إخفاء الوسائط." : "Media hidden.");
         return RedirectToAction(nameof(MediaItems));
+    }
+
+    // ---------------------------------------------------------------------
+    // Channel review helpers
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Organization-targeted notification to the contributing entity only. No other organization is
+    /// addressed, and club photo uploads generate nothing — they carry no review workflow.
+    /// </summary>
+    private async Task NotifyOwnerAsync(GalleryItem item, ChannelApprovalStatus status, string? notes)
+    {
+        if (item.OrganizationId is null) return;
+
+        var (titleEn, titleAr, messageEn, messageAr) = status switch
+        {
+            ChannelApprovalStatus.Approved => (
+                "Ghars Channel content approved", "تم اعتماد المحتوى في قناة غرس",
+                $"'{item.TitleEn}' was approved and is now published in the Ghars Channel.",
+                $"تم اعتماد '{item.TitleAr}' ونشره في قناة غرس."),
+            ChannelApprovalStatus.ReturnedForCorrection => (
+                "Ghars Channel content returned", "إعادة المحتوى في قناة غرس للتعديل",
+                $"'{item.TitleEn}' was returned for correction. Please review the notes and resubmit.",
+                $"تمت إعادة '{item.TitleAr}' للتعديل. يرجى مراجعة الملاحظات وإعادة الإرسال."),
+            _ => (
+                "Ghars Channel content rejected", "تم رفض المحتوى في قناة غرس",
+                $"'{item.TitleEn}' was rejected. Please review the notes.",
+                $"تم رفض '{item.TitleAr}'. يرجى مراجعة الملاحظات.")
+        };
+
+        var n = new Notification
+        {
+            TitleEn = titleEn,
+            TitleAr = titleAr,
+            MessageEn = string.IsNullOrWhiteSpace(notes) ? messageEn : $"{messageEn} — {notes}",
+            MessageAr = string.IsNullOrWhiteSpace(notes) ? messageAr : $"{messageAr} — {notes}",
+            Type = status == ChannelApprovalStatus.Approved ? NotificationType.Success : NotificationType.Warning,
+            TargetType = NotificationTargetType.Organization,
+            TargetOrganizationId = item.OrganizationId,
+            LinkUrl = $"/partner/channel/details/{item.Id}",
+            CreatedAtUtc = DateTime.UtcNow,
+            CreatedByUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+        };
+        _db.Notifications.Add(n);
+        await _db.SaveChangesAsync();
+
+        var users = await _db.OrganizationAdminLinks
+            .Where(x => x.OrganizationId == item.OrganizationId)
+            .Select(x => x.UserId).Distinct().ToListAsync();
+        foreach (var u in users)
+            _db.NotificationDeliveries.Add(new NotificationDelivery { NotificationId = n.Id, UserId = u, DeliveredAtUtc = DateTime.UtcNow });
+        await _db.SaveChangesAsync();
+
+        await _hub.Clients.All.SendAsync("notificationReceived", new { title = n.TitleEn, message = n.MessageEn, linkUrl = n.LinkUrl });
+    }
+
+    private async Task AuditAsync(string action, int itemId, object? oldValues, object? newValues)
+    {
+        try
+        {
+            _db.SystemAuditLogs.Add(new SystemAuditLog
+            {
+                Action = action,
+                EntityName = nameof(GalleryItem),
+                EntityId = itemId.ToString(),
+                UserId = User.FindFirstValue(ClaimTypes.NameIdentifier),
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                UserAgent = Request.Headers.UserAgent.ToString(),
+                OldValuesJson = oldValues is null ? null : System.Text.Json.JsonSerializer.Serialize(oldValues),
+                NewValuesJson = newValues is null ? null : System.Text.Json.JsonSerializer.Serialize(newValues),
+                AtUtc = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+        }
+        catch { /* non-blocking audit */ }
     }
 
     [HttpPost]

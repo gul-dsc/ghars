@@ -1,0 +1,103 @@
+@model GharsPlatform.Models.Core.GharsAnnualReport
+@using GharsPlatform.Helpers
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    // The official document. A standalone page rather than the site layout: no navigation, no toasts,
+    // nothing that would print. Deliberately NOT a pixel copy of the Word template - it reproduces the
+    // template's structure and official terminology, and prioritises readability and correct Arabic.
+    //
+    // Export is the browser's own Print-to-PDF, which shapes Arabic correctly with the reader's system
+    // fonts. Generating the PDF server-side would mean embedding an Arabic-shaping font just for this
+    // one document; the print path gives a correct result with no such dependency.
+    Layout = null;
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var p = ViewBag.Presentation as AnnualReportPresentation;
+    var season = ar ? Model.Season?.TitleAr : Model.Season?.TitleEn;
+    var org = ar ? Model.Organization?.NameAr : Model.Organization?.NameEn;
+}
+<!DOCTYPE html>
+<html lang="@(ar ? "ar" : "en")" dir="@(ar ? "rtl" : "ltr")">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@AnnualReportWorkflow.ReportTitle — @org — @season</title>
+    @* Same Bootstrap build the site layout loads, so the printed document matches the screen. *@
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root { --dsc-teal: #0f6e64; --ink: #1c2b2a; }
+        body { background: #fff; color: var(--ink); font-size: 13px; padding: 24px; }
+        .report-header { border-bottom: 3px solid var(--dsc-teal); padding-bottom: 12px; margin-bottom: 20px; }
+        .report-header img { height: 54px; width: auto; }
+        .annual-report-heading {
+            background: #f2f7f6; border-inline-start: 4px solid var(--dsc-teal);
+            padding: 8px 12px; margin-bottom: 10px; font-weight: 600;
+        }
+        .annual-report-table th { background: #f7f9f9; }
+        .annual-report-table td, .annual-report-table th { vertical-align: middle; }
+        /* Narrative answers are stored as typed, including line breaks. */
+        .annual-report-narrative { white-space: pre-wrap; min-height: 3.5rem; }
+        .report-meta { font-size: 12px; color: #566; }
+
+        /* Wide content must scroll on screen rather than push the page sideways. */
+        .table-responsive { overflow-x: auto; }
+
+        @@media print {
+            body { padding: 0; font-size: 11.5px; }
+            .no-print { display: none !important; }
+            .annual-report-section { break-inside: avoid; page-break-inside: avoid; }
+            table { break-inside: auto; }
+            tr { break-inside: avoid; page-break-inside: avoid; }
+            thead { display: table-header-group; }
+            a { text-decoration: none; color: inherit; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print d-flex flex-wrap gap-2 justify-content-end mb-3">
+        <button type="button" class="btn btn-success btn-sm" onclick="window.print()">
+            @T("Print / save as PDF", "طباعة / حفظ PDF")
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.close()">
+            @T("Close", "إغلاق")
+        </button>
+    </div>
+
+    <header class="report-header d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+            <h1 class="h4 mb-1">@AnnualReportWorkflow.ProgramReportTitle</h1>
+            <div class="report-meta">
+                @AnnualReportWorkflow.SportsSeason: <strong>@season</strong>
+                &nbsp;·&nbsp; @AnnualReportWorkflow.ClubName: <strong>@org</strong>
+            </div>
+        </div>
+        <img src="~/img/brand/ghars-logo.png" alt="@T("Ghars Program", "برنامج غرس")" />
+    </header>
+
+    <div class="report-meta mb-3">
+        <span class="me-3">@T("Status", "الحالة"): <strong>@AnnualReportWorkflow.Label(Model.Status)</strong></span>
+        @if (Model.SubmittedAtUtc.HasValue)
+        {
+            <span class="me-3">@T("Submitted", "أُرسل في"): @Model.SubmittedAtUtc.Value.ToString("yyyy-MM-dd")</span>
+        }
+        @if (Model.ReviewedAtUtc.HasValue)
+        {
+            <span class="me-3">@T("Reviewed", "روجع في"): @Model.ReviewedAtUtc.Value.ToString("yyyy-MM-dd")</span>
+        }
+    </div>
+
+    @* Full path: this view is also rendered by the Admin controller, where a bare name would resolve
+       against /Areas/Admin/Views. *@
+    @await Html.PartialAsync("~/Views/AnnualReports/_ReportBody.cshtml", Model, new ViewDataDictionary(ViewData)
+    {
+        ["Presentation"] = p,
+        ["ForPrint"] = true
+    })
+
+    <footer class="report-meta mt-4 pt-2 border-top">
+        @T("Generated by the Ghars Platform — Dubai Sports Council", "أُنشئ عبر منصة غرس — مجلس دبي الرياضي")
+        &nbsp;·&nbsp; @DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm") @T("UTC", "بتوقيت غرينتش")
+    </footer>
+</body>
+</html>

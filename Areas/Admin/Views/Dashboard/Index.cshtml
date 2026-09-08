@@ -119,6 +119,48 @@
         }
     </div>
 
+    @{
+        // Governance shortcuts: what is waiting for a DSC decision. Counts and links only - the detail
+        // belongs on the review screens, not here.
+        var arAwaiting = (int)(ViewBag.AnnualReportsAwaitingReview ?? 0);
+        var arApproved = (int)(ViewBag.AnnualReportsApproved ?? 0);
+        var chAwaiting = (int)(ViewBag.ChannelSubmissionsAwaitingReview ?? 0);
+    }
+    <div class="row g-3 mb-4">
+        <div class="col-md-6 col-xl-4">
+            <div class="chart-card h-100">
+                <div class="chart-title"><i class="bi bi-file-earmark-text me-1" aria-hidden="true"></i>@T("Ghars Annual Reports", "التقارير السنوية لغرس")</div>
+                <div class="d-flex flex-wrap align-items-center gap-3 mt-2">
+                    <div>
+                        <div class="fs-3 fw-semibold">@arAwaiting</div>
+                        <div class="small text-muted">@T("Awaiting review", "بانتظار المراجعة")</div>
+                    </div>
+                    <div>
+                        <div class="fs-3 fw-semibold">@arApproved</div>
+                        <div class="small text-muted">@T("Approved", "معتمدة")</div>
+                    </div>
+                    <a class="btn btn-sm @(arAwaiting > 0 ? "btn-warning" : "btn-outline-secondary") ms-auto" href="/Admin/AnnualReports">
+                        @T("Open", "فتح")
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-4">
+            <div class="chart-card h-100">
+                <div class="chart-title"><i class="bi bi-collection-play me-1" aria-hidden="true"></i>@T("Ghars Channel", "قناة غرس")</div>
+                <div class="d-flex flex-wrap align-items-center gap-3 mt-2">
+                    <div>
+                        <div class="fs-3 fw-semibold">@chAwaiting</div>
+                        <div class="small text-muted">@T("Submissions awaiting review", "محتوى بانتظار المراجعة")</div>
+                    </div>
+                    <a class="btn btn-sm @(chAwaiting > 0 ? "btn-warning" : "btn-outline-secondary") ms-auto" href="/Admin/Gallery/MediaItems">
+                        @T("Open", "فتح")
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="row g-4 mb-4">
         <div class="col-xl-8"><div class="chart-card"><div class="chart-title">@T("Booking & Attendance Trend", "اتجاه الحجوزات والحضور")</div><div class="chart-subtitle">@T("Monthly movement across selected filters", "الحركة الشهرية حسب الفلاتر المحددة")</div><canvas id="trendChart"></canvas></div></div>
         <div class="col-xl-4"><div class="chart-card"><div class="chart-title">@T("Booking Status Distribution", "توزيع حالات الحجوزات")</div><div class="chart-subtitle">@T("Confirmed, rejected, modified and pending", "مؤكد ومرفوض ومعدل ومعلق")</div><canvas id="bookingStatusChart"></canvas></div></div>

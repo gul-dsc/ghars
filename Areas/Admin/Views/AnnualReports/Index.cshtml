@@ -1,0 +1,118 @@
+@model List<GharsPlatform.Models.Core.GharsAnnualReport>
+@using GharsPlatform.Helpers
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Ghars Annual Reports", "التقارير السنوية لغرس");
+    ViewData["PageTitle"] = ViewData["Title"];
+    var seasons = ViewBag.Seasons as List<Season> ?? new();
+    var clubs = ViewBag.Clubs as List<Organization> ?? new();
+    var selectedStatus = ViewBag.SelectedStatus as AnnualReportStatus?;
+    var selectedSeasonId = ViewBag.SelectedSeasonId as int?;
+    var selectedClubId = ViewBag.SelectedClubId as int?;
+    var counts = ViewBag.StatusCounts as Dictionary<AnnualReportStatus, int> ?? new();
+    string N(Organization? o) => ar ? (o?.NameAr ?? o?.NameEn ?? "") : (o?.NameEn ?? o?.NameAr ?? "");
+    counts.TryGetValue(AnnualReportStatus.Submitted, out var pending);
+}
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+        <h1 class="h4 mb-0">@ViewData["Title"]</h1>
+        <div class="text-muted">@T("Review club annual reports: approve, return for correction, or reject.", "مراجعة التقارير السنوية للأندية: اعتماد أو إعادة للتصحيح أو رفض.")</div>
+    </div>
+</div>
+
+@if (pending > 0)
+{
+    <div class="alert alert-warning rounded-4 border-0">
+        <i class="bi bi-hourglass-split me-1" aria-hidden="true"></i>@T($"{pending} report(s) awaiting review.", $"{pending} تقرير بانتظار المراجعة.")
+    </div>
+}
+
+<form method="get" class="card p-3 rounded-4 border-0 shadow-sm mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label" for="f-ar-status">@T("Status", "الحالة")</label>
+            <select id="f-ar-status" class="form-select" name="status">
+                <option value="">@T("All", "الكل")</option>
+                @foreach (AnnualReportStatus s in Enum.GetValues(typeof(AnnualReportStatus)))
+                {
+                    <option value="@s" selected="@(selectedStatus == s)">@AnnualReportWorkflow.Label(s)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="f-ar-seasonId">@T("Season", "الموسم")</label>
+            <select id="f-ar-seasonId" class="form-select" name="seasonId">
+                <option value="">@T("All", "الكل")</option>
+                @foreach (var s in seasons)
+                {
+                    <option value="@s.Id" selected="@(selectedSeasonId == s.Id)">@(ar ? s.TitleAr : s.TitleEn)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="f-ar-clubId">@T("Club", "النادي")</label>
+            <select id="f-ar-clubId" class="form-select" name="clubId">
+                <option value="">@T("All", "الكل")</option>
+                @foreach (var c in clubs)
+                {
+                    <option value="@c.Id" selected="@(selectedClubId == c.Id)">@N(c)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3 d-flex flex-wrap gap-2">
+            <button class="btn btn-primary">@T("Filter", "تصفية")</button>
+            <a class="btn btn-outline-secondary" href="/Admin/AnnualReports">@T("Reset", "إعادة ضبط")</a>
+        </div>
+    </div>
+</form>
+
+<div class="card border-0 rounded-4 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">@T("Club", "النادي")</th>
+                    <th scope="col">@T("Season", "الموسم")</th>
+                    <th scope="col">@T("Submitted", "تاريخ الإرسال")</th>
+                    <th scope="col">@T("Activities", "الأنشطة")</th>
+                    <th scope="col">@T("Participants", "المشاركون")</th>
+                    <th scope="col">@T("Status", "الحالة")</th>
+                    <th scope="col">@T("Reviewer", "المراجع")</th>
+                    <th scope="col"><span class="visually-hidden">@T("Actions", "إجراءات")</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var x in Model)
+                {
+                    <tr>
+                        <td>@N(x.Organization)</td>
+                        <td>@(ar ? x.Season?.TitleAr : x.Season?.TitleEn)</td>
+                        <td>@(x.SubmittedAtUtc?.ToString("yyyy-MM-dd") ?? "—")</td>
+                        <td>@x.TotalLecturesDelivered</td>
+                        <td>@x.ParticipantsTotal</td>
+                        <td>
+                            @* Text plus icon: never colour alone. *@
+                            <span class="badge @AnnualReportWorkflow.BadgeClass(x.Status)">
+                                <i class="bi @AnnualReportWorkflow.Icon(x.Status) me-1" aria-hidden="true"></i>@AnnualReportWorkflow.Label(x.Status)
+                            </span>
+                        </td>
+                        <td>@(x.ReviewedAtUtc?.ToString("yyyy-MM-dd") ?? "—")</td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-primary" href="/Admin/AnnualReports/Details/@x.Id">
+                                @(x.Status == AnnualReportStatus.Submitted ? T("Review", "مراجعة") : T("Open", "فتح"))
+                            </a>
+                        </td>
+                    </tr>
+                }
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="8" class="p-4 text-muted text-center">@T("No annual reports found.", "لا توجد تقارير سنوية.")</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

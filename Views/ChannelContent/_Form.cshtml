@@ -1,0 +1,147 @@
+@model GharsPlatform.ViewModels.ChannelContentVm
+@using GharsPlatform.Helpers
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var seasons = ViewBag.Seasons as List<Season> ?? new();
+    var libraryItems = ViewBag.LibraryItems as List<LibraryItem> ?? new();
+    var item = ViewBag.Item as GalleryItem;
+
+    string MediaTypeText(GalleryMediaType t) => t == GalleryMediaType.Video ? T("Video", "فيديو") : T("Photo", "صورة");
+}
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div asp-validation-summary="All" class="alert alert-danger"></div>
+}
+
+@if (item is not null && !string.IsNullOrWhiteSpace(item.ReviewNotes))
+{
+    <div class="alert alert-warning">
+        <h2 class="h6"><i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>@T("Reviewer's notes", "ملاحظات المراجع")</h2>
+        <p class="mb-0">@item.ReviewNotes</p>
+    </div>
+}
+
+<div class="card rounded-4 border-0 shadow-sm">
+    <div class="card-body">
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="HasExistingFile" />
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" asp-for="TitleEn">@T("Title (English)", "العنوان (بالإنجليزية)")</label>
+                <input class="form-control" asp-for="TitleEn" maxlength="250" dir="ltr" />
+                <span class="text-danger small" asp-validation-for="TitleEn"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" asp-for="TitleAr">@T("Title (Arabic)", "العنوان (بالعربية)")</label>
+                <input class="form-control" asp-for="TitleAr" maxlength="250" dir="rtl" />
+                <span class="text-danger small" asp-validation-for="TitleAr"></span>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label" asp-for="DescriptionEn">@T("Description (English)", "الوصف (بالإنجليزية)")</label>
+                <textarea class="form-control" asp-for="DescriptionEn" rows="3" maxlength="2000" dir="ltr"></textarea>
+                <span class="text-danger small" asp-validation-for="DescriptionEn"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" asp-for="DescriptionAr">@T("Description (Arabic)", "الوصف (بالعربية)")</label>
+                <textarea class="form-control" asp-for="DescriptionAr" rows="3" maxlength="2000" dir="rtl"></textarea>
+                <span class="text-danger small" asp-validation-for="DescriptionAr"></span>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label" asp-for="ChannelCategory">@T("Category", "التصنيف")</label>
+                <select class="form-select" asp-for="ChannelCategory">
+                    @foreach (var c in ChannelWorkflow.PartnerCategories)
+                    {
+                        <option value="@c" selected="@(Model.ChannelCategory == c)">@ChannelWorkflow.CategoryLabel(c)</option>
+                    }
+                </select>
+                <span class="text-danger small" asp-validation-for="ChannelCategory"></span>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label" asp-for="MediaType">@T("Media type", "نوع الوسائط")</label>
+                <select class="form-select" asp-for="MediaType">
+                    @foreach (var t in ChannelWorkflow.PartnerMediaTypes)
+                    {
+                        <option value="@t" selected="@(Model.MediaType == t)">@MediaTypeText(t)</option>
+                    }
+                </select>
+                <span class="text-danger small" asp-validation-for="MediaType"></span>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label" asp-for="SeasonId">@T("Sports season", "الموسم الرياضي")</label>
+                <select class="form-select" asp-for="SeasonId">
+                    <option value="0">@T("Select…", "اختر…")</option>
+                    @foreach (var s in seasons)
+                    {
+                        <option value="@s.Id" selected="@(Model.SeasonId == s.Id)">@(ar ? s.TitleAr : s.TitleEn)</option>
+                    }
+                </select>
+                <span class="text-danger small" asp-validation-for="SeasonId"></span>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label" asp-for="MediaDate">@T("Date", "التاريخ")</label>
+                <input class="form-control" asp-for="MediaDate" type="date" />
+                <span class="text-danger small" asp-validation-for="MediaDate"></span>
+            </div>
+        </div>
+
+        <hr class="my-4" />
+
+        <h2 class="h6">@T("The content itself", "المحتوى نفسه")</h2>
+        <p class="small text-muted">
+            @T("Provide one of the following: an uploaded photo or video, an external video link, or a link to one of your Digital Library publications.",
+               "قدّموا أحد الخيارات التالية: صورة أو فيديو مرفوع، أو رابط فيديو خارجي، أو رابط لأحد إصداراتكم في المكتبة الرقمية.")
+        </p>
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" asp-for="File">@T("Upload a photo or video", "رفع صورة أو فيديو")</label>
+                <input class="form-control" asp-for="File" type="file"
+                       accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mov" />
+                <div class="form-text">
+                    @T("JPG, PNG, GIF, WEBP, MP4, WEBM or MOV. The channel does not accept documents — publish booklets and PDFs in the Digital Library and link them below.",
+                       "بصيغة JPG أو PNG أو GIF أو WEBP أو MP4 أو WEBM أو MOV. لا تقبل القناة الوثائق — انشروا الكتيبات وملفات PDF في المكتبة الرقمية واربطوها أدناه.")
+                </div>
+                <span class="text-danger small" asp-validation-for="File"></span>
+                @if (Model.HasExistingFile)
+                {
+                    <div class="form-text text-success">
+                        <i class="bi bi-check-circle me-1" aria-hidden="true"></i>@T("A file is already attached. Uploading a new one replaces it.", "يوجد ملف مرفق بالفعل. رفع ملف جديد سيحل محله.")
+                    </div>
+                }
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label" asp-for="ExternalUrl">@T("External video link", "رابط فيديو خارجي")</label>
+                <input class="form-control" asp-for="ExternalUrl" maxlength="700" dir="ltr" placeholder="https://…" />
+                <div class="form-text">@T("Only http and https addresses are accepted.", "تُقبل فقط العناوين بصيغة http أو https.")</div>
+                <span class="text-danger small" asp-validation-for="ExternalUrl"></span>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label" asp-for="LibraryItemId">@T("Link a Digital Library publication", "ربط إصدار من المكتبة الرقمية")</label>
+                <select class="form-select" asp-for="LibraryItemId">
+                    <option value="">@T("None", "بدون")</option>
+                    @foreach (var li in libraryItems)
+                    {
+                        <option value="@li.Id" selected="@(Model.LibraryItemId == li.Id)">@(ar ? li.TitleAr : li.TitleEn)</option>
+                    }
+                </select>
+                <div class="form-text">
+                    @T("Points at your existing publication instead of storing a second copy of the same file.",
+                       "يشير إلى إصداركم الحالي بدلاً من تخزين نسخة ثانية من الملف نفسه.")
+                </div>
+                <span class="text-danger small" asp-validation-for="LibraryItemId"></span>
+            </div>
+        </div>
+    </div>
+</div>

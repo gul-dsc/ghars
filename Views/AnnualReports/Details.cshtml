@@ -1,0 +1,64 @@
+@model GharsPlatform.Models.Core.GharsAnnualReport
+@using GharsPlatform.Helpers
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var p = ViewBag.Presentation as AnnualReportPresentation;
+    ViewData["Title"] = AnnualReportWorkflow.ReportTitle;
+}
+
+<nav aria-label="@T("Breadcrumb", "مسار التنقل")">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-action="Index">@AnnualReportWorkflow.ReportTitle</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@(ar ? Model.Season?.TitleAr : Model.Season?.TitleEn)</li>
+    </ol>
+</nav>
+
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <div>
+        <h1 class="h3 mb-1">@AnnualReportWorkflow.ProgramReportTitle</h1>
+        <div class="text-muted">
+            @AnnualReportWorkflow.SportsSeason: <strong>@(ar ? Model.Season?.TitleAr : Model.Season?.TitleEn)</strong>
+        </div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        @if (AnnualReportWorkflow.ClubCanEdit(Model.Status))
+        {
+            <a class="btn btn-success btn-sm" asp-action="Edit" asp-route-seasonId="@Model.SeasonId">
+                <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>@T("Edit", "تعديل")
+            </a>
+        }
+        <a class="btn btn-outline-secondary btn-sm" asp-action="Print" asp-route-id="@Model.Id" target="_blank">
+            <i class="bi bi-printer me-1" aria-hidden="true"></i>@T("Print / save as PDF", "طباعة / حفظ PDF")
+        </a>
+    </div>
+</div>
+
+<div class="alert @(Model.Status == AnnualReportStatus.Approved ? "alert-success" : "alert-light border") d-flex gap-2">
+    <i class="bi @AnnualReportWorkflow.Icon(Model.Status) flex-shrink-0" aria-hidden="true"></i>
+    <div>
+        <strong>@AnnualReportWorkflow.Label(Model.Status)</strong>
+        <div class="small">@AnnualReportWorkflow.Explain(Model.Status)</div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.ReviewNotes))
+{
+    <div class="alert alert-warning">
+        <h2 class="h6"><i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>@T("Reviewer's notes", "ملاحظات المراجع")</h2>
+        <p class="mb-0">@Model.ReviewNotes</p>
+    </div>
+}
+
+<div class="card rounded-4 border-0 shadow-sm">
+    <div class="card-body">
+        @await Html.PartialAsync("_ReportBody", Model, new ViewDataDictionary(ViewData)
+        {
+            ["Presentation"] = p,
+            ["ApprovedKpi"] = ViewBag.ApprovedKpi,
+            ["LinkAgenda"] = true
+        })
+    </div>
+</div>

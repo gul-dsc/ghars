@@ -1,0 +1,150 @@
+@model GharsPlatform.Models.Core.GharsAnnualReport
+@using GharsPlatform.Helpers
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    string N(Organization? o) => ar ? (o?.NameAr ?? o?.NameEn ?? "") : (o?.NameEn ?? o?.NameAr ?? "");
+    var p = ViewBag.Presentation as AnnualReportPresentation;
+    var people = ViewBag.People as Dictionary<string, string> ?? new();
+    var history = ViewBag.History as List<OfferingHistoryEntry> ?? new();
+    var canReview = AnnualReportWorkflow.DscCanReview(Model.Status);
+    ViewData["Title"] = T("Annual Report Review", "مراجعة التقرير السنوي");
+    ViewData["PageTitle"] = ViewData["Title"];
+
+    string Person(string? id) => string.IsNullOrWhiteSpace(id)
+        ? "—"
+        : (people.TryGetValue(id, out var n) ? n : T("Authorised user", "مستخدم معتمد"));
+}
+
+<nav aria-label="@T("Breadcrumb", "مسار التنقل")">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/Admin/AnnualReports">@T("Ghars Annual Reports", "التقارير السنوية لغرس")</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@N(Model.Organization)</li>
+    </ol>
+</nav>
+
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <div>
+        <h1 class="h4 mb-1">@N(Model.Organization)</h1>
+        <div class="text-muted">
+            @AnnualReportWorkflow.SportsSeason: <strong>@(ar ? Model.Season?.TitleAr : Model.Season?.TitleEn)</strong>
+            <span class="badge @AnnualReportWorkflow.BadgeClass(Model.Status) ms-2">
+                <i class="bi @AnnualReportWorkflow.Icon(Model.Status) me-1" aria-hidden="true"></i>@AnnualReportWorkflow.Label(Model.Status)
+            </span>
+        </div>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" href="/Admin/AnnualReports/Print/@Model.Id" target="_blank">
+        <i class="bi bi-printer me-1" aria-hidden="true"></i>@T("Print / save as PDF", "طباعة / حفظ PDF")
+    </a>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card border-0 rounded-4 shadow-sm">
+            <div class="card-body">
+                @await Html.PartialAsync("~/Views/AnnualReports/_ReportBody.cshtml", Model, new ViewDataDictionary(ViewData)
+                {
+                    ["Presentation"] = p,
+                    ["ApprovedKpi"] = ViewBag.ApprovedKpi
+                })
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- ============================ Decision ============================ -->
+        <div class="card border-0 rounded-4 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3">
+                <h2 class="h6 mb-0">@T("Review decision", "قرار المراجعة")</h2>
+            </div>
+            <div class="card-body">
+                @if (canReview)
+                {
+                    <form method="post" asp-action="Review">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+
+                        <div class="mb-3">
+                            <label class="form-label" for="reviewNotes">@T("Notes to the club", "ملاحظات للنادي")</label>
+                            <textarea class="form-control" id="reviewNotes" name="notes" rows="4" maxlength="2000"
+                                      placeholder="@T("Required when returning or rejecting.", "مطلوبة عند الإعادة أو الرفض.")"></textarea>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" name="status" value="@AnnualReportStatus.Approved" class="btn btn-success">
+                                <i class="bi bi-check-circle me-1" aria-hidden="true"></i>@T("Approve", "اعتماد")
+                            </button>
+                            <button type="submit" name="status" value="@AnnualReportStatus.ReturnedForCorrection" class="btn btn-warning">
+                                <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>@T("Return for correction", "إعادة للتصحيح")
+                            </button>
+                            <button type="submit" name="status" value="@AnnualReportStatus.Rejected" class="btn btn-outline-danger">
+                                <i class="bi bi-x-circle me-1" aria-hidden="true"></i>@T("Reject", "رفض")
+                            </button>
+                        </div>
+                    </form>
+                }
+                else
+                {
+                    <p class="text-muted small mb-0">
+                        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>@AnnualReportWorkflow.Explain(Model.Status)
+                    </p>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(Model.ReviewNotes))
+                {
+                    <hr />
+                    <h3 class="h6">@T("Previous notes", "الملاحظات السابقة")</h3>
+                    <p class="small mb-0">@Model.ReviewNotes</p>
+                }
+            </div>
+        </div>
+
+        <!-- ============================ Provenance ============================ -->
+        <div class="card border-0 rounded-4 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3">
+                <h2 class="h6 mb-0">@T("Submission", "الإرسال")</h2>
+            </div>
+            @* text-break on the value side: a contact email is one long unbreakable token, and a flex
+               item cannot shrink below its content, so without this the sidebar column pushes the page
+               a few pixels wide at tablet widths. *@
+            <ul class="list-group list-group-flush small">
+                <li class="list-group-item d-flex justify-content-between gap-2">
+                    <span class="text-muted flex-shrink-0">@T("Submitted by", "أرسله")</span><span class="text-break text-end">@Person(Model.SubmittedByUserId)</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between gap-2">
+                    <span class="text-muted flex-shrink-0">@T("Submitted at", "تاريخ الإرسال")</span><span class="text-break text-end">@(Model.SubmittedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "—")</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between gap-2">
+                    <span class="text-muted flex-shrink-0">@T("Reviewed by", "راجعه")</span><span class="text-break text-end">@Person(Model.ReviewedByUserId)</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between gap-2">
+                    <span class="text-muted flex-shrink-0">@T("Contact", "جهة التواصل")</span>
+                    <span dir="ltr" class="text-break text-end">@(string.IsNullOrWhiteSpace(Model.ContactEmail) ? "—" : Model.ContactEmail)</span>
+                </li>
+            </ul>
+        </div>
+
+        <!-- ============================ History ============================ -->
+        <div class="card border-0 rounded-4 shadow-sm">
+            <div class="card-header bg-white border-0 pt-3">
+                <h2 class="h6 mb-0">@T("History", "السجل")</h2>
+            </div>
+            <ul class="list-group list-group-flush small">
+                @foreach (var h in history)
+                {
+                    var label = AnnualReportWorkflow.AuditActionLabel(h.Action);
+                    if (label is null) { continue; }
+                    <li class="list-group-item d-flex justify-content-between gap-2">
+                        <span>@label</span><span class="text-muted">@h.AtUtc.ToString("yyyy-MM-dd HH:mm")</span>
+                    </li>
+                }
+                @if (!history.Any(h => AnnualReportWorkflow.AuditActionLabel(h.Action) is not null))
+                {
+                    <li class="list-group-item text-muted">@T("No recorded activity yet.", "لا يوجد سجل بعد.")</li>
+                }
+            </ul>
+        </div>
+    </div>
+</div>

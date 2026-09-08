@@ -1,26 +1,32 @@
+@using System.Globalization
 @{
     var success = TempData["ToastSuccess"] as string;
     var warn = TempData["ToastWarning"] as string;
     var info = TempData["ToastInfo"] as string;
+
+    // The dismiss buttons are icon-only, so they need an explicit accessible name; without one a
+    // screen reader announces only "button". The icons themselves are decorative.
+    var isRtl = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    var dismiss = isRtl ? "إغلاق التنبيه" : "Dismiss message";
 }
 @if (!string.IsNullOrWhiteSpace(success))
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="bi bi-check-circle me-1"></i>@success
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <i class="bi bi-check-circle me-1" aria-hidden="true"></i>@success
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="@dismiss"></button>
     </div>
 }
 @if (!string.IsNullOrWhiteSpace(warn))
 {
     <div class="alert alert-warning alert-dismissible fade show" role="alert">
-        <i class="bi bi-exclamation-triangle me-1"></i>@warn
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>@warn
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="@dismiss"></button>
     </div>
 }
 @if (!string.IsNullOrWhiteSpace(info))
 {
     <div class="alert alert-info alert-dismissible fade show" role="alert">
-        <i class="bi bi-info-circle me-1"></i>@info
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>@info
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="@dismiss"></button>
     </div>
 }

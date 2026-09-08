@@ -1,0 +1,41 @@
+@model GharsPlatform.ViewModels.ChannelContentVm
+@using GharsPlatform.Helpers
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var item = ViewBag.Item as GalleryItem;
+    ViewData["Title"] = T("Edit Ghars Channel content", "تعديل محتوى قناة غرس");
+}
+
+<nav aria-label="@T("Breadcrumb", "مسار التنقل")">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-action="Index">@T("My Ghars Channel Content", "محتواي في قناة غرس")</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@(ar ? item?.TitleAr : item?.TitleEn)</li>
+    </ol>
+</nav>
+
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <h1 class="h3 mb-0">@ViewData["Title"]</h1>
+    <span class="badge @ChannelWorkflow.StatusBadgeClass(item?.ApprovalStatus)">
+        <i class="bi @ChannelWorkflow.StatusIcon(item?.ApprovalStatus) me-1" aria-hidden="true"></i>@ChannelWorkflow.StatusLabel(item?.ApprovalStatus)
+    </span>
+</div>
+
+<p class="text-muted">@ChannelWorkflow.Explain(item?.ApprovalStatus)</p>
+
+<form method="post" enctype="multipart/form-data" novalidate>
+    @Html.AntiForgeryToken()
+    @await Html.PartialAsync("_Form", Model)
+
+    <div class="d-flex flex-wrap gap-2 my-4">
+        <button type="submit" name="action" value="draft" class="btn btn-outline-secondary">
+            <i class="bi bi-save me-1" aria-hidden="true"></i>@T("Save changes", "حفظ التعديلات")
+        </button>
+        <button type="submit" name="action" value="submit" class="btn btn-success">
+            <i class="bi bi-send me-1" aria-hidden="true"></i>@T("Submit for approval", "إرسال للاعتماد")
+        </button>
+        <a class="btn btn-link" asp-action="Index">@T("Cancel", "إلغاء")</a>
+    </div>
+</form>

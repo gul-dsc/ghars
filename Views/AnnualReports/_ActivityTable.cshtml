@@ -1,0 +1,94 @@
+@model GharsPlatform.Helpers.AnnualReportPresentation
+@using GharsPlatform.Helpers
+@using System.Globalization
+@{
+    // Section 3 of the template: the delivered lectures and programs. Generated entirely from the club's
+    // Agenda - the club never rewrites what it has already recorded. The paper form stops at twenty
+    // rows; this does not.
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var rows = Model.Stats.Delivered;
+    var forPrint = ViewData["ForPrint"] as bool? ?? false;
+    // Only an authorised reader gets links back to the live agenda entry, and only where that entry
+    // still exists - a frozen snapshot has to render correctly after its source row is gone.
+    var linkBack = (ViewData["LinkAgenda"] as bool? ?? false) && !forPrint;
+}
+
+<div class="table-responsive">
+    @* data-filterable="false": the admin filter bar must not offer to hide rows of an official report. *@
+    <table class="table table-bordered table-sm align-middle mb-0 annual-report-table" data-filterable="false">
+        <caption class="visually-hidden">@AnnualReportWorkflow.Section3</caption>
+        <thead class="table-light">
+            <tr>
+                <th scope="col" style="width:3rem">@AnnualReportWorkflow.ColIndex</th>
+                <th scope="col">@AnnualReportWorkflow.ColTitle</th>
+                <th scope="col">@AnnualReportWorkflow.ColEntity</th>
+                <th scope="col">@AnnualReportWorkflow.ColLecturer</th>
+                <th scope="col" style="width:7rem">@AnnualReportWorkflow.ColDate</th>
+                <th scope="col">@AnnualReportWorkflow.ColAudience</th>
+                <th scope="col" class="text-center" style="width:6rem">@AnnualReportWorkflow.ColParticipants</th>
+                @if (!forPrint)
+                {
+                    <th scope="col">@AnnualReportWorkflow.ColOrigin</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @{ var i = 0; }
+            @foreach (var r in rows)
+            {
+                i++;
+                var title = ar ? r.TitleAr : r.TitleEn;
+                <tr>
+                    <td>@i</td>
+                    <td>
+                        @if (linkBack && Model.CanLinkTo(r.AgendaEntryId))
+                        {
+                            <a asp-controller="Agenda" asp-action="Edit" asp-route-id="@r.AgendaEntryId">@title</a>
+                        }
+                        else
+                        {
+                            @title
+                        }
+                    </td>
+                    <td>@(string.IsNullOrWhiteSpace(r.ImplementingEntity) ? "—" : r.ImplementingEntity)</td>
+                    <td>@(string.IsNullOrWhiteSpace(r.Lecturer) ? "—" : r.Lecturer)</td>
+                    <td>@r.ActivityDate.ToString("yyyy-MM-dd")</td>
+                    <td>@AnnualReportWorkflow.AudienceLabel(r.Category, r.OtherCategory)</td>
+                    <td class="text-center">@r.Participants</td>
+                    @if (!forPrint)
+                    {
+                        <td>
+                            @* Text, not colour: the origin is the basis of two reported figures. *@
+                            <span class="badge @(r.CouncilProposed ? "text-bg-primary" : "text-bg-secondary")">
+                                @AnnualReportWorkflow.OriginLabel(r.CouncilProposed)
+                            </span>
+                        </td>
+                    }
+                </tr>
+            }
+            @if (rows.Count == 0)
+            {
+                <tr>
+                    <td colspan="@(forPrint ? 7 : 8)" class="text-center text-muted py-4">
+                        @T("No delivered activities were found in the Agenda for this season.",
+                           "لا توجد أنشطة منفذة في الأجندة لهذا الموسم.")
+                    </td>
+                </tr>
+            }
+        </tbody>
+        @if (rows.Count > 0)
+        {
+            <tfoot class="table-light">
+                <tr>
+                    <th scope="row" colspan="@(forPrint ? 6 : 6)" class="text-end">@T("Total", "الإجمالي")</th>
+                    <th class="text-center">@Model.Stats.Participants</th>
+                    @if (!forPrint)
+                    {
+                        <th></th>
+                    }
+                </tr>
+            </tfoot>
+        }
+    </table>
+</div>

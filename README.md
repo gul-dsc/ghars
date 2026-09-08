@@ -16,9 +16,10 @@ around the approved programme documents held in [`docs/`](docs/).
 | Bookings | Clubs request lectures/events; the implementing entity proposes times; DSC confirms. |
 | Agenda | The club's delivery record — what actually happened, with media evidence. |
 | KPIs | Annual indicator submission by clubs, reviewed and approved by DSC, against 2026→2033 targets. |
+| Ghars Annual Report | One official report per club per sports season — indicators and delivered-activity table generated from the Agenda, narrative written by the club, reviewed and approved by DSC, then frozen. |
 | Surveys | The Official Program Survey (external, authoritative) plus an internal activity-feedback engine. |
-| Gallery | Public showcase of programme media, published under DSC control. |
-| Digital Library | Programme reference material for clubs. |
+| Ghars Channel | The programme's content channel: club activity media aggregated from the Agenda, plus awareness and educational material published by implementing entities after DSC approval. (Formerly presented as "Gallery".) |
+| Digital Library | Programme reference material for clubs — booklets, publications and documents. Distinct from the Ghars Channel, which carries visual media only. |
 | Reports & Dashboards | Executive, club and partner views over the above. |
 | Certificates | Participation certificates with public QR verification. |
 
@@ -113,9 +114,9 @@ The launch profile serves <https://localhost:60873> and <http://localhost:60874>
 | --- | --- |
 | Super Admin | Full administrative access. |
 | DSC Admin | Dubai Sports Council review and approval across all organizations. |
-| Club Admin | One club's own bookings, agenda, KPIs and media. |
+| Club Admin | One club's own bookings, agenda, KPIs, annual report and channel media. |
 | Academy Admin | As Club Admin, for private academies. |
-| Partner Admin | An implementing entity's own programmes and incoming booking requests. |
+| Partner Admin | An implementing entity's own programmes, incoming booking requests and Ghars Channel content. Also covers government partner entities — they need no separate role. |
 | Speaker | Lecturer/speaker profile and assigned activities. |
 | Viewer | Read-only access. |
 
@@ -242,6 +243,10 @@ and the application creates the directories it needs on first use.
 > procedures — including a reconciliation query to detect it — are in
 > [`GHARS_PRODUCTION_OPERATIONS.md`](GHARS_PRODUCTION_OPERATIONS.md).
 
-Runtime uploads under `wwwroot/uploads/` (generated certificates, library files, gallery and agenda
-media, logos) are excluded from Git for the same reason, with one exception: the sample library PDF
-that `DbSeeder` references by a fixed path.
+Runtime uploads under `wwwroot/uploads/` (generated certificates, library files, Ghars Channel and
+agenda media, logos) are excluded from Git for the same reason, with one exception: the sample library
+PDF that `DbSeeder` references by a fixed path.
+
+`wwwroot/uploads/agenda` and `wwwroot/uploads/channel` sit under `wwwroot` but are **denied to the
+static-file middleware**: Ghars Channel visibility is decided per database row, so those files are
+served only through `/protected-files/gallery/{id}`, which re-checks it on every request.

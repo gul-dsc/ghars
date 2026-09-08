@@ -1,0 +1,170 @@
+@model GharsPlatform.ViewModels.AnnualReportVm
+@using GharsPlatform.Helpers
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var club = ViewBag.Club as Organization;
+    var season = ViewBag.Season as Season;
+    var report = ViewBag.Report as GharsAnnualReport;
+    var stats = ViewBag.Stats as SeasonClubStats ?? SeasonClubStats.Empty;
+    var status = (AnnualReportStatus)(ViewBag.CurrentStatus ?? AnnualReportStatus.Draft);
+    var warnings = ViewBag.Warnings as List<string> ?? new();
+    var reviewNotes = ViewBag.ReviewNotes as string;
+    ViewData["Title"] = AnnualReportWorkflow.ReportTitle;
+
+    // While the report is editable the derived data is live, so the form can render it straight from
+    // the season statistics rather than from a stored snapshot.
+    var presentation = new AnnualReportPresentation(stats, IsFrozen: false, SnapshotTakenAtUtc: null,
+        LinkableAgendaEntryIds: stats.Delivered.Select(x => x.AgendaEntryId).ToHashSet());
+}
+
+<nav aria-label="@T("Breadcrumb", "مسار التنقل")">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-action="Index">@AnnualReportWorkflow.ReportTitle</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@(ar ? season?.TitleAr : season?.TitleEn)</li>
+    </ol>
+</nav>
+
+<h1 class="h3 mb-1">@AnnualReportWorkflow.ProgramReportTitle</h1>
+<p class="text-muted">
+    @AnnualReportWorkflow.SportsSeason: <strong>@(ar ? season?.TitleAr : season?.TitleEn)</strong>
+    <span class="badge @AnnualReportWorkflow.BadgeClass(status) ms-2">
+        <i class="bi @AnnualReportWorkflow.Icon(status) me-1" aria-hidden="true"></i>@AnnualReportWorkflow.Label(status)
+    </span>
+</p>
+
+@if (!string.IsNullOrWhiteSpace(reviewNotes) && status is AnnualReportStatus.ReturnedForCorrection or AnnualReportStatus.Rejected)
+{
+    <div class="alert alert-warning">
+        <h2 class="h6"><i class="bi bi-chat-left-text me-1" aria-hidden="true"></i>@T("Reviewer's notes", "ملاحظات المراجع")</h2>
+        <p class="mb-0">@reviewNotes</p>
+    </div>
+}
+
+@foreach (var w in warnings)
+{
+    <div class="alert alert-warning d-flex gap-2">
+        <i class="bi bi-exclamation-triangle flex-shrink-0" aria-hidden="true"></i><div>@w</div>
+    </div>
+}
+
+@if (!ViewData.ModelState.IsValid)
+{
+    @* Wrapped: asp-validation-summary always renders its container, which shows an empty red box on a
+       valid form. *@
+    <div asp-validation-summary="All" class="alert alert-danger"></div>
+}
+
+<form method="post" novalidate>
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Id" />
+    <input type="hidden" asp-for="SeasonId" />
+
+    <!-- ============================ Section 1 ============================ -->
+    <section class="card rounded-4 border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3">
+            <h2 class="h5 mb-0">@AnnualReportWorkflow.Section1</h2>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    @* The club is server-derived and read-only. There is deliberately no club selector
+                       and no hidden club id anywhere on this form. *@
+                    <label class="form-label" for="clubNameDisplay">@AnnualReportWorkflow.ClubName</label>
+                    <input class="form-control-plaintext border rounded px-2 bg-light" id="clubNameDisplay"
+                           value="@(ar ? club?.NameAr : club?.NameEn)" readonly aria-readonly="true" />
+                    <div class="form-text">@T("Taken from your organization account.", "مأخوذ من حساب جهتكم.")</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" asp-for="ProgramCoordinatorName">@AnnualReportWorkflow.Coordinator</label>
+                    <input class="form-control" asp-for="ProgramCoordinatorName" maxlength="200" />
+                    <span class="text-danger small" asp-validation-for="ProgramCoordinatorName"></span>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" asp-for="ContactNumber">@AnnualReportWorkflow.ContactNumber</label>
+                    <input class="form-control" asp-for="ContactNumber" maxlength="50" dir="ltr" />
+                    <span class="text-danger small" asp-validation-for="ContactNumber"></span>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" asp-for="ContactEmail">@AnnualReportWorkflow.ContactEmail</label>
+                    <input class="form-control" asp-for="ContactEmail" maxlength="250" dir="ltr" />
+                    <span class="text-danger small" asp-validation-for="ContactEmail"></span>
+                </div>
+            </div>
+            <div class="form-text mt-3">
+                @T("These details are stored with this season's report. Updating them here does not change your organization's master contact record.",
+                   "تُحفظ هذه البيانات مع تقرير هذا الموسم. تحديثها هنا لا يغيّر بيانات التواصل الرئيسية لجهتكم.")
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================ Section 2 ============================ -->
+    <section class="card rounded-4 border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h2 class="h5 mb-0">@AnnualReportWorkflow.Section2</h2>
+            <span class="badge text-bg-light border">
+                <i class="bi bi-magic me-1" aria-hidden="true"></i>@T("Generated from your Agenda", "مُولَّد من الأجندة")
+            </span>
+        </div>
+        <div class="card-body">
+            @await Html.PartialAsync("_Indicators", presentation, new ViewDataDictionary(ViewData) { ["ApprovedKpi"] = ViewBag.ApprovedKpi })
+        </div>
+    </section>
+
+    <!-- ============================ Section 3 ============================ -->
+    <section class="card rounded-4 border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h2 class="h5 mb-0">@AnnualReportWorkflow.Section3</h2>
+            <span class="badge text-bg-light border">
+                <i class="bi bi-magic me-1" aria-hidden="true"></i>@T("Generated from your Agenda", "مُولَّد من الأجندة")
+            </span>
+        </div>
+        <div class="card-body">
+            <p class="small text-muted">
+                @T("Every delivered activity you recorded in the Agenda for this season appears here automatically. To correct a row, edit it in the Agenda.",
+                   "يظهر هنا تلقائياً كل نشاط منفذ سجّلتموه في الأجندة لهذا الموسم. لتصحيح أي سطر، عدّلوه في الأجندة.")
+            </p>
+            @await Html.PartialAsync("_ActivityTable", presentation, new ViewDataDictionary(ViewData) { ["LinkAgenda"] = true })
+        </div>
+    </section>
+
+    <!-- ============================ Section 4 ============================ -->
+    <section class="card rounded-4 border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3">
+            <h2 class="h5 mb-0">@AnnualReportWorkflow.Section4</h2>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label" asp-for="KeyResults">@AnnualReportWorkflow.KeyResultsPrompt</label>
+                <textarea class="form-control" asp-for="KeyResults" rows="5" maxlength="4000"></textarea>
+                <span class="text-danger small" asp-validation-for="KeyResults"></span>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" asp-for="Challenges">@AnnualReportWorkflow.ChallengesPrompt</label>
+                <textarea class="form-control" asp-for="Challenges" rows="5" maxlength="4000"></textarea>
+                <span class="text-danger small" asp-validation-for="Challenges"></span>
+            </div>
+            <div class="mb-0">
+                <label class="form-label" asp-for="DevelopmentProposals">@AnnualReportWorkflow.ProposalsPrompt</label>
+                <textarea class="form-control" asp-for="DevelopmentProposals" rows="5" maxlength="4000"></textarea>
+                <span class="text-danger small" asp-validation-for="DevelopmentProposals"></span>
+            </div>
+        </div>
+    </section>
+
+    <div class="d-flex flex-wrap gap-2 mb-5">
+        <button type="submit" name="SaveAsDraft" value="true" class="btn btn-outline-secondary">
+            <i class="bi bi-save me-1" aria-hidden="true"></i>@T("Save draft", "حفظ كمسودة")
+        </button>
+        <button type="submit" name="SaveAsDraft" value="false" class="btn btn-success">
+            <i class="bi bi-send me-1" aria-hidden="true"></i>@T("Submit to DSC", "إرسال إلى المجلس")
+        </button>
+        <a class="btn btn-link" asp-action="Index">@T("Cancel", "إلغاء")</a>
+    </div>
+    <p class="small text-muted">
+        @T("Once submitted, the indicators and activity table above are frozen exactly as they are now, so the official report does not change if the Agenda is edited later.",
+           "بعد الإرسال، تُجمَّد المؤشرات وجدول الأنشطة أعلاه كما هي الآن، حتى لا يتغيّر التقرير الرسمي إذا عُدّلت الأجندة لاحقاً.")
+    </p>
+</form>

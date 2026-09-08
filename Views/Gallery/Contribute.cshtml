@@ -1,0 +1,87 @@
+@using GharsPlatform.Helpers
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var entries = ViewBag.AgendaEntries as List<AgendaEntry> ?? new();
+    var selected = ViewBag.SelectedAgendaEntryId as int?;
+    ViewData["Title"] = T("Add activity media", "إضافة وسائط نشاط");
+}
+
+<nav aria-label="@T("Breadcrumb", "مسار التنقل")">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-action="Index">@ChannelWorkflow.ChannelName</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@ViewData["Title"]</li>
+    </ol>
+</nav>
+
+<h1 class="h3 mb-1">@ViewData["Title"]</h1>
+<p class="text-muted mb-4">
+    @T("Share photos or videos from an activity your club has already delivered. Media is attached to the activity's Agenda record and appears in the Ghars Channel straight away.",
+       "شاركوا صوراً أو فيديوهات من نشاط نفّذه ناديكم بالفعل. تُرفق الوسائط بسجل النشاط في الأجندة وتظهر في قناة غرس مباشرة.")
+</p>
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div asp-validation-summary="All" class="alert alert-danger"></div>
+}
+
+@if (!entries.Any())
+{
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
+        @T("You have no delivered activities yet. Record an activity in the Agenda and submit it first — the channel is a record of what your club actually delivered.",
+           "لا توجد لديكم أنشطة منفذة بعد. سجّلوا نشاطاً في الأجندة وأرسلوه أولاً — فالقناة سجل لما نفّذه ناديكم فعلياً.")
+        <div class="mt-2"><a class="btn btn-sm btn-success" asp-controller="Agenda" asp-action="Index">@T("Go to the Agenda", "الذهاب إلى الأجندة")</a></div>
+    </div>
+}
+else
+{
+    <form method="post" enctype="multipart/form-data" class="card rounded-4 border-0 shadow-sm" novalidate>
+        @Html.AntiForgeryToken()
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label" for="agendaEntryId">@T("Delivered activity", "النشاط المنفذ")</label>
+                <select class="form-select" id="agendaEntryId" name="agendaEntryId" required>
+                    <option value="">@T("Select an activity…", "اختر نشاطاً…")</option>
+                    @foreach (var e in entries)
+                    {
+                        var label = $"{e.ActivityDate:yyyy-MM-dd} — {(ar ? e.SubjectAr : e.SubjectEn)}";
+                        <option value="@e.Id" selected="@(selected == e.Id)">@label</option>
+                    }
+                </select>
+                <div class="form-text">
+                    @T("Only your own club's delivered activities are listed.", "تُعرض فقط الأنشطة المنفذة لناديكم.")
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="mediaFiles">@T("Photos or videos", "صور أو فيديوهات")</label>
+                <input class="form-control" id="mediaFiles" name="mediaFiles" type="file" multiple
+                       accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mov" />
+                <div class="form-text">
+                    @T("JPG, PNG, GIF, WEBP, MP4, WEBM or MOV. Documents belong in the Digital Library, not the channel.",
+                       "بصيغة JPG أو PNG أو GIF أو WEBP أو MP4 أو WEBM أو MOV. أما الوثائق فمكانها المكتبة الرقمية وليس القناة.")
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label" for="captionEn">@T("Caption (English)", "وصف (بالإنجليزية)")</label>
+                    <input class="form-control" id="captionEn" name="captionEn" maxlength="2000" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="captionAr">@T("Caption (Arabic)", "وصف (بالعربية)")</label>
+                    <input class="form-control" id="captionAr" name="captionAr" maxlength="2000" />
+                </div>
+            </div>
+        </div>
+        <div class="card-footer bg-white border-0 d-flex flex-wrap gap-2 pb-3">
+            <button type="submit" class="btn btn-success">
+                <i class="bi bi-cloud-arrow-up me-1" aria-hidden="true"></i>@T("Add to the channel", "إضافة إلى القناة")
+            </button>
+            <a class="btn btn-link" asp-action="Index">@T("Cancel", "إلغاء")</a>
+        </div>
+    </form>
+}

@@ -2271,3 +2271,324 @@ and the Users link remains rendered only for Super Admin as before.
 
 `dotnet build --no-incremental` → **0 errors, 1 warning**, the retained `CS0108` on
 `Activity.CreatedByUserId`, not suppressed. **No migration required** and none created.
+
+---
+
+## 31. Ghars Annual Report & Ghars Channel (2026-09-08)
+
+Two approved business requirements, implemented together because both touch the same media/reporting
+surfaces. The design decisions were taken and written down *before* any schema change, in
+[`GHARS_ANNUAL_REPORT_CHANNEL_DESIGN.md`](GHARS_ANNUAL_REPORT_CHANNEL_DESIGN.md); this section records
+what was built and how it was verified.
+
+**Business source for Part 1:** `docs/Ghars_Clubs Report Form.docx`, the official Arabic club report
+form. It was read in full before implementation; its four sections and exact terminology are reproduced
+in §1.1 of the design note and are used verbatim in the electronic form, the review screen and the
+printed output.
+
+---
+
+### 31.1 Annual Report — architecture
+
+A dedicated entity, `GharsAnnualReport`, rather than an extension of `KpiSubmission`. The two records
+have different lifecycles: a KPI submission stays live, while an annual report must **freeze** on
+approval. Overloading one row with two "approved" meanings would have made both harder to reason
+about. This follows the precedent set by `OfferingApprovalStatus`, which was created rather than
+widening `ActivityStatus` for the same reason.
+
+`AnnualReportStatus` mirrors `KpiSubmissionStatus`'s numeric layout (Draft=1, Submitted=2, Approved=3,
+Rejected=4) and names the returned state `ReturnedForCorrection=5`. A **unique index on
+(OrganizationId, SeasonId)** enforces one report per club per season in the database, not only in
+validation — the same guarantee `KpiSubmission` already has.
+
+**Club identity is server-derived.** Resolved from `OrganizationAdminLink` on every request. There is
+no club dropdown, no hidden club id and no editable `OrganizationId` anywhere on the club-facing form;
+the club name renders read-only. Verified in the browser: 0 club selectors and 0 hidden organization
+fields on the form.
+
+### 31.2 Template mapping
+
+| Template field (Arabic) | Class | Source |
+| --- | --- | --- |
+| اسم النادي | SYSTEM-DERIVED | `Organization` via `OrganizationAdminLink`; read-only |
+| المسؤول عن برنامج "غرس" | MIXED / CONFIRMED | pre-filled from the club's primary `OrganizationContact`, editable, stored as a season snapshot |
+| رقم التواصل | MIXED / CONFIRMED | same, falling back to the organization's own phone |
+| البريد الإلكتروني | MIXED / CONFIRMED | same, falling back to the organization's own email |
+| عدد المحاضرات المقترحة من النادي | SYSTEM-DERIVED | delivered agenda entries not sourced from the DSC catalogue |
+| عدد المحاضرات المقترحة من مجلس دبي الرياضي | SYSTEM-DERIVED | delivered agenda entries booked from the DSC catalogue |
+| إجمالي المحاضرات المنفذة | SYSTEM-DERIVED | count of delivered agenda entries |
+| عدد المحاضرين | SYSTEM-DERIVED | distinct normalised `AgendaEntry.LecturerName` |
+| عدد الجهات المنفذة / المشاركة | SYSTEM-DERIVED | distinct normalised `DepartmentOrOrganization`, club itself excluded |
+| إجمالي عدد المشاركين | SYSTEM-DERIVED | `SUM(AgendaEntry.NumberOfParticipants)` |
+| تفاصيل المحاضرات والبرامج المنفذة | SYSTEM-GENERATED | one row per delivered agenda entry; read-only |
+| أبرز النتائج / التحديات / المقترحات | CLUB-SUBMITTED | free text, stored in the language typed |
+
+The paper form stops at twenty detail rows; the electronic version does not.
+
+### 31.3 Derived statistics — one query, two surfaces
+
+`Helpers/SeasonClubStatistics.cs` now holds **the** delivered-agenda query, and both
+`Public/KpiController` and the Annual Report call it. `GetDerivedAsync` in the KPI controller was
+replaced by a call into the helper. Two copies of this logic is precisely how an annual report comes to
+report 12 activities while the season KPI reports 11.
+
+"Delivered" means `AgendaEntryStatus.Submitted` or `Approved` — the rule the KPI derivation has always
+used. Published partner offerings, unconfirmed bookings, draft agenda rows and the Activity catalogue
+are all excluded: none of them is evidence that anything was delivered.
+
+One refinement was made inside the shared helper: an implementing entity whose name equals the club's
+own name is not counted as an implementing entity. This was **verified against the data before being
+added** — no agenda row has `DepartmentOrOrganization` equal to its club's `NameEn` or `NameAr` — so it
+changes no stored KPI value and only prevents a wrong count in future data.
+
+Lecturer and entity uniqueness is by **normalised free-text name** (trimmed, case-insensitive). Both
+fields are free text on `AgendaEntry` and there is no master-person or master-entity relationship to
+prefer; the same lecturer across three activities therefore counts once, which is what "number of
+lecturers" asks for.
+
+**Club-proposed vs Council-proposed** is derived from the booking link that already exists on
+`AgendaEntry.BookingRequestId`:
+
+| Situation | Counts as | Why |
+| --- | --- | --- |
+| booking with an `ActivityId` | **Council** | selected from the DSC-managed catalogue — a DSC-created activity, or a partner offering that only became visible because DSC approved it |
+| booking with no `ActivityId` | **Club** | a Request Custom Booking, whose subject the club wrote |
+| no booking at all | **Club** | an activity the club recorded directly in the Agenda |
+
+This is **not applied silently**: the rule is stated on the report screen and the origin of every
+single delivered activity appears in its own column of the section-3 table, so the club can see exactly
+which activities produced each number.
+
+*Historical limitation, stated in the UI as well as here:* agenda rows created before bookings were
+linked to the Agenda carry no `BookingRequestId` and are therefore counted as club-proposed. On the
+development database that is 8 of 10 delivered entries. It is the correct default — an activity with no
+catalogue booking behind it was not proposed by the Council — but it cannot distinguish "the club's own
+initiative" from "a legacy row whose origin was never recorded".
+
+### 31.4 Snapshot / data freeze
+
+| State | Derived values |
+| --- | --- |
+| Draft / ReturnedForCorrection / Rejected | recomputed from live Agenda on every open and save |
+| Submitted / Approved | the snapshot taken at submission; never recomputed |
+
+The snapshot is captured in one place (`AnnualReportSnapshot.Capture`, called from a single point in
+the club controller) so create-and-submit and edit-and-submit cannot freeze different things. It stores
+the six section-2 totals in columns and the section-3 table as JSON, each row keeping its
+`AgendaEntryId` so an authorised reader still gets a link back to the live entry.
+
+**Why JSON in one column rather than child rows.** The requirement is to preserve exactly what was
+submitted, not to make the detail queryable — nothing reports across annual-report detail rows, and the
+live Agenda remains the queryable source. A child table would have added an entity, a delete path and a
+second copy of the agenda dataset for no analytical gain.
+
+**Verified.** With report 3 approved, the live Agenda was changed (entry 1: 45 → 999 participants, plus
+a new delivered entry), taking the live figures to 5 activities / 1,276 participants. The approved
+report continued to report **4 activities / 245 participants** with its original detail rows, including
+the original 45. The Agenda was then restored. Narrative text lives in its own columns and is never
+touched by a snapshot refresh, so refreshing derived data cannot lose what the club typed.
+
+### 31.5 Relationship to KPI
+
+One-directional. The Annual Report **consumes** the same derivation KPI uses; it never writes to
+`KpiSubmission`, and `KpiSubmission` never reads the Annual Report — no circular dependency.
+
+Where an **Approved** KPI submission exists for the same club and season and its stored figure differs
+from the agenda-derived figure, the report shows both, each labelled with its source and status, rather
+than silently overriding either. (This occurs on demo data, where several KPI rows were seeded with
+figures that were never agenda-derived.)
+
+### 31.6 Workflows
+
+**Club:** `/annual-report` lists every season with its status; `/annual-report/edit/{seasonId}` opens
+the form. A GET creates nothing — the row is written on first save, so opening a report has no side
+effects. Save Draft → reopen → Submit. Editable states are Draft, ReturnedForCorrection and Rejected;
+the rule is re-checked on POST, not only on GET, so a form rendered while the report was editable
+cannot still be posted after DSC has taken it into review.
+
+**Submission validation.** Club approved, season valid, contact details present, all three narrative
+answers present, no duplicate report. Missing *derived* data is a **warning, never a blocker** — a club
+with an unusual season can still file its narrative report, and the screen says what is missing.
+
+**DSC:** `/Admin/AnnualReports` is a filtered queue (season, club, status) with submitted reports
+first, showing club, season, submitted date, status and reviewer. `/Admin/AnnualReports/Details/{id}`
+renders the same report body the club sees, plus Approve / Return for correction / Reject with notes,
+the submission provenance and a history timeline read from the audit log. Decisions are refused unless
+the report is actually under review. Deliberately the same interaction as the KPI and partner-offering
+review screens rather than a third style.
+
+### 31.7 Export
+
+An HTML print view (`/annual-report/print/{id}` and the DSC equivalent) with `Layout = null`, Ghars
+branding, a print stylesheet and page-break rules. It follows the template's structure — title, sports
+season, then the four sections in order — and is deliberately not a pixel copy of the Word file.
+
+Export is the browser's own Print-to-PDF, which shapes Arabic correctly using the reader's system
+fonts. Generating the PDF server-side with QuestPDF would have meant embedding an Arabic-shaping font
+for this one document; the print path gives a correct bilingual result with no such dependency.
+
+The print action is **not** audited. The requirement asks for export auditing only where it is already
+a project pattern, and it is not one here; more to the point a print view is a *render*, not a
+download, so auditing it would write a row every time someone opened the preview. (An earlier iteration
+did audit it and produced 12 rows from a handful of test renders — the reason it was removed.)
+
+### 31.8 Ghars Channel — architecture
+
+`Media`/`Gallery` becomes **Ghars Channel / قناة غرس** in user-facing text only. Controllers, tables,
+DbSets and view folders keep their names; `/gallery` keeps working and `/channel` is added as the
+primary route, so existing links and bookmarks do not break.
+
+`GalleryItem` is **extended, not forked**. It was already the aggregation point — `AgendaController`
+writes an `AgendaMedia` row and a `GalleryItem` row from one uploaded file, and both the public and
+admin gallery already read it. Eight nullable columns were added: `ChannelCategory`, `ApprovalStatus`,
+the submit/review stamps, `ReviewNotes` and `LibraryItemId`. Every pre-existing row stays valid with
+`ApprovalStatus = null`, which means "outside the implementing-entity review workflow".
+
+`MediaAlbum` / `MediaItem` (curated albums) and `AgendaMedia` are untouched.
+
+### 31.9 Two streams, two moderation models
+
+**Club activity media — unchanged.** Uploaded through an Agenda entry, stored once, surfacing in the
+channel automatically with `IsPublished = true` and `ApprovalStatus = null`. `IsPublished = false`
+still means *a DSC takedown*, not a draft. No second submission workflow is imposed on a club photo.
+
+A second club entry point was added — "Add activity media" in the channel — but it **requires an agenda
+entry** and writes exactly the same rows through `Helpers/AgendaMediaPublisher.cs`, which both paths now
+call. It cannot create disconnected club media with no activity context.
+
+**Partner / government content — gated.** Draft → SubmittedForApproval → Approved, with Returned,
+Rejected and Unpublished. A partner row is created with `IsPublished = false`; **only a DSC approval
+sets it true**. Visibility therefore requires *both* fields to agree —
+`IsPublished && (ApprovalStatus == null || ApprovalStatus == Approved)` — the same two-field rule the
+offering catalogue uses, centralised as `ChannelWorkflow.PubliclyVisible` so no query can implement
+half of it.
+
+Partner content management lives at `/partner/channel` — **"My Ghars Channel Content" / "محتواي في قناة
+غرس"** — deliberately separate from `/partner/programs`. A program is a bookable offering; channel
+content is published material.
+
+**No new role.** `OrganizationType.GovernmentAuthority` and `OtherPartner` are both administered by
+Partner Admin, exactly as `PartnerProgramsController` already treats them. There is no permission gap a
+`GovernmentEntityAdmin` role would close.
+
+### 31.10 Distinction from the Digital Library
+
+| | Ghars Channel | Digital Library |
+| --- | --- | --- |
+| Content | photos, videos, awareness clips, activity coverage | booklets, publications, structured documents |
+| Uploads accepted | images and video only | PDF and video |
+
+**The channel accepts no documents.** Verified in the browser: the upload control offers
+`.jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mov` and nothing else. A partner whose material is a booklet
+links their existing Library publication via `LibraryItemId` instead — nothing is copied, and the link
+is validated to be a published item issued by that entity. The channel page also carries an explicit
+pointer to the Digital Library so the two are not confused.
+
+Partner vocabulary is constrained to what is theirs to claim: media types **Photo, Video** (not
+"official photo" or "press coverage") and categories **Awareness, Educational** (not "club activity" or
+"press"). Both verified in the rendered form.
+
+### 31.11 File access
+
+Partner uploads go to `wwwroot/uploads/channel`, added to the denied static prefixes in `Program.cs`
+alongside `/uploads/agenda`. `/protected-files/gallery/{id}` now enforces
+`ChannelWorkflow.IsPubliclyVisible` — exactly the rule the listing pages apply — instead of checking
+`IsPublished` alone.
+
+Verified end to end: a partner **draft**, a **submitted** item and a **withdrawn** item all return
+`404` anonymously while their id is known; the owning entity gets `200` for its own draft; an
+**approved** item returns `200` anonymously; a club photo **hidden by DSC** returns `404` anonymously
+but `200` to the owning club; and `GET /uploads/channel/` returns `404`.
+
+### 31.12 Reporting isolation
+
+Channel uploads are evidence, not delivery. After the full end-to-end run — which created club media,
+partner content and a complete report lifecycle — every business metric was **exactly at its
+pre-test baseline**: agenda 11 / 10 delivered, bookings 15, KPI 14, attendance 6 sessions / 8 records,
+certificates 8, activities 59. The Annual Report's totals and detail come from `AgendaEntry` alone.
+
+### 31.13 Notifications and audit
+
+Existing infrastructure, existing conventions. Club submits → role-targeted notification to DSC Admin
+**and Super Admin** (so a site with no DSC Admin cannot lose a submission). DSC decides →
+organization-targeted notification to the reporting club only. Partner submits channel content → DSC
+reviewers; DSC decides → that entity only. No unrelated organization is addressed, and a club photo
+upload generates nothing.
+
+Audited via `SystemAuditLog`: report created, draft updated, submitted, resubmitted, returned,
+approved, rejected; channel content created, updated, submitted, resubmitted, approved, returned,
+rejected, withdrawn, hidden and republished by DSC, and club media added.
+
+### 31.14 Security
+
+Every query is scoped by the caller's `OrganizationAdminLink` set, and a miss returns `NotFound()` —
+non-disclosing, consistent with the rest of the platform.
+
+| Test | Result |
+| --- | --- |
+| Club B views Club A's report | 404 |
+| Club B prints Club A's report | 404 |
+| Club B opens "its own" season report | 200, scoped to Al Nasr Club |
+| Anonymous opens a report | 302 to login |
+| DSC cross-club review | 200 (retained) |
+| Partner B views Partner A's content | 404 |
+| Partner B edits Partner A's content | 404 |
+| Partner B **forges a POST** to submit Partner A's content | 404 |
+| Partner B **forges a POST** to withdraw Partner A's content | 404 |
+
+The forged-POST cases matter: hiding an action in the UI is not authorisation, so both were checked at
+the endpoint.
+
+### 31.15 Verification
+
+| Suite | Result |
+| --- | --- |
+| Annual Report lifecycle (the 14 required steps) | **44 checks, all passing** |
+| Cross-club security + channel end-to-end (club and partner) | **41 checks, all passing** |
+| Snapshot freeze against a post-approval Agenda change | **identical before and after** |
+| Regression / Arabic / mobile / accessibility sweep | **244 page loads, 0 failures** |
+
+The sweep covers 30 pages across anonymous, club, partner and DSC roles at **1440 / 1024 / 768 / 390px
+in English and Arabic**, checking HTTP 200, zero page-level horizontal overflow, zero unnamed form
+controls, zero duplicate ids, no badge without text, every image carrying `alt`, every data table
+carrying a header cell, every button having an accessible name, and `dir` matching the language.
+
+All six approved Arabic template terms — `التقرير السنوي لغرس`, `الموسم الرياضي`, `البيانات الأساسية`,
+`المؤشرات الإجمالية لتنفيذ البرنامج`, `تفاصيل المحاضرات والبرامج المنفذة`, `أبرز النتائج والملاحظات` —
+were asserted present on the rendered Arabic report.
+
+Three defects found by the sweep were fixed rather than explained away:
+
+1. **The injected admin filter bar treated the annual report as a list.** `wwwroot/js/admin.js` adds a
+   keyword/column filter above the first table on any admin page; on the review screen that offered to
+   *hide rows of an official report*. Tables can now opt out with `data-filterable="false"`, and the
+   filter picks the first table that has not, so no other admin page changes.
+2. **4px page overflow at 1024px in Arabic** on the review screen — a contact email is one long
+   unbreakable token in a flex row, and a flex item cannot shrink below its content. Fixed with
+   `text-break` on the value side.
+3. **Toast dismiss buttons had no accessible name** (`Views/Shared/_Toasts.cshtml`) — icon-only buttons
+   announced as "button". Given a bilingual `aria-label`; the icons are now `aria-hidden`.
+
+Four pages carry pre-existing unbound filter labels that this work did not introduce and did not touch
+— Club Dashboard (6 controls), Agenda (2), KPI create (19), Custom booking (2). Verified unchanged
+before and after (`Views/Kpi`, `Views/Agenda` and `Views/Bookings` are untouched by this change set);
+they are recorded here rather than silently absorbed.
+
+### 31.16 Migration
+
+**One migration, additive and non-destructive:**
+`20260908074525_AddAnnualReportAndGharsChannel`.
+
+* New table `GharsAnnualReports` (27 columns), unique index on `(OrganizationId, SeasonId)`, review-queue
+  index on `(Status, SubmittedAtUtc)`, `NoAction` on both parent FKs so an approved report is never
+  cascade-deleted.
+* Eight nullable columns on `GalleryItems`, plus `IX_GalleryItems_ApprovalStatus_SubmittedAtUtc` and the
+  `LibraryItemId` FK (`NoAction`).
+
+No column is dropped, renamed or made non-nullable, and no historical migration was edited. Verified
+from `INFORMATION_SCHEMA` after applying: all 27 columns present with the intended nullability, all
+indexes created, and **all 9 pre-existing gallery rows preserved with `ApprovalStatus = NULL` and
+`IsPublished = 1`** — the intended backwards-compatible default.
+
+`dotnet build --no-incremental` → **0 errors, 1 warning**, the retained `CS0108` on
+`Activity.CreatedByUserId`, not suppressed.

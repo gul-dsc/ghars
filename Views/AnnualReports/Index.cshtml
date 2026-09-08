@@ -1,0 +1,95 @@
+@model List<GharsPlatform.Models.Core.Season>
+@using GharsPlatform.Helpers
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var club = ViewBag.Club as Organization;
+    var reports = ViewBag.Reports as Dictionary<int, GharsAnnualReport> ?? new();
+    ViewData["Title"] = AnnualReportWorkflow.ReportTitle;
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <div>
+        <h1 class="h3 mb-1">@AnnualReportWorkflow.ReportTitle</h1>
+        @* The club is identified, never chosen: it comes from the signed-in user's organization. *@
+        <div class="text-muted">
+            <i class="bi bi-building me-1" aria-hidden="true"></i>@(ar ? club?.NameAr : club?.NameEn)
+        </div>
+    </div>
+</div>
+
+<p class="text-muted mb-4">
+    @T("One official report per sports season. The indicators and the activity table are generated from your Agenda — you only complete the contact details and the three narrative sections.",
+       "تقرير رسمي واحد لكل موسم رياضي. تُولَّد المؤشرات وجدول الأنشطة من الأجندة تلقائياً — ما عليكم سوى استكمال بيانات التواصل والأقسام الثلاثة للنتائج والملاحظات.")
+</p>
+
+<div class="row g-3">
+    @foreach (var season in Model)
+    {
+        reports.TryGetValue(season.Id, out var report);
+        var title = ar ? season.TitleAr : season.TitleEn;
+        <div class="col-md-6 col-xl-4">
+            <div class="card h-100 rounded-4 border-0 shadow-sm">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                        <h2 class="h5 mb-0">@title</h2>
+                        @if (season.IsActive)
+                        {
+                            <span class="badge text-bg-success">@T("Active", "نشط")</span>
+                        }
+                    </div>
+
+                    @if (report is null)
+                    {
+                        <p class="text-muted small flex-grow-1">
+                            @T("No report has been started for this season.", "لم يبدأ إعداد تقرير لهذا الموسم.")
+                        </p>
+                        <a class="btn btn-success" asp-action="Edit" asp-route-seasonId="@season.Id">
+                            <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>@T("Start report", "بدء التقرير")
+                        </a>
+                    }
+                    else
+                    {
+                        <div class="mb-2">
+                            @* Status is carried by text and an icon, never by colour alone. *@
+                            <span class="badge @AnnualReportWorkflow.BadgeClass(report.Status)">
+                                <i class="bi @AnnualReportWorkflow.Icon(report.Status) me-1" aria-hidden="true"></i>@AnnualReportWorkflow.Label(report.Status)
+                            </span>
+                        </div>
+                        <p class="small text-muted flex-grow-1">@AnnualReportWorkflow.Explain(report.Status)</p>
+
+                        @if (report.SubmittedAtUtc.HasValue)
+                        {
+                            <div class="small text-muted mb-2">
+                                @T("Submitted", "أُرسل في"): @report.SubmittedAtUtc.Value.ToString("yyyy-MM-dd")
+                            </div>
+                        }
+
+                        <div class="d-flex flex-wrap gap-2">
+                            @if (AnnualReportWorkflow.ClubCanEdit(report.Status))
+                            {
+                                <a class="btn btn-success btn-sm" asp-action="Edit" asp-route-seasonId="@season.Id">
+                                    <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>@T("Continue", "متابعة")
+                                </a>
+                            }
+                            <a class="btn btn-outline-secondary btn-sm" asp-action="Details" asp-route-id="@report.Id">
+                                <i class="bi bi-eye me-1" aria-hidden="true"></i>@T("View", "عرض")
+                            </a>
+                            <a class="btn btn-outline-secondary btn-sm" asp-action="Print" asp-route-id="@report.Id" target="_blank">
+                                <i class="bi bi-printer me-1" aria-hidden="true"></i>@T("Print", "طباعة")
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+    @if (!Model.Any())
+    {
+        <div class="col-12">
+            <div class="empty-state">@T("No sports seasons are defined yet.", "لا توجد مواسم رياضية معرّفة بعد.")</div>
+        </div>
+    }
+</div>

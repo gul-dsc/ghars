@@ -1,0 +1,76 @@
+@model GharsPlatform.Models.Core.GharsAnnualReport
+@using GharsPlatform.Helpers
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    // The four sections of the official report, read-only. Shared by the club's view, the DSC review
+    // screen and the print/PDF output, so the document a club sees, the one a reviewer decides on and
+    // the one that gets printed are literally the same rendering.
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var p = ViewData["Presentation"] as AnnualReportPresentation
+            ?? new AnnualReportPresentation(SeasonClubStats.Empty, true, null, new HashSet<int>());
+    var forPrint = ViewData["ForPrint"] as bool? ?? false;
+    var org = Model.Organization;
+
+    string Narrative(string? value) => string.IsNullOrWhiteSpace(value)
+        ? T("Not provided.", "لم يتم إدخال بيانات.")
+        : value;
+}
+
+<section class="annual-report-section mb-4">
+    <h2 class="h5 annual-report-heading">@AnnualReportWorkflow.Section1</h2>
+    <div class="table-responsive">
+        @* data-filterable="false": this is the official report, not a list to be filtered. *@
+        <table class="table table-bordered mb-0 annual-report-table" data-filterable="false">
+            <caption class="visually-hidden">@AnnualReportWorkflow.Section1</caption>
+            <tbody>
+                <tr><th scope="row" style="width:35%">@AnnualReportWorkflow.ClubName</th><td>@(ar ? org?.NameAr : org?.NameEn)</td></tr>
+                <tr><th scope="row">@AnnualReportWorkflow.Coordinator</th><td>@(string.IsNullOrWhiteSpace(Model.ProgramCoordinatorName) ? "—" : Model.ProgramCoordinatorName)</td></tr>
+                <tr><th scope="row">@AnnualReportWorkflow.ContactNumber</th><td dir="ltr">@(string.IsNullOrWhiteSpace(Model.ContactNumber) ? "—" : Model.ContactNumber)</td></tr>
+                <tr><th scope="row">@AnnualReportWorkflow.ContactEmail</th><td dir="ltr">@(string.IsNullOrWhiteSpace(Model.ContactEmail) ? "—" : Model.ContactEmail)</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="annual-report-section mb-4">
+    <h2 class="h5 annual-report-heading">@AnnualReportWorkflow.Section2</h2>
+    @* Full paths: this partial is also rendered from the Admin area, where a bare partial name would
+       resolve against /Areas/Admin/Views and never find these files. *@
+    @await Html.PartialAsync("~/Views/AnnualReports/_Indicators.cshtml", p, new ViewDataDictionary(ViewData)
+    {
+        ["ApprovedKpi"] = ViewData["ApprovedKpi"],
+        ["ForPrint"] = forPrint
+    })
+</section>
+
+<section class="annual-report-section mb-4">
+    <h2 class="h5 annual-report-heading">@AnnualReportWorkflow.Section3</h2>
+    @await Html.PartialAsync("~/Views/AnnualReports/_ActivityTable.cshtml", p, new ViewDataDictionary(ViewData)
+    {
+        ["ForPrint"] = forPrint,
+        ["LinkAgenda"] = ViewData["LinkAgenda"]
+    })
+</section>
+
+<section class="annual-report-section">
+    <h2 class="h5 annual-report-heading">@AnnualReportWorkflow.Section4</h2>
+
+    <h3 class="h6 mt-3">@AnnualReportWorkflow.KeyResultsPrompt</h3>
+    <div class="annual-report-narrative border rounded p-3">@Narrative(Model.KeyResults)</div>
+
+    <h3 class="h6 mt-3">@AnnualReportWorkflow.ChallengesPrompt</h3>
+    <div class="annual-report-narrative border rounded p-3">@Narrative(Model.Challenges)</div>
+
+    <h3 class="h6 mt-3">@AnnualReportWorkflow.ProposalsPrompt</h3>
+    <div class="annual-report-narrative border rounded p-3">@Narrative(Model.DevelopmentProposals)</div>
+</section>
+
+@if (p.IsFrozen && p.SnapshotTakenAtUtc.HasValue)
+{
+    <p class="small text-muted mt-4 mb-0">
+        @T("Figures and activity table frozen at submission on", "جُمّدت الأرقام وجدول الأنشطة عند الإرسال بتاريخ")
+        @p.SnapshotTakenAtUtc.Value.ToString("yyyy-MM-dd HH:mm") @T("UTC", "بتوقيت غرينتش").
+    </p>
+}

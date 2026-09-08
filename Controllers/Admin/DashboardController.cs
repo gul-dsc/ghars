@@ -143,6 +143,19 @@ public class DashboardController : Controller
         var baselineParticipants = baselineSeason == null ? 0 : await _db.AgendaEntries.Where(x => x.SeasonId == baselineSeason.Id).SumAsync(x => (int?)x.NumberOfParticipants) ?? 0;
         var growth = baselineParticipants == 0 ? 0 : Math.Round(((decimal)currentSeasonParticipants - baselineParticipants) / baselineParticipants * 100, 1);
 
+        // Ghars Annual Report oversight: two counts and a link, deliberately not the reports' contents.
+        // One grouped query rather than a count per state.
+        var annualReportStates = await _db.GharsAnnualReports
+            .GroupBy(x => x.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Status, x => x.Count);
+        ViewBag.AnnualReportsAwaitingReview = annualReportStates.TryGetValue(AnnualReportStatus.Submitted, out var arPending) ? arPending : 0;
+        ViewBag.AnnualReportsApproved = annualReportStates.TryGetValue(AnnualReportStatus.Approved, out var arApproved) ? arApproved : 0;
+
+        // Ghars Channel moderation: partner submissions awaiting a decision.
+        ViewBag.ChannelSubmissionsAwaitingReview = await _db.GalleryItems
+            .CountAsync(x => x.ApprovalStatus == ChannelApprovalStatus.SubmittedForApproval);
+
         ViewBag.IsSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
         ViewBag.ActiveSeason = activeSeason;
         ViewBag.Filters = new { seasonId = selectedSeasonId, clubId, partnerId, activityType, from, to, kpiCategory };

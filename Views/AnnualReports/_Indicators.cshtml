@@ -1,0 +1,83 @@
+@model GharsPlatform.Helpers.AnnualReportPresentation
+@using GharsPlatform.Helpers
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    // Section 2 of the template: the six overall implementation indicators. Every one of them is
+    // system-derived, so this partial is shared by the club form, the read-only view, the DSC review
+    // screen and the print output - four surfaces that must never disagree about what the report says.
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var s = Model.Stats;
+    var kpi = ViewData["ApprovedKpi"] as KpiSubmission;
+    var forPrint = ViewData["ForPrint"] as bool? ?? false;
+
+    var rows = new (string Label, int Value, string Note)[]
+    {
+        (AnnualReportWorkflow.ClubProposed, s.ClubProposed, T("Activities the club arranged itself", "أنشطة رتّبها النادي بنفسه")),
+        (AnnualReportWorkflow.CouncilProposed, s.CouncilProposed, T("Activities booked from the DSC catalogue", "أنشطة محجوزة من كتالوج المجلس")),
+        (AnnualReportWorkflow.TotalDelivered, s.DeliveredActivities, T("Delivered agenda entries for this season", "أنشطة الأجندة المنفذة لهذا الموسم")),
+        (AnnualReportWorkflow.LecturersCount, s.Lecturers, T("Distinct lecturers, counted once each", "محاضرون مختلفون، يُحتسب كل منهم مرة واحدة")),
+        (AnnualReportWorkflow.EntitiesCount, s.ImplementingEntities, T("Distinct implementing entities, excluding the club itself", "جهات منفذة مختلفة، باستثناء النادي نفسه")),
+        (AnnualReportWorkflow.ParticipantsTotal, s.Participants, T("Sum of participants actually recorded", "مجموع المشاركين المسجلين فعلياً"))
+    };
+}
+
+<div class="table-responsive">
+    @* data-filterable="false": the admin filter bar must not offer to hide rows of an official report. *@
+    <table class="table table-bordered align-middle mb-0 annual-report-table" data-filterable="false">
+        <caption class="visually-hidden">@AnnualReportWorkflow.Section2</caption>
+        <thead class="table-light">
+            <tr>
+                <th scope="col">@T("Indicator", "المؤشر")</th>
+                <th scope="col" class="text-center" style="width:8rem">@T("Value", "القيمة")</th>
+                @if (!forPrint)
+                {
+                    <th scope="col">@T("How it is derived", "طريقة الاحتساب")</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var r in rows)
+            {
+                <tr>
+                    <th scope="row" class="fw-normal">@r.Label</th>
+                    <td class="text-center fw-semibold fs-5">@r.Value</td>
+                    @if (!forPrint)
+                    {
+                        <td class="small text-muted">@r.Note</td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (!forPrint)
+{
+    @* The rule behind the first two rows, stated rather than applied silently, together with the
+       limitation that comes with it. *@
+    <div class="alert alert-light border small mt-3 mb-0">
+        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>@AnnualReportWorkflow.OriginRuleExplanation
+        <div class="text-muted mt-2">@AnnualReportWorkflow.OriginHistoricalNote</div>
+    </div>
+}
+
+@if (!forPrint && kpi is not null && kpi.NumberOfLecturesActivities != s.DeliveredActivities)
+{
+    @* The approved KPI figure for the same club and season, shown beside the derived one and labelled
+       with its source. The annual report never overwrites KPI and never adopts its value: both numbers
+       stand, each identified. *@
+    <div class="alert alert-warning small mt-3 mb-0">
+        <strong>@T("Approved KPI submission for this season reports a different total.", "تُبلغ بيانات المؤشرات المعتمدة لهذا الموسم إجمالياً مختلفاً.")</strong>
+        <div class="mt-1">
+            @T("Approved KPI", "المؤشرات المعتمدة"): <strong>@kpi.NumberOfLecturesActivities</strong>
+            @T("activities", "نشاطاً") ·
+            @T("derived from the Agenda", "المشتق من الأجندة"): <strong>@s.DeliveredActivities</strong>
+        </div>
+        <div class="text-muted mt-1">
+            @T("Both figures are shown with their source. This report always uses the Agenda-derived value; it never changes an approved KPI submission.",
+               "يُعرض الرقمان مع مصدر كل منهما. يعتمد هذا التقرير دائماً على القيمة المشتقة من الأجندة، ولا يغيّر أبداً بيانات المؤشرات المعتمدة.")
+        </div>
+    </div>
+}

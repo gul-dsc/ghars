@@ -1,0 +1,163 @@
+@model List<GharsPlatform.Models.Core.GalleryItem>
+@using GharsPlatform.Helpers
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var org = ViewBag.Organization as Organization;
+    var counts = ViewBag.StateCounts as Dictionary<ChannelApprovalStatus, int> ?? new();
+    var total = ViewBag.TotalItems as int? ?? 0;
+    var selectedStatus = ViewBag.Status as ChannelApprovalStatus?;
+    var selectedCategory = ViewBag.Category as ChannelCategory?;
+    ViewData["Title"] = T("My Ghars Channel Content", "محتواي في قناة غرس");
+
+    int C(ChannelApprovalStatus s) => counts.TryGetValue(s, out var n) ? n : 0;
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <div>
+        <h1 class="h3 mb-1">@ViewData["Title"]</h1>
+        <div class="text-muted"><i class="bi bi-building me-1" aria-hidden="true"></i>@(ar ? org?.NameAr : org?.NameEn)</div>
+    </div>
+    <a class="btn btn-success" asp-action="Create">
+        <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>@T("Add content", "إضافة محتوى")
+    </a>
+</div>
+
+<p class="text-muted">
+    @T("Awareness and educational media your entity publishes to the Ghars Channel for clubs to use. Content becomes visible only after Dubai Sports Council approves it.",
+       "وسائط توعوية وتعليمية تنشرها جهتكم في قناة غرس لتستفيد منها الأندية. لا يصبح المحتوى مرئياً إلا بعد اعتماد مجلس دبي الرياضي له.")
+</p>
+
+@* Programs and channel content are different concepts and live on different screens. *@
+<div class="alert alert-light border small d-flex flex-wrap align-items-center gap-2">
+    <i class="bi bi-info-circle" aria-hidden="true"></i>
+    <span>@T("Looking for your bookable training programs and workshops?", "تبحثون عن برامجكم التدريبية وورش العمل القابلة للحجز؟")</span>
+    <a class="ms-auto" asp-controller="PartnerPrograms" asp-action="Index">@T("Go to My Programs", "الذهاب إلى برامجي")</a>
+</div>
+
+<div class="row g-3 mb-4">
+    @foreach (var tile in new (ChannelApprovalStatus? S, string Label, int Count)[]
+    {
+        (null, T("All content", "كل المحتوى"), total),
+        (ChannelApprovalStatus.Draft, ChannelWorkflow.StatusLabel(ChannelApprovalStatus.Draft), C(ChannelApprovalStatus.Draft)),
+        (ChannelApprovalStatus.SubmittedForApproval, ChannelWorkflow.StatusLabel(ChannelApprovalStatus.SubmittedForApproval), C(ChannelApprovalStatus.SubmittedForApproval)),
+        (ChannelApprovalStatus.Approved, ChannelWorkflow.StatusLabel(ChannelApprovalStatus.Approved), C(ChannelApprovalStatus.Approved)),
+    })
+    {
+        <div class="col-6 col-lg-3">
+            <a class="text-decoration-none" asp-action="Index" asp-route-status="@tile.S">
+                <div class="card rounded-4 border-0 shadow-sm h-100 @(selectedStatus == tile.S ? "border border-success" : "")">
+                    <div class="card-body">
+                        <div class="small text-muted">@tile.Label</div>
+                        <div class="fs-3 fw-semibold">@tile.Count</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    }
+</div>
+
+<form method="get" class="card p-3 rounded-4 border-0 shadow-sm mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label" for="f-cc-status">@T("Status", "الحالة")</label>
+            <select class="form-select" id="f-cc-status" name="status">
+                <option value="">@T("All", "الكل")</option>
+                @foreach (ChannelApprovalStatus s in Enum.GetValues(typeof(ChannelApprovalStatus)))
+                {
+                    <option value="@s" selected="@(selectedStatus == s)">@ChannelWorkflow.StatusLabel(s)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" for="f-cc-category">@T("Category", "التصنيف")</label>
+            <select class="form-select" id="f-cc-category" name="category">
+                <option value="">@T("All", "الكل")</option>
+                @foreach (var c in ChannelWorkflow.PartnerCategories)
+                {
+                    <option value="@c" selected="@(selectedCategory == c)">@ChannelWorkflow.CategoryLabel(c)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4 d-flex flex-wrap gap-2">
+            <button class="btn btn-primary">@T("Filter", "تصفية")</button>
+            <a class="btn btn-outline-secondary" asp-action="Index">@T("Reset", "إعادة ضبط")</a>
+        </div>
+    </div>
+</form>
+
+<div class="card border-0 rounded-4 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">@T("Title", "العنوان")</th>
+                    <th scope="col">@T("Category", "التصنيف")</th>
+                    <th scope="col">@T("Season", "الموسم")</th>
+                    <th scope="col">@T("Date", "التاريخ")</th>
+                    <th scope="col">@T("Status", "الحالة")</th>
+                    <th scope="col"><span class="visually-hidden">@T("Actions", "إجراءات")</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td>
+                            <a asp-action="Details" asp-route-id="@item.Id">@(ar ? item.TitleAr : item.TitleEn)</a>
+                            @if (item.LibraryItem is not null)
+                            {
+                                <span class="badge text-bg-light border ms-1">
+                                    <i class="bi bi-journal-text me-1" aria-hidden="true"></i>@T("Library link", "رابط مكتبة")
+                                </span>
+                            }
+                        </td>
+                        <td>@ChannelWorkflow.CategoryLabel(item.ChannelCategory ?? ChannelCategory.Awareness)</td>
+                        <td>@(ar ? item.Season?.TitleAr : item.Season?.TitleEn)</td>
+                        <td>@item.MediaDate.ToString("yyyy-MM-dd")</td>
+                        <td>
+                            <span class="badge @ChannelWorkflow.StatusBadgeClass(item.ApprovalStatus)">
+                                <i class="bi @ChannelWorkflow.StatusIcon(item.ApprovalStatus) me-1" aria-hidden="true"></i>@ChannelWorkflow.StatusLabel(item.ApprovalStatus)
+                            </span>
+                        </td>
+                        <td class="text-end">
+                            <div class="d-flex flex-wrap gap-1 justify-content-end">
+                                @if (ChannelWorkflow.PartnerCanEdit(item.ApprovalStatus))
+                                {
+                                    <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@item.Id">@T("Edit", "تعديل")</a>
+                                }
+                                @if (ChannelWorkflow.PartnerCanSubmit(item.ApprovalStatus))
+                                {
+                                    <form method="post" asp-action="Submit" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@item.Id" />
+                                        <button class="btn btn-sm btn-success" type="submit">@T("Submit", "إرسال")</button>
+                                    </form>
+                                }
+                                @if (ChannelWorkflow.PartnerCanWithdraw(item.ApprovalStatus))
+                                {
+                                    <form method="post" asp-action="Withdraw" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@item.Id" />
+                                        <button class="btn btn-sm btn-outline-danger" type="submit">@T("Withdraw", "سحب")</button>
+                                    </form>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+                @if (!Model.Any())
+                {
+                    <tr>
+                        <td colspan="6" class="p-4 text-muted text-center">
+                            @T("No channel content yet. Use \"Add content\" to publish an awareness video or educational material.",
+                               "لا يوجد محتوى بعد. استخدموا \"إضافة محتوى\" لنشر فيديو توعوي أو مادة تعليمية.")
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

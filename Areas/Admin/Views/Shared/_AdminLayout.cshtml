@@ -115,16 +115,21 @@
                 <i class="bi bi-journal-bookmark"></i> <span>@(isRtl ? "المكتبة" : "Library")</span>
             </a>
 
+            @* Albums keep their own entry; the channel itself is the media list below. *@
             <a class="nav-link @ActiveIf("Gallery", "Index")" asp-area="Admin" asp-controller="Gallery" asp-action="Index">
-                <i class="bi bi-images"></i> <span>@(isRtl ? "المعرض" : "Gallery")</span>
+                <i class="bi bi-images"></i> <span>@(isRtl ? "الألبومات" : "Albums")</span>
             </a>
 
             <a class="nav-link @ActiveIf("Gallery", "MediaItems")" asp-area="Admin" asp-controller="Gallery" asp-action="MediaItems">
-                <i class="bi bi-camera"></i> <span>@(isRtl ? "وسائط الأنشطة" : "Activity Media")</span>
+                <i class="bi bi-collection-play"></i> <span>@(isRtl ? "قناة غرس" : "Ghars Channel")</span>
             </a>
 
             <a class="nav-link @ActiveIf("Kpi")" asp-area="Admin" asp-controller="Kpi" asp-action="Index">
                 <i class="bi bi-bullseye"></i> <span>@(isRtl ? "مراجعة المؤشرات" : "KPI Review")</span>
+            </a>
+
+            <a class="nav-link @ActiveIf("AnnualReports")" asp-area="Admin" asp-controller="AnnualReports" asp-action="Index">
+                <i class="bi bi-file-earmark-text"></i> <span>@(isRtl ? "التقارير السنوية" : "Annual Reports")</span>
             </a>
 
 

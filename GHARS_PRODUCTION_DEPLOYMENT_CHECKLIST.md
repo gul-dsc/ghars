@@ -46,6 +46,12 @@ Work through this during a deployment. Background and the reasoning behind each 
 - [ ] `dotnet ef database update` executed successfully
 - [ ] Migration history verified: `SELECT MigrationId FROM __EFMigrationsHistory ORDER BY MigrationId`
 - [ ] Schema sanity checked — the tables and columns the release expects are present
+- [ ] **Ghars Annual Report / Ghars Channel release only** —
+      `20260908074525_AddAnnualReportAndGharsChannel` applied. It is additive and non-destructive:
+      one new table (`GharsAnnualReports`, with a unique index on `OrganizationId, SeasonId`) and eight
+      nullable columns on `GalleryItems`. No existing column is dropped, renamed or made non-nullable,
+      so existing gallery rows keep working unchanged — a null `ApprovalStatus` means "outside the
+      implementing-entity review workflow", which is every pre-existing row
 
 ## Files
 

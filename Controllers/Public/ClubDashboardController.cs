@@ -45,6 +45,14 @@ public class ClubDashboardController : Controller
             .ToListAsync();
         var unread = await _db.NotificationDeliveries.Include(x => x.Notification).Where(x => x.UserId == userId && x.ReadAtUtc == null).OrderByDescending(x => x.Notification!.CreatedAtUtc).Take(5).ToListAsync();
 
+        // Ghars Annual Report status for the current season - a status and a shortcut, not the report's
+        // contents: the dashboard points at the obligation, the report screen is where it is done.
+        var activeSeason = await _db.Seasons.Where(x => x.IsActive).OrderByDescending(x => x.StartDate).FirstOrDefaultAsync();
+        ViewBag.AnnualReportSeason = activeSeason;
+        ViewBag.AnnualReport = activeSeason is null || club is null
+            ? null
+            : await _db.GharsAnnualReports.FirstOrDefaultAsync(x => x.OrganizationId == club.Id && x.SeasonId == activeSeason.Id);
+
         ViewBag.Club = club;
         ViewBag.Bookings = bookings;
         ViewBag.Programs = programs;

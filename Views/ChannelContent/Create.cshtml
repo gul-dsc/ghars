@@ -1,0 +1,41 @@
+@model GharsPlatform.ViewModels.ChannelContentVm
+@using GharsPlatform.Helpers
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var org = ViewBag.Organization as Organization;
+    ViewData["Title"] = T("Add Ghars Channel content", "إضافة محتوى إلى قناة غرس");
+}
+
+<nav aria-label="@T("Breadcrumb", "مسار التنقل")">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-action="Index">@T("My Ghars Channel Content", "محتواي في قناة غرس")</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@T("Add content", "إضافة محتوى")</li>
+    </ol>
+</nav>
+
+<h1 class="h3 mb-1">@ViewData["Title"]</h1>
+@* The publishing entity is identified, never chosen. *@
+<p class="text-muted mb-4">
+    <i class="bi bi-building me-1" aria-hidden="true"></i>@(ar ? org?.NameAr : org?.NameEn)
+    <span class="mx-2">·</span>
+    @T("Published on behalf of your entity. Content is visible to clubs only after DSC approval.",
+       "يُنشر باسم جهتكم. لا يصبح المحتوى مرئياً للأندية إلا بعد اعتماد المجلس.")
+</p>
+
+<form method="post" enctype="multipart/form-data" novalidate>
+    @Html.AntiForgeryToken()
+    @await Html.PartialAsync("_Form", Model)
+
+    <div class="d-flex flex-wrap gap-2 my-4">
+        <button type="submit" name="action" value="draft" class="btn btn-outline-secondary">
+            <i class="bi bi-save me-1" aria-hidden="true"></i>@T("Save draft", "حفظ كمسودة")
+        </button>
+        <button type="submit" name="action" value="submit" class="btn btn-success">
+            <i class="bi bi-send me-1" aria-hidden="true"></i>@T("Submit for approval", "إرسال للاعتماد")
+        </button>
+        <a class="btn btn-link" asp-action="Index">@T("Cancel", "إلغاء")</a>
+    </div>
+</form>

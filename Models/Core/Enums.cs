@@ -191,6 +191,55 @@ public enum KpiSubmissionStatus : byte
     MoreInfoRequired = 5
 }
 
+/// <summary>
+/// The DSC review lifecycle for a club's Ghars Annual Report. Deliberately its own enum rather than a
+/// reuse of <see cref="KpiSubmissionStatus"/>: the two records are compared and filtered independently
+/// across dashboards and review queues, and an Annual Report freezes on approval while a KPI
+/// submission does not. The numeric layout is kept identical so the two read the same way in the
+/// database, and the returned state is named for what the requirement calls it.
+/// </summary>
+public enum AnnualReportStatus : byte
+{
+    Draft = 1,
+    Submitted = 2,
+    Approved = 3,
+    Rejected = 4,
+    ReturnedForCorrection = 5
+}
+
+/// <summary>
+/// What a Ghars Channel item is, for the channel's content filters. Distinct from
+/// <see cref="GalleryMediaType"/>, which says what the file *is* (photo/video); this says what it is
+/// *for*. Nullable on the row: every item that predates the channel is classified by fallback from
+/// its existing fields rather than being back-filled by guesswork.
+/// </summary>
+public enum ChannelCategory : byte
+{
+    ClubActivity = 1,
+    Awareness = 2,
+    Educational = 3,
+    Official = 4,
+    Press = 5
+}
+
+/// <summary>
+/// The DSC review lifecycle for partner/government content submitted to the Ghars Channel.
+///
+/// The column is <c>null</c> for club activity media and DSC uploads, which are outside this workflow
+/// entirely — exactly the convention <see cref="OfferingApprovalStatus"/> uses for DSC-created
+/// activities. Visibility requires BOTH <see cref="Approved"/> here and <c>IsPublished</c> on the row;
+/// only a DSC approval ever sets the pair.
+/// </summary>
+public enum ChannelApprovalStatus : byte
+{
+    Draft = 1,
+    SubmittedForApproval = 2,
+    ReturnedForCorrection = 3,
+    Approved = 4,
+    Rejected = 5,
+    Unpublished = 6
+}
+
 public enum GalleryMediaType : byte
 {
     Photo = 1,

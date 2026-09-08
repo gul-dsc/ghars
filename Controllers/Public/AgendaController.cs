@@ -200,21 +200,12 @@ public class AgendaController : Controller
         await Task.CompletedTask;
     }
 
-    // Supporting media is stored once and referenced by both the agenda entry and the Ghars gallery
-    // (docs: club media uploaded through the agenda is automatically aggregated into the gallery).
-    private async Task SaveAgendaMedia(AgendaEntry entry, List<IFormFile>? files)
-    {
-        if (files == null || files.Count == 0) return;
-        foreach (var file in files.Where(f=>f.Length>0))
-        {
-            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-            var path = await FileValidationHelper.SaveAsync(file, _env.WebRootPath, "uploads/agenda");
-            var mediaType = ext is ".mp4" or ".webm" or ".mov" ? GalleryMediaType.Video : GalleryMediaType.Photo;
-            _db.AgendaMedia.Add(new AgendaMedia{ AgendaEntryId=entry.Id, MediaType=mediaType, FilePath=path, TitleEn=entry.SubjectEn, TitleAr=entry.SubjectAr, IsPublished=true });
-            _db.GalleryItems.Add(new GalleryItem{ TitleEn=entry.SubjectEn, TitleAr=entry.SubjectAr, DescriptionEn=entry.Notes, DescriptionAr=entry.Notes, MediaType=mediaType, FilePath=path, OrganizationId=entry.OrganizationId, AgendaEntryId=entry.Id, SeasonId=entry.SeasonId, MediaDate=entry.ActivityDate, IsPublished=true, CreatedAtUtc=DateTime.UtcNow, CreatedByUserId=entry.CreatedByUserId });
-        }
-        await _db.SaveChangesAsync();
-    }
+    // Supporting media is stored once and referenced by both the agenda entry and the Ghars Channel
+    // (docs: club media uploaded through the agenda is automatically aggregated into the channel).
+    // The write itself lives in AgendaMediaPublisher because the channel's own "contribute media" page
+    // is a second entry point to exactly this, and the two must not produce differently-shaped rows.
+    private Task SaveAgendaMedia(AgendaEntry entry, List<IFormFile>? files)
+        => AgendaMediaPublisher.PublishAsync(_db, _env, entry, files, entry.CreatedByUserId);
 
     private async Task AuditAsync(string action, int entryId, object? oldValues, object? newValues)
     {

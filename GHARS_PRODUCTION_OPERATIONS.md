@@ -87,12 +87,21 @@ icacls $root /grant "IIS AppPool\GharsPlatform:(OI)(CI)(M)"
 icacls $root /grant "Administrators:(OI)(CI)(F)"
 ```
 
-**Verification after any change** — this must return 404, not the file:
+**Verification after any change** — each of these must return 404, not the file:
 
 ```
 GET https://<host>/protected-uploads/kpi/<any-known-filename>
 GET https://<host>/uploads/kpi/<any-known-filename>
+GET https://<host>/uploads/agenda/<any-known-filename>
+GET https://<host>/uploads/channel/<any-known-filename>
 ```
+
+`wwwroot/uploads/agenda` and `wwwroot/uploads/channel` hold Ghars Channel media. They live under
+`wwwroot` but are denied to the static-file middleware in `Program.cs`, because whether a given item is
+visible is decided per database row — club media can be hidden by DSC, and implementing-entity content
+is invisible until DSC approves it. Both are served only through `/protected-files/gallery/{id}`, which
+re-checks that visibility on every request. If either folder ever becomes statically reachable, hiding
+or withdrawing an item stops actually withdrawing the file.
 
 ---
 

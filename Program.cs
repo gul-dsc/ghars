@@ -155,9 +155,11 @@ app.UseHttpsRedirection();
 //   /uploads/kpi, /uploads/surveys — only ever held protected content (KPI evidence, official reports).
 //   /uploads/agenda — club activity media. Publication is decided per gallery row, so the file must be
 //     fetched through /protected-files/gallery/{id}; served statically, hiding a photo would not hide it.
+//   /uploads/channel — implementing-entity content submitted to the Ghars Channel. Visibility depends on
+//     a DSC approval, so an unapproved draft's file must not be reachable by guessing its URL.
 // /uploads/org is deliberately absent: it also holds public organization logos. Its documents are
 // removed from disk by the --purge phase of the migration instead.
-string[] deniedStaticPrefixes = { "/uploads/kpi", "/uploads/surveys", "/uploads/agenda" };
+string[] deniedStaticPrefixes = { "/uploads/kpi", "/uploads/surveys", "/uploads/agenda", "/uploads/channel" };
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value ?? string.Empty;

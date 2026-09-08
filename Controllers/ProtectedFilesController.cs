@@ -98,13 +98,22 @@ public class ProtectedFilesController : Controller
     }
 
     /// <summary>
-    /// Activity / agenda media, held as gallery rows. CONDITIONAL: a published item is public — the Ghars
-    /// gallery is a public showcase and must keep working anonymously. An unpublished item has been
-    /// withheld or taken down by DSC (Gallery "Hide", and "Delete" on agenda-sourced media, both only
-    /// unpublish), so it is readable solely by the owning club's linked admins and by DSC reviewers.
+    /// Ghars Channel media, held as gallery rows. CONDITIONAL: a visible item is public — the channel is
+    /// a public showcase and must keep working anonymously.
+    ///
+    /// "Visible" is <see cref="ChannelWorkflow.IsPubliclyVisible"/> and nothing else, so this endpoint
+    /// enforces exactly the rule the listing pages apply: published, AND either outside the partner
+    /// review workflow or approved by DSC. A partner's draft, submitted, returned, rejected or withdrawn
+    /// item is therefore not served to the public even when its URL is known — knowing a storage key was
+    /// never a credential.
+    ///
+    /// Anything not publicly visible is readable solely by the owning organization's linked admins (so a
+    /// partner can still preview its own draft, and a club can still see media DSC has hidden) and by
+    /// DSC reviewers.
     ///
     /// Files are neither moved nor duplicated: the gallery row stays the single record of the media, and
-    /// static access to /uploads/agenda is denied in Program.cs so this endpoint is the only way in.
+    /// static access to /uploads/agenda and /uploads/channel is denied in Program.cs so this endpoint is
+    /// the only way in.
     /// </summary>
     [HttpGet("gallery/{id:int}")]
     [AllowAnonymous]
@@ -113,12 +122,11 @@ public class ProtectedFilesController : Controller
         var item = await _db.GalleryItems.FirstOrDefaultAsync(x => x.Id == id);
         if (item is null || string.IsNullOrWhiteSpace(item.FilePath)) return NotFound();
 
-        if (!item.IsPublished)
+        if (!ChannelWorkflow.IsPubliclyVisible(item))
         {
             if (User.Identity?.IsAuthenticated != true) return NotFound();
 
-            // Club-owned media stays visible to the club that produced it; media with no owning
-            // organization (DSC/press uploads) is DSC-only while unpublished.
+            // Media with no owning organization (DSC/press uploads) is DSC-only while withheld.
             if (!IsDscAdmin)
             {
                 if (item.OrganizationId is null) return NotFound();

@@ -64,6 +64,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<KpiDocument> KpiDocuments => Set<KpiDocument>();
     public DbSet<GalleryItem> GalleryItems => Set<GalleryItem>();
     public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
+    public DbSet<GharsAnnualReport> GharsAnnualReports => Set<GharsAnnualReport>();
 
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -201,6 +202,45 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<GalleryItem>()
             .HasIndex(x => new { x.SeasonId, x.OrganizationId, x.MediaDate });
+
+        // The Ghars Channel review queue: partner submissions awaiting DSC, oldest first. Mirrors the
+        // index that backs the partner offering queue.
+        builder.Entity<GalleryItem>()
+            .HasIndex(x => new { x.ApprovalStatus, x.SubmittedAtUtc })
+            .HasDatabaseName("IX_GalleryItems_ApprovalStatus_SubmittedAtUtc");
+
+        // A channel item may point at a Digital Library publication instead of duplicating its file.
+        // NoAction: removing a library item must not silently delete the channel entry that cites it.
+        builder.Entity<GalleryItem>()
+            .HasOne(x => x.LibraryItem)
+            .WithMany()
+            .HasForeignKey(x => x.LibraryItemId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // One Annual Report per club per sports season, enforced in the database and not only in
+        // validation - the same guarantee KpiSubmission already has.
+        builder.Entity<GharsAnnualReport>()
+            .HasIndex(x => new { x.OrganizationId, x.SeasonId })
+            .IsUnique();
+
+        // The DSC review queue: submitted reports, oldest first.
+        builder.Entity<GharsAnnualReport>()
+            .HasIndex(x => new { x.Status, x.SubmittedAtUtc })
+            .HasDatabaseName("IX_GharsAnnualReports_Status_SubmittedAtUtc");
+
+        // NoAction on both parents, consistent with the rest of the model: an approved annual report is
+        // an official historical record and must not be cascade-deleted out of existence.
+        builder.Entity<GharsAnnualReport>()
+            .HasOne(x => x.Season)
+            .WithMany()
+            .HasForeignKey(x => x.SeasonId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<GharsAnnualReport>()
+            .HasOne(x => x.Organization)
+            .WithMany()
+            .HasForeignKey(x => x.OrganizationId)
+            .OnDelete(DeleteBehavior.NoAction);
 
         // The admin queue is "newest unhandled first", which is the only way this table is ever read.
         builder.Entity<ContactMessage>()

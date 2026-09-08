@@ -1,4 +1,5 @@
 using GharsPlatform.Data;
+using GharsPlatform.Helpers;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
 using Microsoft.AspNetCore.Authorization;
@@ -57,7 +58,7 @@ public class ClubDashboardController : Controller
         ViewBag.Bookings = bookings;
         ViewBag.Programs = programs;
         ViewBag.Notifications = unread;
-        ViewBag.Partners = await _db.Organizations.Where(x => x.Status == ApprovalStatus.Approved && (x.OrganizationType == OrganizationType.OtherPartner || x.OrganizationType == OrganizationType.GovernmentAuthority)).OrderBy(x => x.NameEn).ToListAsync();
+        ViewBag.Partners = await _db.Organizations.ApprovedPartners().ToListAsync();
         ViewBag.PartnerId = partnerId; ViewBag.ProgramType = programType; ViewBag.Status = status; ViewBag.From = from?.ToString("yyyy-MM-dd"); ViewBag.To = to?.ToString("yyyy-MM-dd"); ViewBag.Query = q;
         return View();
     }

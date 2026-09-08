@@ -178,12 +178,36 @@ Demo and sample data — organizations, clubs, demo users, bookings, KPIs, agend
 Demo accounts share one password that you choose and keep out of source control:
 
 ```bash
-dotnet user-secrets set "Ghars:Seed:DemoPassword" "<your own password>"
+# The project has no UserSecretsId, so use the environment variable:
+export GHARS_SEED_DEMO_PASSWORD="<your own password>"     # PowerShell: $env:GHARS_SEED_DEMO_PASSWORD = '...'
 ```
 
 Without it the application still starts; it logs one warning and does not create the missing demo
-accounts. Account names, and how to recover a forgotten demo password with
+accounts. An account that already exists never has its password changed, so a value set now applies
+only to accounts created from now on. Account names, and how to recover a forgotten demo password with
 `dotnet run -- reset-demo-passwords`, are in [`SEED_CREDENTIALS.md`](SEED_CREDENTIALS.md).
+
+### Organization master data
+
+The clubs and implementing entities Ghars exposes are the approved roster in
+[`Data/GharsMasterData.cs`](Data/GharsMasterData.cs) — 7 clubs and 17 implementing entities,
+reconciled from the approved logo assets in `clubs/` and `partners/`. Seeding a fresh development
+database creates that roster and nothing else.
+
+To bring an **existing** development database in line:
+
+```bash
+dotnet run -- reconcile-organizations            # dry run: prints the plan, changes nothing
+dotnet run -- reconcile-organizations --commit   # applies it
+```
+
+It is Development-only and refused elsewhere, and it **never deletes an organization**: rows outside
+the roster are set to `Suspended`, which removes them from every selector, catalogue and report while
+leaving their bookings, agenda entries, KPI submissions and audit history untouched.
+
+Eligibility at request time comes from `OrganizationType` and `Status` through the single definition in
+[`Helpers/GharsOrganizations.cs`](Helpers/GharsOrganizations.cs). The logo folders guided which
+organizations were approved; they are not consulted at request time and grant nothing.
 
 > **This repository is public, and earlier commits contain literal demo passwords.** Those values are
 > permanently exposed. Any database seeded before 2026-09-06 should have its demo passwords rotated —
@@ -199,6 +223,23 @@ row that existed before the run.
 
 Fixtures are never identified by subject text, program name, notification wording or date range.
 Section 34 of `GHARS_IMPLEMENTATION_REPORT.md` explains why, and what it cost to learn.
+
+> `Surveys` and `SurveyResponses` carry filtered indexes, and SQL Server refuses any write to such a
+> table while `QUOTED_IDENTIFIER` is off — which is `sqlcmd`'s default. The tooling passes `-I`; any
+> ad-hoc `sqlcmd` you write against those tables needs it too.
+
+### Participant satisfaction survey
+
+The official Ghars Program Participant Satisfaction Survey is native: DSC authors it under
+**Ghars Surveys**, one per sports season, and participants complete it at `/surveys/take/{token}`
+anonymously — no account, no personal data. Clubs distribute a link and QR code per delivered agenda
+activity and see aggregate results for their own club at `/surveys/results`.
+
+Satisfaction is computed in one place, [`Helpers/SatisfactionCalculator.cs`](Helpers/SatisfactionCalculator.cs):
+the mean of the 1–5 ratings ÷ 5 × 100, using the native survey once a season has at least ten
+responses and the approved club-submitted average until then. The **Legacy Surveys** screen retains the
+older externally-run surveys and their published reports as historical records; nothing new is created
+there. Section 35 of `GHARS_IMPLEMENTATION_REPORT.md` has the detail.
 
 ## Contact page
 

@@ -1,0 +1,177 @@
+@model GharsPlatform.Models.Core.Survey
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Survey questions", "أسئلة الاستبيان");
+    ViewData["PageTitle"] = ViewData["Title"];
+
+    var responseCount = ViewBag.ResponseCount as int? ?? 0;
+    var questions = Model.Questions.OrderBy(x => x.SortOrder).ToList();
+    var official = Model.Purpose == SurveyPurpose.OfficialSatisfaction;
+
+    string TypeName(SurveyQuestionType t) => t switch
+    {
+        SurveyQuestionType.Stars => T("Rating 1-5", "تقييم ١-٥"),
+        SurveyQuestionType.YesNo => T("Yes / No", "نعم / لا"),
+        SurveyQuestionType.Mcq => T("Multiple choice", "اختيار من متعدد"),
+        _ => T("Free text", "نص حر")
+    };
+}
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+    <div>
+        <h1 class="h4 mb-1">@(ar ? Model.TitleAr : Model.TitleEn)</h1>
+        <div class="text-muted">
+            @if (official)
+            {
+                <span class="badge text-bg-primary me-1">@T("Official", "رسمي")</span>
+                @(ar ? Model.Season?.TitleAr : Model.Season?.TitleEn)
+            }
+            else
+            {
+                @(ar ? (Model.Activity?.TitleAr ?? Model.Activity?.TitleEn) : (Model.Activity?.TitleEn ?? Model.Activity?.TitleAr))
+            }
+        </div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-outline-secondary" asp-action="Index">@T("Back", "رجوع")</a>
+        <a class="btn btn-outline-secondary" asp-action="Share" asp-route-id="@Model.Id">@T("Share", "مشاركة")</a>
+        <a class="btn btn-outline-success" asp-action="Results" asp-route-id="@Model.Id">@T("Results", "النتائج")</a>
+    </div>
+</div>
+
+@if (responseCount > 0)
+{
+    <div class="alert alert-warning d-flex gap-2 align-items-start">
+        <i class="bi bi-exclamation-triangle fs-5"></i>
+        <div>
+            <div class="fw-semibold">@T("This survey already has responses.", "تم استلام استجابات على هذا الاستبيان.")</div>
+            <div class="small">@T("Questions that have been answered can be reworded but not retyped or deleted, so existing answers keep their meaning.", "يمكن إعادة صياغة الأسئلة التي تمت الإجابة عليها، لكن لا يمكن تغيير نوعها أو حذفها، حفاظاً على معنى الإجابات المسجلة.")</div>
+        </div>
+    </div>
+}
+
+<div class="vstack gap-3 mb-4">
+@for (var i = 0; i < questions.Count; i++)
+{
+    var q = questions[i];
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body">
+            <form method="post" asp-action="EditQuestion" asp-route-id="@Model.Id" asp-route-questionId="@q.Id">
+                @Html.AntiForgeryToken()
+                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                    <span class="badge text-bg-light border">@(i + 1)</span>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-secondary" type="submit" formaction="@Url.Action("MoveQuestion", new { id = Model.Id, questionId = q.Id, direction = "up" })" formmethod="post" @(i == 0 ? "disabled" : "") aria-label="@T("Move up", "تحريك لأعلى")"><i class="bi bi-arrow-up"></i></button>
+                        <button class="btn btn-sm btn-outline-secondary" type="submit" formaction="@Url.Action("MoveQuestion", new { id = Model.Id, questionId = q.Id, direction = "down" })" formmethod="post" @(i == questions.Count - 1 ? "disabled" : "") aria-label="@T("Move down", "تحريك لأسفل")"><i class="bi bi-arrow-down"></i></button>
+                    </div>
+                </div>
+
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small" for="qen_@q.Id">@T("Question (English)", "السؤال (بالإنجليزية)")</label>
+                        <input class="form-control" id="qen_@q.Id" name="QuestionEn" value="@q.QuestionEn" required maxlength="500" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small" for="qar_@q.Id">@T("Question (Arabic)", "السؤال (بالعربية)")</label>
+                        <input class="form-control" id="qar_@q.Id" name="QuestionAr" value="@q.QuestionAr" dir="rtl" required maxlength="500" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small" for="qtype_@q.Id">@T("Answer type", "نوع الإجابة")</label>
+                        <select class="form-select" id="qtype_@q.Id" name="QuestionType">
+                            @foreach (var t in new[] { SurveyQuestionType.Stars, SurveyQuestionType.YesNo, SurveyQuestionType.Mcq, SurveyQuestionType.Text })
+                            {
+                                <option value="@((int)t)" selected="@(q.QuestionType == t)">@TypeName(t)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="IsRequired" value="true" id="qreq_@q.Id" checked="@q.IsRequired" />
+                            <label class="form-check-label" for="qreq_@q.Id">@T("Required", "إلزامي")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end justify-content-end gap-2">
+                        <button class="btn btn-sm btn-primary" type="submit">@T("Save", "حفظ")</button>
+                    </div>
+                </div>
+            </form>
+
+            @if (q.QuestionType == SurveyQuestionType.Mcq)
+            {
+                <hr />
+                <div class="fw-semibold small mb-2">@T("Answer options", "خيارات الإجابة")</div>
+                <ul class="list-group list-group-flush mb-2">
+                    @foreach (var o in q.Options.OrderBy(x => x.SortOrder))
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <span>@o.OptionEn <span class="text-muted">/ @o.OptionAr</span></span>
+                            <form method="post" asp-action="DeleteOption" asp-route-id="@Model.Id" asp-route-optionId="@o.Id">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn-sm btn-outline-danger" aria-label="@T("Remove option", "حذف الخيار")"><i class="bi bi-x-lg"></i></button>
+                            </form>
+                        </li>
+                    }
+                    @if (!q.Options.Any())
+                    {
+                        <li class="list-group-item text-muted small px-0">@T("No options yet. A multiple-choice question with no options cannot be answered.", "لا توجد خيارات بعد. لا يمكن الإجابة على سؤال اختيار من متعدد بدون خيارات.")</li>
+                    }
+                </ul>
+                <form method="post" asp-action="AddOption" asp-route-id="@Model.Id" asp-route-questionId="@q.Id" class="row g-2">
+                    @Html.AntiForgeryToken()
+                    <div class="col-md-5"><input class="form-control form-control-sm" name="optionEn" placeholder="@T("Option (English)", "الخيار (بالإنجليزية)")" aria-label="@T("Option (English)", "الخيار (بالإنجليزية)")" maxlength="250" /></div>
+                    <div class="col-md-5"><input class="form-control form-control-sm" name="optionAr" dir="rtl" placeholder="@T("Option (Arabic)", "الخيار (بالعربية)")" aria-label="@T("Option (Arabic)", "الخيار (بالعربية)")" maxlength="250" /></div>
+                    <div class="col-md-2"><button class="btn btn-sm btn-outline-primary w-100">@T("Add", "إضافة")</button></div>
+                </form>
+            }
+
+            <hr />
+            <form method="post" asp-action="DeleteQuestion" asp-route-id="@Model.Id" asp-route-questionId="@q.Id" onsubmit="return confirm('@T("Delete this question?", "حذف هذا السؤال؟")');">
+                @Html.AntiForgeryToken()
+                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>@T("Delete question", "حذف السؤال")</button>
+            </form>
+        </div>
+    </div>
+}
+@if (!questions.Any())
+{
+    <div class="alert alert-secondary mb-0">@T("This survey has no questions yet.", "لا توجد أسئلة في هذا الاستبيان بعد.")</div>
+}
+</div>
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body">
+        <h2 class="h6 mb-3">@T("Add a question", "إضافة سؤال")</h2>
+        <form method="post" asp-action="AddQuestion" asp-route-id="@Model.Id" class="row g-2">
+            @Html.AntiForgeryToken()
+            <div class="col-md-6">
+                <label class="form-label small" for="newQuestionEn">@T("Question (English)", "السؤال (بالإنجليزية)")</label>
+                <input class="form-control" id="newQuestionEn" name="QuestionEn" required maxlength="500" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small" for="newQuestionAr">@T("Question (Arabic)", "السؤال (بالعربية)")</label>
+                <input class="form-control" id="newQuestionAr" name="QuestionAr" dir="rtl" required maxlength="500" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small" for="newQuestionType">@T("Answer type", "نوع الإجابة")</label>
+                <select class="form-select" id="newQuestionType" name="QuestionType">
+                    @foreach (var t in new[] { SurveyQuestionType.Stars, SurveyQuestionType.YesNo, SurveyQuestionType.Mcq, SurveyQuestionType.Text })
+                    {
+                        <option value="@((int)t)">@TypeName(t)</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="IsRequired" value="true" id="newQuestionRequired" checked />
+                    <label class="form-check-label" for="newQuestionRequired">@T("Required", "إلزامي")</label>
+                </div>
+            </div>
+            <div class="col-md-4 d-flex align-items-end justify-content-end">
+                <button class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>@T("Add question", "إضافة السؤال")</button>
+            </div>
+        </form>
+    </div>
+</div>

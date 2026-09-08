@@ -1,0 +1,85 @@
+@model GharsPlatform.Models.Core.AgendaEntry
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var survey = ViewBag.Survey as Survey;
+    var shareUrl = ViewBag.ShareUrl as string ?? "";
+    ViewData["Title"] = T("Distribute the satisfaction survey", "توزيع استبيان الرضا");
+}
+
+<div class="dashboard-hero mb-4">
+    <h1 class="h4 mb-1">@T("Distribute the satisfaction survey", "توزيع استبيان الرضا")</h1>
+    <div>@T("Share this link or QR code with participants after the activity. Their responses are recorded against your club and this activity automatically.", "شارك هذا الرابط أو رمز الاستجابة السريعة مع المشاركين بعد النشاط. تُسجَّل استجاباتهم تلقائياً لناديك ولهذا النشاط.")</div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body">
+                <h2 class="h6 mb-1">@(ar ? Model.SubjectAr : Model.SubjectEn)</h2>
+                <div class="text-muted small mb-3">
+                    @Model.ActivityDate.ToString("yyyy-MM-dd")
+                    @if (Model.Organization != null)
+                    {
+                        <span class="mx-1">·</span>
+                        <span>@(ar ? Model.Organization.NameAr : Model.Organization.NameEn)</span>
+                    }
+                    @if (Model.Season != null)
+                    {
+                        <span class="mx-1">·</span>
+                        <span>@(ar ? Model.Season.TitleAr : Model.Season.TitleEn)</span>
+                    }
+                </div>
+
+                @if (survey != null)
+                {
+                    <div class="fw-semibold mb-1">@(ar ? survey.TitleAr : survey.TitleEn)</div>
+                    <span class="badge text-bg-primary mb-3">@T("Official", "رسمي")</span>
+                }
+
+                <div class="input-group mb-3">
+                    <label class="visually-hidden" for="distributeUrl">@T("Participant link", "رابط المشاركين")</label>
+                    <input class="form-control" id="distributeUrl" value="@shareUrl" readonly />
+                    <button class="btn btn-outline-secondary" type="button" id="copyDistributeUrl">@T("Copy", "نسخ")</button>
+                </div>
+
+                <a class="btn btn-outline-primary" href="@shareUrl" target="_blank" rel="noopener">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>@T("Open the participant page", "فتح صفحة المشاركين")
+                </a>
+
+                <hr />
+                <p class="text-muted small mb-0">@T("Participants do not need a Ghars account and no personal data is collected. Your club sees only its own aggregate results.", "لا يحتاج المشاركون إلى حساب في غرس ولا يتم جمع أي بيانات شخصية. يرى ناديك النتائج المجمعة الخاصة به فقط.")</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body text-center">
+                <h2 class="h6 mb-3">@T("QR code", "رمز الاستجابة السريعة")</h2>
+                <img src="@Url.Content($"~/surveys/distribute/{Model.Id}/qr")"
+                     alt="@T("QR code linking to the participant survey for this activity", "رمز استجابة سريعة يؤدي إلى استبيان المشاركين لهذا النشاط")"
+                     class="img-fluid border rounded-3 p-2 bg-white" style="max-width:260px;" />
+                <div class="mt-3">
+                    <a class="btn btn-sm btn-outline-secondary" href="@Url.Content($"~/surveys/distribute/{Model.Id}/qr")" target="_blank" rel="noopener">
+                        <i class="bi bi-download me-1"></i>@T("Open full size", "فتح بالحجم الكامل")
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    document.getElementById('copyDistributeUrl')?.addEventListener('click', function () {
+        var field = document.getElementById('distributeUrl');
+        field.select();
+        field.setSelectionRange(0, 99999);
+        navigator.clipboard?.writeText(field.value);
+        this.textContent = '@T("Copied", "تم النسخ")';
+    });
+</script>
+}

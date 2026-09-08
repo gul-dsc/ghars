@@ -3,24 +3,41 @@
 @{
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string e, string a) => ar ? a : e;
-    var external = ViewBag.ExternalSurveys as List<ExternalSurvey> ?? new();
-    var internalSurveys = ViewBag.InternalSurveys as List<Survey> ?? new();
+    var officialSurveys = ViewBag.OfficialSurveys as List<Survey> ?? new();
+    var activitySurveys = ViewBag.ActivitySurveys as List<Survey> ?? new();
     var answered = ViewBag.AnsweredSurveyIds as List<int> ?? new();
     ViewData["Title"] = T("Surveys", "الاستبيانات");
+
+    string TakeUrl(Survey s) => s.PublicToken != null
+        ? Url.Content($"~/surveys/take/{s.PublicToken}")
+        : Url.Content($"~/surveys/{s.ActivityId}");
 }
+
 <div class="dashboard-hero mb-4">
     <h1 class="h3 mb-1">@T("Ghars Surveys", "استبيانات غرس")</h1>
-    <div>@T("Share your feedback on the Ghars Program and access the published analysis reports.", "شاركنا رأيك حول برنامج غرس واطلع على التقارير التحليلية المنشورة.")</div>
+    <div>@T("Share your feedback on the Ghars Program. Every survey is completed here, inside Ghars.", "شاركنا رأيك حول برنامج غرس. تُستكمل جميع الاستبيانات هنا داخل منصة غرس.")</div>
 </div>
 
-@* Two distinct concepts share this page, so each block states plainly what it is and who runs it. *@
-<h2 class="h5 mb-1"><i class="bi bi-clipboard-check me-2"></i>@T("Official Program Survey", "الاستبيان الرسمي للبرنامج")</h2>
-<p class="text-muted small mb-3">@T("Conducted on an external official platform (e.g. Dubai Digital Authority). Dubai Sports Council publishes the analysed report here once it is available.", "يُجرى عبر منصة رسمية خارجية (مثل هيئة دبي الرقمية). ينشر مجلس دبي الرياضي التقرير التحليلي هنا فور توفره.")</p>
+@if (User.IsInRole(GharsPlatform.Models.Identity.RoleNames.ClubAdmin))
+{
+    <div class="alert alert-light border d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+        <div>
+            <div class="fw-semibold">@T("Your club's satisfaction results", "نتائج الرضا الخاصة بناديك")</div>
+            <div class="small text-muted">@T("Aggregate results from the official survey for your own club.", "النتائج المجمعة من الاستبيان الرسمي لناديك فقط.")</div>
+        </div>
+        <a class="btn btn-outline-primary" href="/surveys/results"><i class="bi bi-bar-chart me-1"></i>@T("View results", "عرض النتائج")</a>
+    </div>
+}
+
+<h2 class="h5 mb-1"><i class="bi bi-clipboard-check me-2"></i>@T("Official Participant Satisfaction Survey", "استبيان قياس رضا المشاركين الرسمي")</h2>
+<p class="text-muted small mb-3">@T("The official Ghars Program survey for the sports season. Its results are the source of the participant satisfaction indicator.", "الاستبيان الرسمي لبرنامج غرس للموسم الرياضي. نتائجه هي مصدر مؤشر رضا المشاركين.")</p>
+
 <div class="row g-3 mb-5">
-@foreach (var survey in external)
+@foreach (var survey in officialSurveys)
 {
     var title = ar ? survey.TitleAr : survey.TitleEn;
     var desc = ar ? survey.DescriptionAr : survey.DescriptionEn;
+    var isAnswered = answered.Contains(survey.Id);
     <div class="col-md-6">
         <div class="metric-card h-100 d-flex flex-column">
             <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
@@ -31,28 +48,31 @@
             {
                 <div class="small text-muted mb-2">@(ar ? survey.Season.TitleAr : survey.Season.TitleEn)</div>
             }
-            <p class="text-muted flex-grow-1">@(string.IsNullOrWhiteSpace(desc) ? T("Official Ghars Program survey.", "استبيان برنامج غرس الرسمي.") : desc)</p>
-            <div class="d-flex gap-2 flex-wrap">
-                <a class="btn btn-primary" href="@survey.ExternalUrl" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right me-1"></i>@T("Open survey", "فتح الاستبيان")</a>
-                @* The report button appears only once DSC has uploaded and published the analysis. *@
-                @if (survey.IsReportPublished && !string.IsNullOrWhiteSpace(survey.ReportPdfPath))
+            <p class="text-muted flex-grow-1">@(string.IsNullOrWhiteSpace(desc) ? T("Official Ghars Program participant satisfaction survey.", "استبيان قياس رضا المشاركين الرسمي لبرنامج غرس.") : desc)</p>
+            <div>
+                @if (isAnswered)
                 {
-                    <a class="btn btn-outline-success" href="/protected-files/survey-report/@survey.Id" target="_blank" rel="noopener noreferrer"><i class="bi bi-file-earmark-pdf me-1"></i>@T("View report", "عرض التقرير")</a>
+                    <span class="badge text-bg-success"><i class="bi bi-check2 me-1"></i>@T("Completed", "تم الإكمال")</span>
+                }
+                else
+                {
+                    <a class="btn btn-primary" href="@TakeUrl(survey)"><i class="bi bi-pencil-square me-1"></i>@T("Take the survey", "تعبئة الاستبيان")</a>
                 }
             </div>
         </div>
     </div>
 }
-@if (!external.Any())
+@if (!officialSurveys.Any())
 {
-    <div class="col-12"><div class="empty-state">@T("No official survey is currently available.", "لا يوجد استبيان رسمي متاح حالياً.")</div></div>
+    <div class="col-12"><div class="empty-state">@T("No official survey is currently open.", "لا يوجد استبيان رسمي مفتوح حالياً.")</div></div>
 }
 </div>
 
-<h2 class="h5 mb-1"><i class="bi bi-stars me-2"></i>@T("Ghars Internal Surveys", "استبيانات غرس الداخلية")</h2>
-<p class="text-muted small mb-3">@T("Created inside the Ghars platform to collect feedback on individual activities. Results are used for internal follow-up and are not the official satisfaction figure.", "تُنشأ داخل منصة غرس لجمع الملاحظات حول الأنشطة الفردية. تُستخدم النتائج للمتابعة الداخلية وليست القيمة الرسمية لمؤشر الرضا.")</p>
+<h2 class="h5 mb-1"><i class="bi bi-stars me-2"></i>@T("Activity surveys", "استبيانات الأنشطة")</h2>
+<p class="text-muted small mb-3">@T("Feedback on individual Ghars activities. Used for internal follow-up, separately from the official satisfaction indicator.", "ملاحظات حول أنشطة غرس الفردية. تُستخدم للمتابعة الداخلية بمعزل عن مؤشر الرضا الرسمي.")</p>
+
 <div class="row g-3">
-@foreach (var survey in internalSurveys)
+@foreach (var survey in activitySurveys)
 {
     var title = ar ? survey.TitleAr : survey.TitleEn;
     var activityTitle = ar ? (survey.Activity?.TitleAr ?? survey.Activity?.TitleEn) : (survey.Activity?.TitleEn ?? survey.Activity?.TitleAr);
@@ -68,13 +88,13 @@
                 }
                 else
                 {
-                    <a class="btn btn-outline-primary w-100" href="/surveys/@survey.ActivityId">@T("Take survey", "تعبئة الاستبيان")</a>
+                    <a class="btn btn-outline-primary w-100" href="@TakeUrl(survey)">@T("Take survey", "تعبئة الاستبيان")</a>
                 }
             </div>
         </div>
     </div>
 }
-@if (!internalSurveys.Any())
+@if (!activitySurveys.Any())
 {
     <div class="col-12"><div class="empty-state">@T("No activity surveys are open right now.", "لا توجد استبيانات أنشطة متاحة حالياً.")</div></div>
 }

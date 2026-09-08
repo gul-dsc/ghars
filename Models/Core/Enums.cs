@@ -6,6 +6,19 @@ public enum OrganizationType : byte
     PrivateAcademy = 2,
     GovernmentAuthority = 3,
     OtherPartner = 4,
+
+    /// <summary>
+    /// Dubai Sports Council itself — the council that owns and governs the Ghars Program.
+    /// </summary>
+    /// <remarks>
+    /// Its own type rather than a government authority, because every partner query in the platform
+    /// asks "which entities can a club book a lecture from?" and the answer must not include the
+    /// council running the programme. Separating it keeps DSC's organization record, users and
+    /// history intact while removing it from every implementing-entity selector, with no filter
+    /// anywhere needing to name it. See <see cref="Helpers.GharsOrganizations"/>.
+    /// </remarks>
+    DubaiSportsCouncil = 5,
+
     // Legacy aliases kept for backward compatibility in code paths
     Academy = PrivateAcademy,
     Partner = OtherPartner
@@ -91,6 +104,26 @@ public enum SurveyQuestionType : byte
     YesNo = 2,
     Text = 3,
     Mcq = 4
+}
+
+/// <summary>
+/// What a survey is *for*, as a stored attribute rather than something inferred from its title.
+/// </summary>
+/// <remarks>
+/// The official participant satisfaction survey feeds the Ghars satisfaction KPI, so the platform has
+/// to be able to recognise it with certainty. Matching on title text would make the KPI depend on a
+/// string an administrator can edit at any moment, in either language.
+/// </remarks>
+public enum SurveyPurpose : byte
+{
+    /// <summary>An ordinary Ghars survey attached to a single activity. Never feeds the KPI.</summary>
+    General = 1,
+
+    /// <summary>
+    /// The official Ghars Program Participant Satisfaction Survey for one sports season. At most one
+    /// per season, enforced by a filtered unique index.
+    /// </summary>
+    OfficialSatisfaction = 2
 }
 
 public enum MediaType : byte

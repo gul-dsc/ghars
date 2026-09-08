@@ -108,9 +108,49 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             .HasIndex(x => new { x.AttendanceSessionId, x.UserId })
             .IsUnique();
 
+        // One response per signed-in participant per survey. FILTERED, and that matters: UserId is
+        // nullable now, and SQL Server treats NULLs as equal in a unique index — an unfiltered index
+        // here would silently allow exactly one anonymous response per survey and reject every
+        // subsequent one with a duplicate-key error.
         builder.Entity<SurveyResponse>()
             .HasIndex(x => new { x.SurveyId, x.UserId })
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("[UserId] IS NOT NULL");
+
+        // Response context. Both optional, both NoAction: a club or an agenda entry disappearing must
+        // not take submitted feedback with it, and cascading from either would add a second delete
+        // path into SurveyAnswers.
+        builder.Entity<SurveyResponse>()
+            .HasOne(x => x.Organization)
+            .WithMany()
+            .HasForeignKey(x => x.OrganizationId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<SurveyResponse>()
+            .HasOne(x => x.AgendaEntry)
+            .WithMany()
+            .HasForeignKey(x => x.AgendaEntryId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<Survey>()
+            .HasOne(x => x.Season)
+            .WithMany()
+            .HasForeignKey(x => x.SeasonId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // "Exactly one official satisfaction survey per season", enforced by the database rather than
+        // by a controller check that a concurrent second request could slip past. Filtered, so it
+        // constrains only official surveys and leaves activity surveys entirely alone.
+        builder.Entity<Survey>()
+            .HasIndex(x => x.SeasonId)
+            .IsUnique()
+            .HasFilter($"[Purpose] = {(byte)SurveyPurpose.OfficialSatisfaction} AND [SeasonId] IS NOT NULL")
+            .HasDatabaseName("UX_Surveys_OfficialSatisfaction_PerSeason");
+
+        builder.Entity<Survey>()
+            .HasIndex(x => x.PublicToken)
+            .IsUnique()
+            .HasFilter("[PublicToken] IS NOT NULL");
 
         builder.Entity<Certificate>()
             .HasIndex(x => x.CertificateNo)

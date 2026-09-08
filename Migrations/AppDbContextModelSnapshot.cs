@@ -2400,7 +2400,7 @@ namespace GharsPlatform.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("ActivityId")
+                    b.Property<int?>("ActivityId")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("ClosesAtUtc")
@@ -2413,11 +2413,29 @@ namespace GharsPlatform.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("DescriptionAr")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("DescriptionEn")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("OpensAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("PublicToken")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<byte>("Purpose")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int?>("SeasonId")
+                        .HasColumnType("int");
 
                     b.Property<string>("TitleAr")
                         .IsRequired()
@@ -2439,6 +2457,15 @@ namespace GharsPlatform.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ActivityId");
+
+                    b.HasIndex("PublicToken")
+                        .IsUnique()
+                        .HasFilter("[PublicToken] IS NOT NULL");
+
+                    b.HasIndex("SeasonId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Surveys_OfficialSatisfaction_PerSeason")
+                        .HasFilter("[Purpose] = 2 AND [SeasonId] IS NOT NULL");
 
                     b.ToTable("Surveys");
                 });
@@ -2556,6 +2583,12 @@ namespace GharsPlatform.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AgendaEntryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("OrganizationId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("SubmittedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -2563,14 +2596,18 @@ namespace GharsPlatform.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("UserId")
-                        .IsRequired()
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AgendaEntryId");
+
+                    b.HasIndex("OrganizationId");
+
                     b.HasIndex("SurveyId", "UserId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[UserId] IS NOT NULL");
 
                     b.ToTable("SurveyResponses");
                 });
@@ -3269,11 +3306,16 @@ namespace GharsPlatform.Migrations
                 {
                     b.HasOne("GharsPlatform.Models.Core.Activity", "Activity")
                         .WithMany()
-                        .HasForeignKey("ActivityId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("ActivityId");
+
+                    b.HasOne("GharsPlatform.Models.Core.Season", "Season")
+                        .WithMany()
+                        .HasForeignKey("SeasonId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("Activity");
+
+                    b.Navigation("Season");
                 });
 
             modelBuilder.Entity("GharsPlatform.Models.Core.SurveyAnswer", b =>
@@ -3326,11 +3368,25 @@ namespace GharsPlatform.Migrations
 
             modelBuilder.Entity("GharsPlatform.Models.Core.SurveyResponse", b =>
                 {
+                    b.HasOne("GharsPlatform.Models.Core.AgendaEntry", "AgendaEntry")
+                        .WithMany()
+                        .HasForeignKey("AgendaEntryId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("GharsPlatform.Models.Core.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("GharsPlatform.Models.Core.Survey", "Survey")
                         .WithMany()
                         .HasForeignKey("SurveyId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("AgendaEntry");
+
+                    b.Navigation("Organization");
 
                     b.Navigation("Survey");
                 });

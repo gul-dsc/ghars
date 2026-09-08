@@ -42,7 +42,7 @@ public class AnnualReportsController : Controllers.BaseController
 
         ViewBag.Seasons = await Db.Seasons.OrderByDescending(x => x.StartDate).ToListAsync();
         ViewBag.Clubs = await Db.Organizations
-            .Where(x => x.OrganizationType == OrganizationType.Club || x.OrganizationType == OrganizationType.PrivateAcademy)
+            .Where(GharsOrganizations.IsApprovedClubOrAcademy)
             .OrderBy(x => x.NameEn).ToListAsync();
         ViewBag.SelectedStatus = status;
         ViewBag.SelectedSeasonId = seasonId;

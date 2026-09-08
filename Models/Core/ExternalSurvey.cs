@@ -3,11 +3,22 @@ using System.ComponentModel.DataAnnotations;
 namespace GharsPlatform.Models.Core;
 
 /// <summary>
-/// Official external survey (developed and analyzed by Dubai Digital Authority).
-/// DSC staff maintain the survey link; participants open it externally; the analyzed
-/// PDF report is uploaded afterwards and published alongside the link.
-/// Coexists with the internal Ghars survey engine (Survey/SurveyQuestion/...).
+/// LEGACY. A survey run on a third-party platform, with its analysed PDF report uploaded afterwards.
 /// </summary>
+/// <remarks>
+/// <para>
+/// This was once how the official participant satisfaction survey worked. It is not any more: the
+/// official survey is now native, lives in <see cref="Survey"/> with
+/// <see cref="SurveyPurpose.OfficialSatisfaction"/>, and is completed inside Ghars.
+/// </para>
+/// <para>
+/// The entity and its rows are kept because they are historical evidence — a report a third party
+/// analysed and DSC published is a record of what happened, and deleting it would erase that. It no
+/// longer feeds satisfaction reporting, no longer appears to participants, and nothing new should be
+/// created here. See <see cref="KpiSubmission.SatisfactionExternalSurveyId"/>, which stays readable
+/// for the submissions that cite it.
+/// </para>
+/// </remarks>
 public class ExternalSurvey : AuditableEntity
 {
     public int Id { get; set; }
@@ -36,7 +47,7 @@ public class ExternalSurvey : AuditableEntity
     public DateTime? StartsAtUtc { get; set; }
     public DateTime? EndsAtUtc { get; set; }
 
-    // Analyzed results report (PDF) uploaded by DSC after Dubai Digital Authority analysis.
+    // Analysed results report (PDF) uploaded by DSC after the external provider returned its analysis.
     [MaxLength(500)]
     public string? ReportPdfPath { get; set; }
 

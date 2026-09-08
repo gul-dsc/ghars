@@ -1,0 +1,81 @@
+@model GharsPlatform.Models.Core.Survey
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Share survey", "مشاركة الاستبيان");
+    ViewData["PageTitle"] = ViewData["Title"];
+    var shareUrl = ViewBag.ShareUrl as string ?? "";
+    var open = Model.IsOpenAt(DateTime.UtcNow);
+}
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+    <div>
+        <h1 class="h4 mb-1">@(ar ? Model.TitleAr : Model.TitleEn)</h1>
+        <div class="text-muted">
+            @if (Model.Purpose == SurveyPurpose.OfficialSatisfaction)
+            {
+                <span class="badge text-bg-primary me-1">@T("Official", "رسمي")</span>
+                @(ar ? Model.Season?.TitleAr : Model.Season?.TitleEn)
+            }
+        </div>
+    </div>
+    <a class="btn btn-outline-secondary" asp-action="Index">@T("Back", "رجوع")</a>
+</div>
+
+@if (!open)
+{
+    <div class="alert alert-warning">@T("This survey is closed. The link resolves but will not accept responses until it is opened.", "هذا الاستبيان مغلق. سيفتح الرابط ولكنه لن يقبل استجابات حتى يتم فتحه.")</div>
+}
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body">
+                <h2 class="h6 mb-2">@T("Participant link", "رابط المشاركين")</h2>
+                <p class="text-muted small">@T("Anyone with this link can answer. No Ghars account is required and no personal data is collected.", "يمكن لأي شخص لديه هذا الرابط الإجابة. لا يلزم وجود حساب في غرس ولا يتم جمع أي بيانات شخصية.")</p>
+                <div class="input-group mb-3">
+                    <label class="visually-hidden" for="shareUrl">@T("Participant link", "رابط المشاركين")</label>
+                    <input class="form-control" id="shareUrl" value="@shareUrl" readonly />
+                    <button class="btn btn-outline-secondary" type="button" id="copyShareUrl">@T("Copy", "نسخ")</button>
+                </div>
+                <a class="btn btn-outline-primary" href="@shareUrl" target="_blank" rel="noopener">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>@T("Preview the participant page", "معاينة صفحة المشاركين")
+                </a>
+
+                <hr />
+                <h2 class="h6 mb-2">@T("Club distribution", "التوزيع عبر الأندية")</h2>
+                <p class="text-muted small mb-0">@T("A club can generate its own link and QR code for a delivered agenda activity, from the agenda screen. Responses collected through that link are attributed to that club and activity automatically.", "يمكن للنادي إنشاء رابط ورمز QR خاص بنشاط مُنفّذ من شاشة الأجندة. تُنسب الاستجابات المُجمّعة عبر ذلك الرابط إلى النادي والنشاط تلقائياً.")</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body text-center">
+                <h2 class="h6 mb-3">@T("QR code", "رمز الاستجابة السريعة")</h2>
+                <img src="@Url.Action("QrCode", new { id = Model.Id })"
+                     alt="@T("QR code for the survey participant link", "رمز استجابة سريعة لرابط المشاركة في الاستبيان")"
+                     class="img-fluid border rounded-3 p-2 bg-white" style="max-width:260px;" />
+                <div class="mt-3">
+                    <a class="btn btn-sm btn-outline-secondary" href="@Url.Action("QrCode", new { id = Model.Id })" target="_blank" rel="noopener">
+                        <i class="bi bi-download me-1"></i>@T("Open full size", "فتح بالحجم الكامل")
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    document.getElementById('copyShareUrl')?.addEventListener('click', function () {
+        var field = document.getElementById('shareUrl');
+        field.select();
+        field.setSelectionRange(0, 99999);
+        navigator.clipboard?.writeText(field.value);
+        this.textContent = '@T("Copied", "تم النسخ")';
+    });
+</script>
+}

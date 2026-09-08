@@ -100,40 +100,68 @@
 @{
     var satisfactionKpi = GharsKpiCatalog.Satisfaction;
     var linkedSurvey = Model.SatisfactionExternalSurvey;
+    var seasonSatisfaction = ViewBag.SeasonSatisfaction as GharsPlatform.Helpers.SatisfactionResult;
+    var nativeSatisfaction = ViewBag.NativeSatisfaction as GharsPlatform.Helpers.SatisfactionResult;
+    var minimumResponses = ViewBag.MinimumResponses as int? ?? 0;
 }
-@* Satisfaction is the one indicator whose approved value is meant to rest on an external instrument,
-   so the review screen states plainly which official report backs the number - or that none is cited. *@
+@* The satisfaction figure now comes from the native Ghars survey once a season has enough responses.
+   The club's own submitted rate is still shown beside it, unchanged, because that is what was
+   submitted and approved. *@
 <div class="card rounded-4 border-0 shadow-sm mb-3">
     <div class="card-body">
         <h2 class="h6 mb-3">@T("Satisfaction evidence", "أدلة مؤشر الرضا")</h2>
         <dl class="row mb-0">
-            <dt class="col-sm-4">@T("Satisfaction rate", "نسبة الرضا")</dt>
+            <dt class="col-sm-4">@T("Club submitted rate", "النسبة المُرسلة من النادي")</dt>
             <dd class="col-sm-8">@Pct(Model.SatisfactionRate) <span class="text-muted small">(@T("target", "المستهدف") @satisfactionKpi.TargetText)</span></dd>
 
-            <dt class="col-sm-4">@T("Source", "المصدر")</dt>
-            <dd class="col-sm-8">@GharsKpiCatalog.SourceLabel(satisfactionKpi.Source, ar)</dd>
-
-            <dt class="col-sm-4">@T("Linked official survey", "الاستبيان الرسمي المرتبط")</dt>
+            <dt class="col-sm-4">@T("Season satisfaction figure", "نسبة الرضا للموسم")</dt>
             <dd class="col-sm-8">
-                @if (linkedSurvey is null)
+                @if (seasonSatisfaction?.Percent is decimal p)
                 {
-                    <span class="text-warning-emphasis">@T("No linked official survey report", "لا يوجد تقرير استبيان رسمي مرتبط")</span>
+                    <span class="fw-semibold">@p.ToString("0.#")%</span>
+                    <div class="small text-muted">@seasonSatisfaction.SourceLabel(ar)</div>
                 }
                 else
                 {
-                    <div>@(ar ? linkedSurvey.TitleAr : linkedSurvey.TitleEn)</div>
-                    @if (string.IsNullOrWhiteSpace(linkedSurvey.ReportPdfPath))
+                    <span class="text-warning-emphasis">@T("No data", "لا توجد بيانات")</span>
+                }
+            </dd>
+
+            <dt class="col-sm-4">@T("Native official survey", "الاستبيان الرسمي داخل غرس")</dt>
+            <dd class="col-sm-8">
+                @if (nativeSatisfaction is null || nativeSatisfaction.SurveyId is null)
+                {
+                    <span class="text-muted">@T("No official satisfaction survey exists for this season yet.", "لا يوجد استبيان رضا رسمي لهذا الموسم بعد.")</span>
+                }
+                else
+                {
+                    <div>@nativeSatisfaction.ResponseCount @T("responses collected", "استجابة مُجمّعة")</div>
+                    @if (nativeSatisfaction.Percent is null)
                     {
-                        <div class="small text-muted">@T("No analysed report has been uploaded for this survey yet.", "لم يتم رفع التقرير التحليلي لهذا الاستبيان بعد.")</div>
+                        <div class="small text-muted">@string.Format(T("At least {0} responses are needed before this becomes the official figure.", "يلزم {0} استجابة على الأقل قبل أن تصبح هذه النسبة الرسمية."), minimumResponses)</div>
                     }
-                    else
+                    <a class="btn btn-sm btn-outline-primary mt-1" asp-area="Admin" asp-controller="Surveys" asp-action="Results" asp-route-id="@nativeSatisfaction.SurveyId">
+                        <i class="bi bi-bar-chart"></i> @T("View survey results", "عرض نتائج الاستبيان")
+                    </a>
+                }
+            </dd>
+
+            @* Historical only. Submissions approved under the previous external-survey model keep the
+               report they cited; nothing new is ever linked here. *@
+            @if (linkedSurvey is not null)
+            {
+                <dt class="col-sm-4">@T("Legacy external survey", "استبيان خارجي (سجل تاريخي)")</dt>
+                <dd class="col-sm-8">
+                    <div>@(ar ? linkedSurvey.TitleAr : linkedSurvey.TitleEn)</div>
+                    <div class="small text-muted">@T("Retained as historical evidence for this submission.", "محفوظ كدليل تاريخي لهذا الإرسال.")</div>
+                    @if (!string.IsNullOrWhiteSpace(linkedSurvey.ReportPdfPath))
                     {
-                        <a class="btn btn-sm btn-outline-primary mt-1" href="/protected-files/survey-report/@linkedSurvey.Id" target="_blank" rel="noopener noreferrer">
+                        <a class="btn btn-sm btn-outline-secondary mt-1" href="/protected-files/survey-report/@linkedSurvey.Id" target="_blank" rel="noopener noreferrer">
                             <i class="bi bi-file-earmark-pdf"></i> @T("Open report", "فتح التقرير")
                         </a>
                     }
-                }
-            </dd>
+                </dd>
+            }
         </dl>
     </div>
 </div>
@@ -180,16 +208,6 @@
                         <option value="MoreInfoRequired">@T("Return for correction", "إعادة للتصحيح")</option>
                         <option value="Rejected">@T("Reject", "رفض")</option>
                     </select>
-                    @{ var surveyOptions = ViewBag.SatisfactionSurveys as List<ExternalSurvey> ?? new List<ExternalSurvey>(); }
-                    <label class="form-label">@T("Supporting official survey (satisfaction)", "الاستبيان الرسمي الداعم (الرضا)")</label>
-                    <select class="form-select mb-1" name="satisfactionExternalSurveyId">
-                        <option value="">@T("— None —", "— لا يوجد —")</option>
-                        @foreach (var s in surveyOptions)
-                        {
-                            <option value="@s.Id" selected="@(Model.SatisfactionExternalSurveyId == s.Id)">@(ar ? s.TitleAr : s.TitleEn)@(string.IsNullOrWhiteSpace(s.ReportPdfPath) ? T(" (no report yet)", " (بدون تقرير)") : "")</option>
-                        }
-                    </select>
-                    <div class="form-text mb-3">@T("Records which official report supports the submitted satisfaction rate. It does not change the value.", "يسجل التقرير الرسمي الداعم لنسبة الرضا المُرسلة، ولا يغيّر القيمة.")</div>
                     <label class="form-label">@T("Notes to the club", "ملاحظات للنادي")</label>
                     <textarea class="form-control mb-3" name="notes" rows="3">@Model.ReviewNotes</textarea>
                     <button class="btn btn-success">@T("Submit decision", "اعتماد القرار")</button>

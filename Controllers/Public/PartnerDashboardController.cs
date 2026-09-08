@@ -79,7 +79,7 @@ public class PartnerDashboardController : Controller
         ViewBag.Activities = activities;
         ViewBag.Bookings = bookings;
         ViewBag.Notifications = unread;
-        ViewBag.Clubs = await _db.Organizations.Where(x => x.OrganizationType == OrganizationType.Club && x.Status == ApprovalStatus.Approved).OrderBy(x => x.NameEn).ToListAsync();
+        ViewBag.Clubs = await _db.Organizations.ApprovedClubs().ToListAsync();
         ViewBag.From = from?.ToString("yyyy-MM-dd"); ViewBag.To = to?.ToString("yyyy-MM-dd"); ViewBag.ProgramType = programType; ViewBag.Status = status; ViewBag.ClubId = clubId; ViewBag.Query = q; ViewBag.Capacity = capacity; ViewBag.Source = source;
         return View();
     }

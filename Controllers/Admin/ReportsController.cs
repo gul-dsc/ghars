@@ -1,4 +1,5 @@
 using GharsPlatform.Data;
+using GharsPlatform.Helpers;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
 using Microsoft.AspNetCore.Authorization;
@@ -52,20 +53,53 @@ public class ReportsController : Controller
         return View(list);
     }
 
-    public async Task<IActionResult> Satisfaction()
+    /// <summary>
+    /// Participant satisfaction for one season, from the native official survey.
+    /// </summary>
+    /// <remarks>
+    /// Scoped to <see cref="SurveyPurpose.OfficialSatisfaction"/>. It used to pool every star answer in
+    /// the platform over a rolling 180 days, which mixed activity feedback into a figure presented as
+    /// the official one and moved that figure as old responses aged out of the window.
+    /// </remarks>
+    public async Task<IActionResult> Satisfaction(int? seasonId)
     {
-        var since = DateTime.UtcNow.AddDays(-180);
-        var answers = await _db.SurveyAnswers.Include(x => x.SurveyQuestion).Include(x => x.SurveyResponse)
-            .Where(x => x.StarsValue != null && x.SurveyResponse != null && x.SurveyResponse.SubmittedAtUtc >= since)
+        var seasons = await _db.Seasons.OrderByDescending(x => x.StartDate).ToListAsync();
+        var selectedSeasonId = seasonId ?? seasons.FirstOrDefault(x => x.IsActive)?.Id ?? seasons.FirstOrDefault()?.Id;
+
+        ViewBag.Seasons = seasons;
+        ViewBag.SeasonId = selectedSeasonId;
+        ViewBag.Satisfaction = selectedSeasonId is null
+            ? SatisfactionResult.NoData
+            : await SatisfactionCalculator.ForSeasonAsync(_db, selectedSeasonId);
+        ViewBag.MinimumResponses = SatisfactionCalculator.MinimumResponses;
+
+        var survey = selectedSeasonId is null
+            ? null
+            : await SatisfactionCalculator.OfficialSurveyAsync(_db, selectedSeasonId.Value);
+        ViewBag.Survey = survey;
+
+        if (survey is null) return View(new List<SatisfactionRow>());
+
+        var answers = await _db.SurveyAnswers
+            .Include(x => x.SurveyQuestion)
+            .Where(x => x.StarsValue != null
+                        && x.SurveyQuestion != null
+                        && x.SurveyQuestion.SurveyId == survey.Id)
             .ToListAsync();
-        var grouped = answers.Where(a => a.SurveyQuestion != null).GroupBy(a => a.SurveyQuestion!.Id)
+
+        var grouped = answers
+            .Where(a => a.SurveyQuestion != null)
+            .GroupBy(a => a.SurveyQuestion!.Id)
             .Select(g => new SatisfactionRow
             {
                 QuestionEn = g.First().SurveyQuestion!.QuestionEn,
                 QuestionAr = g.First().SurveyQuestion!.QuestionAr,
                 AvgStars = g.Average(x => (double)x.StarsValue!.Value),
                 Count = g.Count()
-            }).OrderByDescending(x => x.AvgStars).ToList();
+            })
+            .OrderByDescending(x => x.AvgStars)
+            .ToList();
+
         return View(grouped);
     }
 
@@ -126,7 +160,7 @@ public class ReportsController : Controller
         if (to.HasValue) libraryQ = libraryQ.Where(x => x.PublicationDate <= to.Value);
         var library = await libraryQ.Take(5000).ToListAsync();
 
-        var clubs = await _db.Organizations.Where(x => x.OrganizationType == OrganizationType.Club).OrderBy(x => x.NameEn).ToListAsync();
+        var clubs = await _db.Organizations.ApprovedClubs().ToListAsync();
         var approvedKpiClubs = kpis.Where(x => x.Status == KpiSubmissionStatus.Approved).Select(x => x.OrganizationId).Distinct().Count();
         var coveragePercent = clubs.Count == 0 ? 0 : Math.Round((decimal)approvedKpiClubs * 100m / clubs.Count, 1);
 
@@ -152,6 +186,14 @@ public class ReportsController : Controller
         }
         ViewBag.PreviousViolations = previousViolations;
 
+        // Satisfaction per season, resolved before the projection below because it is an async call and
+        // must be the same figure the dashboard and KPI screens show. Everything else in the row still
+        // comes from approved submissions.
+        var satisfactionBySeason = new Dictionary<int, SatisfactionResult>();
+        foreach (var season in allSeasons)
+            satisfactionBySeason[season.Id] = await SatisfactionCalculator.ForSeasonAsync(_db, season.Id);
+        ViewBag.SatisfactionBySeason = satisfactionBySeason;
+
         // Season-over-season progression (2026 baseline -> 2033 target) from approved submissions.
         var progression = allSeasons.Select(season =>
         {
@@ -168,7 +210,7 @@ public class ReportsController : Controller
                 Attendance = full.Any() ? Math.Round(full.Average(x => x.AttendanceRate), 1) : (decimal?)null,
                 Ethics = full.Any() ? Math.Round(full.Average(x => x.EthicalValuesAdherenceRate), 1) : (decimal?)null,
                 Diet = full.Any() ? Math.Round(full.Average(x => x.HealthyDietaryHabitsRate), 1) : (decimal?)null,
-                Satisfaction = full.Any() ? Math.Round(full.Average(x => x.SatisfactionRate), 1) : (decimal?)null,
+                Satisfaction = satisfactionBySeason.TryGetValue(season.Id, out var sat) ? sat.Percent : null,
                 PhysicalActivity = full.Any(x => x.PhysicalActivityComplianceRate != null)
                     ? Math.Round(full.Where(x => x.PhysicalActivityComplianceRate != null).Average(x => x.PhysicalActivityComplianceRate!.Value), 1)
                     : (decimal?)null,
@@ -213,7 +255,7 @@ public class ReportsController : Controller
         ViewBag.ClubsNotCovered = clubs.Where(c => !kpis.Any(k => k.OrganizationId == c.Id && k.Status == KpiSubmissionStatus.Approved)).ToList();
         ViewBag.Seasons = await _db.Seasons.OrderByDescending(x => x.StartDate).ToListAsync();
         ViewBag.Clubs = clubs;
-        ViewBag.Entities = await _db.Organizations.Where(x => x.OrganizationType == OrganizationType.GovernmentAuthority || x.OrganizationType == OrganizationType.OtherPartner).OrderBy(x => x.NameEn).ToListAsync();
+        ViewBag.Entities = await _db.Organizations.ApprovedPartners().ToListAsync();
         ViewBag.SelectedSeasonId = seasonId;
         ViewBag.SelectedClubId = clubId;
         ViewBag.SelectedEntityId = entityId;

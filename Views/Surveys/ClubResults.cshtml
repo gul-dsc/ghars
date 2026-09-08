@@ -1,0 +1,133 @@
+@using GharsPlatform.Models.Core
+@using GharsPlatform.Helpers
+@using GharsPlatform.Controllers.Admin
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Satisfaction results", "نتائج قياس الرضا");
+
+    var club = ViewBag.Club as Organization;
+    var myClubs = ViewBag.MyClubs as List<Organization> ?? new();
+    var seasons = ViewBag.Seasons as List<Season> ?? new();
+    var seasonId = ViewBag.SeasonId as int?;
+    var survey = ViewBag.Survey as Survey;
+    var clubResult = ViewBag.ClubResult as SatisfactionResult ?? SatisfactionResult.NoData;
+    var programmeResult = ViewBag.ProgrammeResult as SatisfactionResult ?? SatisfactionResult.NoData;
+    var breakdown = ViewBag.Breakdown as List<SurveysController.QuestionBreakdown> ?? new();
+    var total = ViewBag.TotalResponses as int? ?? 0;
+}
+
+<div class="dashboard-hero mb-4">
+    <h1 class="h4 mb-1">@T("Participant satisfaction", "رضا المشاركين")</h1>
+    @* Name the club on the page itself. With a single club there is no selector to read it from, and
+       a results page that does not say whose results these are invites the wrong conclusion. *@
+    <div class="fw-semibold">@(club is null ? "" : (ar ? club.NameAr : club.NameEn))</div>
+    <div>@T("Aggregate results for your club from the official Ghars satisfaction survey.", "النتائج المجمعة لناديك من استبيان الرضا الرسمي لغرس.")</div>
+</div>
+
+<form method="get" class="row g-2 align-items-end mb-4">
+    @if (myClubs.Count > 1)
+    {
+        <div class="col-md-4">
+            <label class="form-label small" for="organizationId">@T("Club", "النادي")</label>
+            <select class="form-select" id="organizationId" name="organizationId" onchange="this.form.submit()">
+                @foreach (var c in myClubs)
+                {
+                    <option value="@c.Id" selected="@(club?.Id == c.Id)">@(ar ? c.NameAr : c.NameEn)</option>
+                }
+            </select>
+        </div>
+    }
+    <div class="col-md-4">
+        <label class="form-label small" for="seasonId">@T("Sports season", "الموسم الرياضي")</label>
+        <select class="form-select" id="seasonId" name="seasonId" onchange="this.form.submit()">
+            @foreach (var s in seasons)
+            {
+                <option value="@s.Id" selected="@(seasonId == s.Id)">@(ar ? s.TitleAr : s.TitleEn)</option>
+            }
+        </select>
+    </div>
+</form>
+
+@if (survey is null)
+{
+    <div class="empty-state">@T("No official satisfaction survey has been published for this season yet.", "لم يُنشر استبيان رضا رسمي لهذا الموسم بعد.")</div>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="metric-card h-100">
+                <div class="text-muted small">@T("Your responses", "استجابات ناديك")</div>
+                <div class="h3 mb-0">@total</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="metric-card h-100">
+                <div class="text-muted small">@T("Your satisfaction", "نسبة الرضا لناديك")</div>
+                <div class="h3 mb-0">@(clubResult.Percent.HasValue ? $"{clubResult.Percent.Value:0.#}%" : T("No data", "لا توجد بيانات"))</div>
+                @if (!clubResult.Percent.HasValue && total > 0)
+                {
+                    <div class="small text-muted">@string.Format(T("{0} of {1} responses needed", "{0} من {1} استجابة مطلوبة"), total, ViewBag.MinimumResponses)</div>
+                }
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="metric-card h-100">
+                <div class="text-muted small">@T("Ghars Program overall", "المعدل العام لبرنامج غرس")</div>
+                <div class="h3 mb-0">@(programmeResult.Percent.HasValue ? $"{programmeResult.Percent.Value:0.#}%" : T("No data", "لا توجد بيانات"))</div>
+                <div class="small text-muted">@programmeResult.SourceLabel(ar)</div>
+            </div>
+        </div>
+    </div>
+
+    <h2 class="h6 text-uppercase text-muted mb-2">@T("Per question", "حسب السؤال")</h2>
+    <div class="vstack gap-3">
+    @foreach (var b in breakdown)
+    {
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                    <div class="fw-semibold">@(ar ? b.Question.QuestionAr : b.Question.QuestionEn)</div>
+                    <span class="badge text-bg-light border">@b.AnswerCount @T("answers", "إجابة")</span>
+                </div>
+
+                @if (b.Question.QuestionType == SurveyQuestionType.Text)
+                {
+                    <div class="text-muted small">@T("Written comments are reviewed by Dubai Sports Council and are not shown here.", "يراجع مجلس دبي الرياضي الملاحظات المكتوبة ولا تُعرض هنا.")</div>
+                }
+                else if (b.Distribution.Any(d => d.Count > 0))
+                {
+                    @if (b.Average.HasValue)
+                    {
+                        <div class="text-muted small mb-2">@T("Average", "المتوسط"): <strong>@b.Average.Value.ToString("0.00")</strong> / 5</div>
+                    }
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead class="table-light">
+                                <tr><th>@T("Answer", "الإجابة")</th><th style="width:110px;">@T("Count", "العدد")</th><th style="width:110px;">@T("Share", "النسبة")</th></tr>
+                            </thead>
+                            <tbody>
+                            @{ var totalForQ = b.Distribution.Sum(d => d.Count); }
+                            @foreach (var d in b.Distribution)
+                            {
+                                <tr>
+                                    <td>@(ar ? d.LabelAr : d.LabelEn)</td>
+                                    <td>@d.Count</td>
+                                    <td>@(totalForQ == 0 ? "-" : $"{(decimal)d.Count / totalForQ * 100:0.#}%")</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-muted small">@T("No answers yet.", "لا توجد إجابات بعد.")</div>
+                }
+            </div>
+        </div>
+    }
+    </div>
+}

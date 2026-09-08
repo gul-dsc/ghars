@@ -104,11 +104,13 @@
             </a>
 
             <a class="nav-link @ActiveIf("Surveys")" asp-area="Admin" asp-controller="Surveys" asp-action="Index">
-                <i class="bi bi-star"></i> <span>@(isRtl ? "استبيانات الأنشطة" : "Activity Surveys")</span>
+                <i class="bi bi-clipboard-check"></i> <span>@(isRtl ? "استبيانات غرس" : "Ghars Surveys")</span>
             </a>
 
+            @* Legacy, kept reachable for the historical records it holds. Named so nobody mistakes it
+               for the current official survey, which lives under Ghars Surveys above. *@
             <a class="nav-link @ActiveIf("ExternalSurveys")" asp-area="Admin" asp-controller="ExternalSurveys" asp-action="Index">
-                <i class="bi bi-clipboard-check"></i> <span>@(isRtl ? "الاستبيانات الرسمية" : "Official Surveys")</span>
+                <i class="bi bi-archive"></i> <span>@(isRtl ? "استبيانات خارجية (أرشيف)" : "Legacy Surveys")</span>
             </a>
 
             <a class="nav-link @ActiveIf("Library")" asp-area="Admin" asp-controller="Library" asp-action="Categories">

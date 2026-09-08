@@ -52,7 +52,7 @@ public class ActivitiesController : Controllers.BaseController
         ViewBag.SubmitterNames = await ResolveDisplayNamesAsync(list.Select(x => x.SubmittedByUserId));
 
         ViewBag.Partners = await Db.Organizations
-            .Where(x => x.OrganizationType == OrganizationType.GovernmentAuthority || x.OrganizationType == OrganizationType.OtherPartner)
+            .Where(GharsOrganizations.IsApprovedPartner)
             .OrderBy(x => x.NameEn).ToListAsync();
         ViewBag.Seasons = await Db.Seasons.OrderByDescending(x => x.IsActive).ThenByDescending(x => x.Id).ToListAsync();
         ViewBag.PendingCount = await Db.Activities.CountAsync(x => x.ApprovalStatus == OfferingApprovalStatus.SubmittedForApproval);

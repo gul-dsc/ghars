@@ -1,37 +1,137 @@
 @model List<GharsPlatform.Models.Core.Survey>
+@using GharsPlatform.Models.Core
+@using System.Globalization
 @{
-    ViewData["Title"] = "Surveys";
-    ViewData["PageTitle"] = "Surveys";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Ghars Surveys", "استبيانات غرس");
+    ViewData["PageTitle"] = ViewData["Title"];
+
+    var counts = ViewBag.ResponseCounts as Dictionary<int, int> ?? new();
+    var seasons = ViewBag.Seasons as List<Season> ?? new();
+    var official = Model.Where(x => x.Purpose == SurveyPurpose.OfficialSatisfaction).ToList();
+    var general = Model.Where(x => x.Purpose == SurveyPurpose.General).ToList();
+    var now = DateTime.UtcNow;
+
+    string StateBadge(Survey s) => s.IsOpenAt(now) ? "text-bg-success" : "text-bg-secondary";
+    string StateText(Survey s) => s.IsOpenAt(now) ? T("Open", "مفتوح") : T("Closed", "مغلق");
 }
-<div class="d-flex align-items-center justify-content-between mb-3">
-    <div class="fw-semibold">Surveys</div>
-    <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Surveys/Create"><i class="bi bi-plus-lg"></i> Create</a>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div>
+        <h1 class="h4 mb-0">@ViewData["Title"]</h1>
+        <div class="text-muted">@T("One survey engine. The official satisfaction survey is completed inside Ghars and feeds the satisfaction indicator.", "محرك استبيانات واحد. يُستكمل استبيان الرضا الرسمي داخل منصة غرس ويغذي مؤشر الرضا.")</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-primary" asp-action="Create" asp-route-purpose="@SurveyPurpose.OfficialSatisfaction">
+            <i class="bi bi-clipboard-check"></i> @T("New official survey", "استبيان رسمي جديد")
+        </a>
+        <a class="btn btn-outline-primary" asp-action="Create" asp-route-purpose="@SurveyPurpose.General">
+            <i class="bi bi-plus-lg"></i> @T("New activity survey", "استبيان نشاط جديد")
+        </a>
+    </div>
 </div>
+
+<h2 class="h6 text-uppercase text-muted mb-2">@T("Official Participant Satisfaction Survey", "استبيان قياس رضا المشاركين الرسمي")</h2>
+<p class="text-muted small">@T("One per sports season. Its 1-5 rating answers are the source of the official satisfaction percentage.", "استبيان واحد لكل موسم رياضي. تُعد إجابات التقييم من ١ إلى ٥ مصدر النسبة الرسمية للرضا.")</p>
+
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>@T("Title", "العنوان")</th>
+                    <th>@T("Season", "الموسم")</th>
+                    <th>@T("Questions", "الأسئلة")</th>
+                    <th>@T("Responses", "الاستجابات")</th>
+                    <th>@T("Status", "الحالة")</th>
+                    <th class="text-end">@T("Actions", "إجراءات")</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var s in official)
+            {
+                <tr>
+                    <td>
+                        <strong>@s.TitleEn</strong>
+                        <div class="text-muted small">@s.TitleAr</div>
+                        <span class="badge text-bg-primary mt-1">@T("Official", "رسمي")</span>
+                    </td>
+                    <td>@(ar ? s.Season?.TitleAr : s.Season?.TitleEn)</td>
+                    <td>@s.Questions.Count</td>
+                    <td class="fw-semibold">@(counts.TryGetValue(s.Id, out var c) ? c : 0)</td>
+                    <td><span class="badge @StateBadge(s)">@StateText(s)</span></td>
+                    <td class="text-end">
+                        <div class="d-flex gap-1 justify-content-end flex-wrap">
+                            <a class="btn btn-sm btn-outline-primary" asp-action="Questions" asp-route-id="@s.Id">@T("Questions", "الأسئلة")</a>
+                            <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@s.Id">@T("Edit", "تعديل")</a>
+                            <a class="btn btn-sm btn-outline-secondary" asp-action="Share" asp-route-id="@s.Id">@T("Share", "مشاركة")</a>
+                            <a class="btn btn-sm btn-outline-success" asp-action="Results" asp-route-id="@s.Id">@T("Results", "النتائج")</a>
+                            <form method="post" asp-action="TogglePublish" asp-route-id="@s.Id" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn-sm @(s.IsActive ? "btn-outline-warning" : "btn-success")">@(s.IsActive ? T("Close", "إغلاق") : T("Open", "فتح"))</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+            }
+            @if (!official.Any())
+            {
+                <tr><td colspan="6" class="text-center text-muted py-4">
+                    @T("No official satisfaction survey has been created yet.", "لم يتم إنشاء استبيان رضا رسمي بعد.")
+                    @if (seasons.Any())
+                    {
+                        <div class="mt-2"><a class="btn btn-sm btn-primary" asp-action="Create" asp-route-purpose="@SurveyPurpose.OfficialSatisfaction">@T("Create it now", "إنشاؤه الآن")</a></div>
+                    }
+                </td></tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<h2 class="h6 text-uppercase text-muted mb-2">@T("Activity surveys", "استبيانات الأنشطة")</h2>
+<p class="text-muted small">@T("Feedback on a single activity. Used for internal follow-up; never counted in the official satisfaction indicator.", "ملاحظات حول نشاط واحد. تُستخدم للمتابعة الداخلية ولا تُحتسب ضمن مؤشر الرضا الرسمي.")</p>
 
 <div class="card border-0 shadow-sm rounded-4">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
-            <tr>
-                <th>ID</th>
-                <th>Activity</th>
-                <th>Title</th>
-                <th>Active</th>
-                <th></th>
-            </tr>
+                <tr>
+                    <th>@T("Title", "العنوان")</th>
+                    <th>@T("Activity", "النشاط")</th>
+                    <th>@T("Questions", "الأسئلة")</th>
+                    <th>@T("Responses", "الاستجابات")</th>
+                    <th>@T("Status", "الحالة")</th>
+                    <th class="text-end">@T("Actions", "إجراءات")</th>
+                </tr>
             </thead>
             <tbody>
-            @foreach (var s in Model)
+            @foreach (var s in general)
             {
                 <tr>
-                    <td>@s.Id</td>
-                    <td>@s.Activity?.TitleEn</td>
-                    <td class="fw-semibold">@s.TitleEn</td>
-                    <td>@(s.IsActive ? "Yes" : "No")</td>
+                    <td><strong>@s.TitleEn</strong><div class="text-muted small">@s.TitleAr</div></td>
+                    <td>@(ar ? (s.Activity?.TitleAr ?? s.Activity?.TitleEn) : (s.Activity?.TitleEn ?? s.Activity?.TitleAr))</td>
+                    <td>@s.Questions.Count</td>
+                    <td>@(counts.TryGetValue(s.Id, out var gc) ? gc : 0)</td>
+                    <td><span class="badge @StateBadge(s)">@StateText(s)</span></td>
                     <td class="text-end">
-                        <a class="btn btn-sm btn-outline-primary" href="/Admin/Surveys/Results/@s.Id">Results</a>
+                        <div class="d-flex gap-1 justify-content-end flex-wrap">
+                            <a class="btn btn-sm btn-outline-primary" asp-action="Questions" asp-route-id="@s.Id">@T("Questions", "الأسئلة")</a>
+                            <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@s.Id">@T("Edit", "تعديل")</a>
+                            <a class="btn btn-sm btn-outline-secondary" asp-action="Share" asp-route-id="@s.Id">@T("Share", "مشاركة")</a>
+                            <a class="btn btn-sm btn-outline-success" asp-action="Results" asp-route-id="@s.Id">@T("Results", "النتائج")</a>
+                            <form method="post" asp-action="TogglePublish" asp-route-id="@s.Id" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn-sm @(s.IsActive ? "btn-outline-warning" : "btn-success")">@(s.IsActive ? T("Close", "إغلاق") : T("Open", "فتح"))</button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
+            }
+            @if (!general.Any())
+            {
+                <tr><td colspan="6" class="text-center text-muted py-4">@T("No activity surveys yet.", "لا توجد استبيانات أنشطة بعد.")</td></tr>
             }
             </tbody>
         </table>

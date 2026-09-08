@@ -77,8 +77,12 @@ function Invoke-GharsQuery {
         [string[]]$Columns
     )
 
+    # -I sets QUOTED_IDENTIFIER ON. sqlcmd defaults it OFF, and SQL Server refuses any INSERT, UPDATE
+    # or DELETE against a table carrying a filtered index while it is OFF — which Surveys and
+    # SurveyResponses now do. Without this a cleanup fails with a message about indexed views and
+    # spatial indexes that says nothing about the actual cause.
     $full = "SET NOCOUNT ON;`n$Query"
-    $raw = & sqlcmd -S $Server -d $Database -E -h -1 -W -s '|' -b -Q $full 2>&1
+    $raw = & sqlcmd -S $Server -d $Database -E -h -1 -W -s '|' -b -I -Q $full 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "sqlcmd failed (exit $LASTEXITCODE): $($raw -join [Environment]::NewLine)"
     }
@@ -109,7 +113,8 @@ function Invoke-GharsStatement {
         [string]$Database = 'GharsPlatformDb'
     )
 
-    $raw = & sqlcmd -S $Server -d $Database -E -W -b -Q $Sql 2>&1
+    # -I as above: required for any write to a table with a filtered index.
+    $raw = & sqlcmd -S $Server -d $Database -E -W -b -I -Q $Sql 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "sqlcmd failed (exit $LASTEXITCODE): $($raw -join [Environment]::NewLine)"
     }

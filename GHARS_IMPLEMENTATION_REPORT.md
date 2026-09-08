@@ -3099,3 +3099,307 @@ The tooling was exercised rather than assumed to work.
 > The first build failed with `MSB3027`/`MSB3021`. That is the running application holding
 > `bin/Debug/net8.0/GharsPlatform.exe`, not a compile error; the C# was clean throughout. Stop the
 > app before building.
+
+---
+
+## 35. Native Official Satisfaction Survey and Organization Master Data Reconciliation (2026-09-08)
+
+Two changes that turned out to be one. The official participant satisfaction survey stopped being a
+third-party instrument and became a Ghars one; and the organization roster it reports against was
+reconciled against the approved logo assets, so the clubs and implementing entities the platform
+exposes are the real ones.
+
+### 35.1 From external to native
+
+The survey used to be a link. `ExternalSurvey` stored a URL, a participant clicked through to another
+platform, that platform analysed the answers, and DSC uploaded the resulting PDF. Ghars held no
+responses and computed nothing; the satisfaction KPI was a number a club typed into a form, with the
+uploaded report cited beside it as evidence.
+
+It is now completed inside Ghars end to end. A participant opens `/surveys/take/{token}`, answers, and
+sees a Ghars thank-you page. No route leaves the platform, and no result is ever imported into it.
+
+**The engine was reused, not replaced.** The platform already had a working native survey engine —
+`Survey` → `SurveyQuestion` → `SurveyOption`, `SurveyResponse` → `SurveyAnswer`, four question types,
+bilingual throughout. Building a second one would have left the KPI reading from whichever of the two
+a given screen happened to know about. What the existing engine lacked was the ability to *be* an
+official survey, and that is what was added.
+
+### 35.2 Classification, not title matching
+
+`Survey.Purpose` (`SurveyPurpose.General` / `OfficialSatisfaction`) is what makes a survey official.
+Deliberately a stored attribute rather than a title match: the satisfaction indicator must not depend
+on a string an administrator can edit, in either of two languages, at any moment.
+
+"Exactly one official survey per season" is enforced by the database, not by a controller check a
+concurrent second request could slip past:
+
+```sql
+CREATE UNIQUE INDEX UX_Surveys_OfficialSatisfaction_PerSeason ON Surveys (SeasonId)
+  WHERE [Purpose] = 2 AND [SeasonId] IS NOT NULL;
+```
+
+Filtered, so it constrains only official surveys and leaves activity surveys alone. Verified on a
+scratch database: a second official survey for a season is rejected; a `General` survey in the same
+season is unaffected.
+
+`Survey.SeasonId` is nullable and set per season, so 2026-2027 is configuration rather than something
+compiled in, and closed seasons stay reportable.
+
+### 35.3 Participants and response storage
+
+Participants are club players at a lecture. Requiring a Ghars account would have collected almost
+nothing, so responses are **anonymous**: `SurveyResponse.UserId` became nullable and no personal data
+is stored. A signed-in respondent is still recorded and still limited to one response.
+
+That nullable column has a sharp edge worth stating plainly. The old uniqueness index on
+`(SurveyId, UserId)` had to be rebuilt as:
+
+```sql
+CREATE UNIQUE INDEX IX_SurveyResponses_SurveyId_UserId ON SurveyResponses (SurveyId, UserId)
+  WHERE [UserId] IS NOT NULL;
+```
+
+SQL Server treats NULLs as **equal** in a unique index. Left unfiltered, it would have accepted
+exactly one anonymous response per survey and rejected every one after it with a duplicate-key error —
+a survey that appears to work, collects one answer, and silently fails for everybody else. Verified:
+three anonymous responses accepted, a duplicate signed-in response rejected.
+
+Duplicate submission by the same anonymous participant is handled where it actually belongs: a
+12-hour per-browser cookie, plus a `survey-response` rate-limiter partition alongside the existing
+contact-form one. The partition key is an IP address used in memory and never stored.
+
+Each response optionally carries `OrganizationId` and `AgendaEntryId`. Both are **server-derived from
+the agenda entry named in the link** — never accepted from the request — so a club cannot attribute
+responses to itself by editing a query string. A response with no context is still valid: the same
+official survey is reused across every activity in a season.
+
+### 35.4 The satisfaction formula, in one place
+
+`Helpers/SatisfactionCalculator.cs` is the only place the figure is computed.
+
+> **mean of the 1–5 rating answers ÷ 5 × 100**, rounded to one decimal.
+
+That is the conversion the platform already used for star scores; it is restated here, not redefined.
+Yes/no, multiple-choice and free-text answers are reported on the results page but never enter the
+percentage — mixing instruments produces a number that means nothing.
+
+**Precedence.** The native survey becomes the season's figure once it has at least
+`SatisfactionCalculator.MinimumResponses` (10) responses. Below that the approved club-submitted
+average stands. Ten is a publication threshold, not a statistical claim: high enough that one
+respondent cannot move the headline by tens of points, low enough to reach early. Below it the
+responses are still collected, still counted and still shown.
+
+`KpiSubmission.SatisfactionRate` **is never overwritten**. It remains exactly what the club submitted
+and DSC approved, and serves as both the fallback and the historical record.
+
+Every screen that shows the figure also shows what produced it. A percentage with no provenance
+invites the reader to assume the strongest possible one, and the difference between "36 participants
+answered" and "seven clubs typed a number into a form" is the difference between a measurement and an
+estimate. `SatisfactionResult.SourceLabel` carries that, bilingually.
+
+Readers of the calculator: the executive dashboard, `Admin/Kpi/Details`, `Admin/Reports/Satisfaction`,
+the season-over-season progression in `Admin/Reports/Analytics`, and the club-facing results page.
+
+> The satisfaction report previously pooled **every** star answer in the database over a rolling
+> 180 days. That mixed activity feedback into a figure presented as the official one, and moved that
+> figure as old responses aged out of the window. It is now scoped to the season's official survey.
+
+### 35.5 Distribution
+
+A club opens a delivered agenda entry and gets a link and QR code (QRCoder was already a dependency;
+no new package). The link carries the agenda entry id only — never a club id — and access to the page
+is limited to that entry's owner, DSC excepted. So a club admin can neither browse another club's
+agenda nor forge a club into a distribution link.
+
+### 35.6 The legacy external survey
+
+`ExternalSurvey` and `KpiSubmission.SatisfactionExternalSurveyId` are **retained**. A report a third
+party analysed and DSC published is a record of what happened; deleting it would erase that.
+
+What changed:
+
+| | Before | Now |
+|---|---|---|
+| Participant CTA | "Open survey" → external URL | removed; the native survey is the only participant route |
+| Admin navigation | "Official Surveys" | "Legacy Surveys", with an archive banner pointing at Ghars Surveys |
+| Creating one | supported | **removed** — action and view both deleted, so the route cannot be typed either |
+| Editing one | supported | retained, so a historical record can be corrected or its report published |
+| KPI review | reviewer picked a supporting external survey | selector removed; existing links are displayed and preserved untouched on re-review |
+
+`KpiSource.ExternalApproved` is kept and relabelled "External source (historical)" so stored values
+still resolve; the Satisfaction indicator now declares `KpiSource.OfficialSurvey`.
+
+All Dubai Digital Authority wording is gone from both languages. Digital Dubai as an *organization*
+was not touched by that edit — it was affected only by the roster reconciliation below, on the same
+footing as every other entity.
+
+### 35.7 The approved roster
+
+Two asset drops shipped with the project decided the roster: `partners/` (17 real logos) and `clubs/`
+(7). Both are reconciled into `Data/GharsMasterData.cs`, which the seeder and the reconciliation
+command both read — one list, two readers, so a fresh database and a reconciled one cannot disagree.
+
+> `wwwroot/img/partners/*.svg` proved to be **generated placeholders**, roughly 570 bytes each:
+> coloured shapes with a word like "COURTS" set in Arial. They were never real partner logos and are
+> not evidence of an approved partnership. The real artwork is in `partners/`, and the reconciliation
+> follows it. Where a logo is filed under a fuller legal name than the organization row uses —
+> "General Directorate of Civil Defence Dubai" for "Dubai Civil Defence", "Dubai Culture and Arts
+> Authority" for "Dubai Culture" — it is mapped to the existing row rather than inserted a second time.
+
+**The logo folders decided which organizations are approved. They are not consulted at request time
+and confer nothing.** Eligibility is decided entirely by `OrganizationType` and `Status`.
+
+### 35.8 One eligibility rule
+
+`Helpers/GharsOrganizations.cs` holds the single definition of an approved implementing entity and an
+approved club. The rule was previously written out by hand in six controllers. Duplication like that
+does not stay identical: one copy gains a condition, the others do not, and a screen quietly starts
+offering something the server will refuse — or worse, accepting something no screen offers.
+
+`OrganizationType.DubaiSportsCouncil` was added for DSC itself. Every partner query asks "which
+entities can a club book a lecture from?", and the answer must not include the council that runs the
+programme. Its own type keeps DSC's record, users and history intact while removing it from every
+implementing-entity selector, with no filter anywhere needing to name it.
+
+### 35.9 Reconciliation of the existing database
+
+`dotnet run -- reconcile-organizations [--commit]` — Development only, refused elsewhere, dry run by
+default. Not a startup step: a routine that rewrote the organization table on every launch would be a
+standing hazard, and there would be no moment at which a human read the plan.
+
+**It never deletes an organization.** Rows outside the roster are set to `ApprovalStatus.Suspended`,
+which removes them from every selector, catalogue, filter and report while leaving their bookings,
+agenda entries, KPI submissions, activities and audit history exactly where they are. Every
+deactivated row was checked for dependants first, and every one had some.
+
+| | Count |
+|---|---|
+| Retained and updated | 17 |
+| Created | 8 |
+| Deactivated (Suspended, all rows kept) | 19 |
+| **Deleted** | **0** |
+
+After reconciliation: **7 approved clubs**, **17 approved implementing entities** (12
+`GovernmentAuthority` + 5 `OtherPartner`), **1 DSC organization**, **19 deactivated and retained**,
+44 total.
+
+Seven bookings created before this pass still reference now-deactivated partners. They are history and
+are left alone. Sixteen referential-integrity checks across activities, bookings, agenda, KPI, annual
+reports, admin links, gallery, survey data, notifications and attachments returned **zero** invalid
+references.
+
+### 35.10 Seeding a fresh database
+
+`SeedOrganizationsAsync` now builds from `GharsMasterData` and creates the approved roster and nothing
+else, so a brand-new development database cannot reintroduce what an existing one deactivated. Two
+further seeder defects were found and fixed while verifying:
+
+* Demo bookings were drawn from **every** published activity, including offerings left behind by
+  deactivated organizations — quietly recreating, as booking data, the partners the roster had just
+  removed. Four such rows were created on the first restart and were removed by exact id.
+* Demo survey responses were attached to any seeded agenda entry, including one belonging to a
+  deactivated club, adding its ratings to the season's headline percentage while that club was absent
+  from every filter that could explain them.
+
+Sample accounts follow the roster: a partner admin is created only for an approved implementing
+entity. Existing accounts are untouched — the seeder still never changes a password that already
+exists, so accounts created before this pass keep theirs and only new ones use the configured
+`GHARS_SEED_DEMO_PASSWORD`.
+
+> Worth knowing: `DbSeeder` tells operators to run `dotnet user-secrets set` for the demo password,
+> but `GharsPlatform.csproj` has no `UserSecretsId`, so that command fails. The environment variable
+> works. Not fixed here — it is unrelated to this pass — but it will confuse whoever follows the log
+> message.
+
+### 35.11 Verification
+
+| Check | Result |
+|---|---|
+| Anonymous participant flow (open, submit, thank-you, re-open) | 10/10 |
+| Signed-in roles, catalogue and forged posts | 16/16 |
+| Club isolation, distribution, QR, regression sweep | 23/23 |
+| Arabic RTL, wording and accessibility structure | 20/20 |
+| Migration from zero on a scratch database | applied clean; schema confirmed via `INFORMATION_SCHEMA` |
+| Both filtered unique indexes | enforced as intended |
+| Referential integrity, 16 checks | 0 invalid references |
+| Booking 20 | untouched — org 30, partner 17, activity 35, both notifications, both audit rows |
+
+Forged posts refused: a deactivated partner id, a club the user does not administer, another club's
+results page, another club's distribution page and QR endpoint, an unknown survey token, and a survey
+id used in place of a token.
+
+> `sqlcmd` defaults `QUOTED_IDENTIFIER` **off**, and SQL Server refuses any write to a table carrying
+> a filtered index while it is off. `Surveys` and `SurveyResponses` now have them, so
+> `tools/testing/GharsTestSafety.ps1` passes `-I`. Without it a cleanup fails with a message about
+> indexed views and spatial indexes that says nothing about the actual cause.
+
+### 35.12 Final master data
+
+**Clubs** — 7 approved.
+
+| Club | Arabic | Logo | Sample account | Org | Active |
+|---|---|---|---|---|---|
+| Al Nasr Club | نادي النصر | al-nasr-club.png | club-al-nasr-club@ghars.local | 31 | Yes |
+| Al Wasl Club | نادي الوصل | al-wasl-club.png | club-al-wasl-club@ghars.local | 32 | Yes |
+| Dubai Chess & Culture Club | نادي دبي للشطرنج والثقافة | dubai-chess-and-culture-club.png | club-dubai-chess-culture-club@ghars.local | 35 | Yes |
+| Dubai Club for People of Determination | نادي دبي لأصحاب الهمم | dubai-club-for-people-of-determination.png | club-dubai-club-for-people-of-determination@ghars.local | 34 | Yes |
+| Dubai International Marine Club | نادي دبي الدولي للرياضات البحرية | dubai-international-marine-club.png | club-dubai-international-marine-club@ghars.local | 39 | Yes |
+| Hatta Club | نادي حتا | hatta-club.png | club-hatta-club@ghars.local | 33 | Yes |
+| Shabab Al Ahli Club | نادي شباب الأهلي | shabab-al-ahli-club.png | club-shabab-al-ahli-club@ghars.local, club1@ghars.local | 30 | Yes |
+
+Deactivated club: **Al Habtoor Polo Club** (36) — no logo in the approved drop; 9 dependent rows
+retained.
+
+**Implementing entities** — 17 approved. Logos under `/img/partners/`.
+
+| Partner | Arabic | Logo file | Org | Type | Active |
+|---|---|---|---|---|---|
+| Community Development Authority | هيئة تنمية المجتمع في دبي | community-development-authority.png | 1 | Government | Yes |
+| Dubai Civil Defence | الإدارة العامة للدفاع المدني – دبي | dubai-civil-defence.png | 4 | Government | Yes |
+| Dubai Corporation for Ambulance Services | مؤسسة دبي لخدمات الإسعاف | dubai-ambulance.png | 5 | Government | Yes |
+| Dubai Culture | هيئة الثقافة والفنون في دبي | dubai-culture.png | 7 | Government | Yes |
+| Dubai Electricity and Water Authority | هيئة كهرباء ومياه دبي | dewa.png | 10 | Government | Yes |
+| Dubai Health Authority | هيئة الصحة في دبي | dha.png | 11 | Government | Yes |
+| Dubai Municipality | بلدية دبي | dubai-municipality.png | 16 | Government | Yes |
+| Dubai Police | القيادة العامة لشرطة دبي | dubai-police.png | 17 | Government | Yes |
+| Dubai Public Library | مكتبة دبي العامة | dubai-public-library.png | 40 | Government | Yes |
+| Islamic Affairs and Charitable Activities | دائرة الشؤون الإسلامية والعمل الخيري | islamic-affairs-and-charitable-activities.png | 25 | Government | Yes |
+| Ministry of Education | وزارة التربية والتعليم | ministry-of-education.png | 41 | Government | Yes |
+| Roads and Transport Authority | هيئة الطرق والمواصلات | rta.png | 28 | Government | Yes |
+| Al Tadawi Medical Centre | مركز التداوي الطبي | al-tadawi-medical-centre.png | 42 | Other partner | Yes |
+| Emirates Association for Social Development | جمعية الإمارات للتنمية الاجتماعية | emirates-association-for-social-development.png | 43 | Other partner | Yes |
+| Emirates Child Protection Association | جمعية الإمارات لحماية الطفل | emirates-child-protection-association.png | 44 | Other partner | Yes |
+| Higher Colleges of Technology – Dubai Women's College | كليات التقنية العليا – كلية دبي للطالبات | hct-dubai-womens-college.png | 45 | Other partner | Yes |
+| UAE Football Association | اتحاد الإمارات لكرة القدم | uae-football-association.png | 46 | Other partner | Yes |
+
+Each has a sample account `partner-<slug>@ghars.local`.
+
+**DSC** — Dubai Sports Council (19), `OrganizationType.DubaiSportsCouncil`, retained and excluded from
+implementing-entity selectors.
+
+**Deactivated and retained (19)** — Al Habtoor Polo Club (36); Digital Dubai (2), Dubai Academic
+Health Corporation (3), Dubai Courts (6), Dubai Customs (8), Dubai Economy and Tourism (9), Dubai
+Islamic Economy Development Centre (12), Dubai Judicial Institute (13), Dubai Media Council (14),
+Dubai Media Incorporated (15), Dubai Public Prosecution (18), Dubai Statistics Center (20), Dubai
+Women's Establishment (21), Endowment and Minors' Trust Foundation (22), General Directorate of
+Residency and Foreigners Affairs–Dubai (23), Hamdan Bin Mohammed Smart University (24), Knowledge and
+Human Development Authority (26), Mohammed Bin Rashid Space Centre (27), Hamdan Bin Mohammed Heritage
+Center (29). Every row, and everything referencing it, is intact; each can be reinstated by setting
+its status back to Approved.
+
+### 35.13 Migration
+
+One migration, `20260908170721_AddNativeOfficialSatisfactionSurvey`. Additive apart from two widenings
+that accept strictly more data than before: `Surveys.ActivityId` and `SurveyResponses.UserId` become
+nullable. No table dropped, no data deleted.
+
+The scaffolded `Purpose` default was `0`, which is not a member of `SurveyPurpose` — every existing
+survey would have matched neither classification and appeared in neither list. Corrected to `1`
+(`General`), with a backfill statement alongside it.
+
+Organization reconciliation needed **no** schema change: `OrganizationType` and `Status` already
+express approval, and `DubaiSportsCouncil` is a new value in an existing `tinyint` column.
+
+**Build** — `dotnet build --no-incremental` → **0 errors, 1 warning**, the retained `CS0108` on
+`Activity.CreatedByUserId`, not suppressed.

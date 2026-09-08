@@ -1,0 +1,93 @@
+@model GharsPlatform.Controllers.Admin.SurveysController.SurveyVm
+@using GharsPlatform.Models.Core
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var activities = ViewBag.Activities as List<Activity> ?? new();
+    var seasons = ViewBag.Seasons as List<Season> ?? new();
+    var official = Model.Purpose == SurveyPurpose.OfficialSatisfaction;
+}
+
+<input type="hidden" asp-for="Id" />
+<input type="hidden" asp-for="Purpose" />
+
+<div class="row g-3">
+    @if (official)
+    {
+        <div class="col-12">
+            <div class="alert alert-primary d-flex gap-2 align-items-start mb-0">
+                <i class="bi bi-clipboard-check fs-5"></i>
+                <div>
+                    <div class="fw-semibold">@T("Official Participant Satisfaction Survey", "استبيان قياس رضا المشاركين الرسمي")</div>
+                    <div class="small">@T("Completed inside Ghars. Its 1-5 rating answers produce the official satisfaction percentage for the selected season. One official survey per season.", "يُستكمل داخل منصة غرس. تُنتج إجابات التقييم من ١ إلى ٥ النسبة الرسمية للرضا للموسم المحدد. استبيان رسمي واحد لكل موسم.")</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label" asp-for="SeasonId">@T("Sports season", "الموسم الرياضي")</label>
+            <select class="form-select" asp-for="SeasonId" required>
+                <option value="">@T("-- Select a season --", "-- اختر الموسم --")</option>
+                @foreach (var s in seasons)
+                {
+                    <option value="@s.Id" selected="@(Model.SeasonId == s.Id)">@(ar ? s.TitleAr : s.TitleEn)</option>
+                }
+            </select>
+            <span class="text-danger small" asp-validation-for="SeasonId"></span>
+        </div>
+    }
+    else
+    {
+        <div class="col-md-6">
+            <label class="form-label" asp-for="ActivityId">@T("Activity", "النشاط")</label>
+            <select class="form-select" asp-for="ActivityId" required>
+                <option value="">@T("-- Select an activity --", "-- اختر النشاط --")</option>
+                @foreach (var a in activities)
+                {
+                    <option value="@a.Id" selected="@(Model.ActivityId == a.Id)">@(ar ? a.TitleAr : a.TitleEn)</option>
+                }
+            </select>
+            <span class="text-danger small" asp-validation-for="ActivityId"></span>
+        </div>
+    }
+
+    <div class="col-md-6 d-flex align-items-end">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" asp-for="IsActive" id="surveyIsActive" />
+            <label class="form-check-label" for="surveyIsActive">@T("Open for responses", "مفتوح لاستقبال الاستجابات")</label>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label" asp-for="TitleEn">@T("Title (English)", "العنوان (بالإنجليزية)")</label>
+        <input class="form-control" asp-for="TitleEn" required maxlength="200" />
+        <span class="text-danger small" asp-validation-for="TitleEn"></span>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label" asp-for="TitleAr">@T("Title (Arabic)", "العنوان (بالعربية)")</label>
+        <input class="form-control" asp-for="TitleAr" dir="rtl" required maxlength="200" />
+        <span class="text-danger small" asp-validation-for="TitleAr"></span>
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label" asp-for="DescriptionEn">@T("Introduction (English)", "المقدمة (بالإنجليزية)")</label>
+        <textarea class="form-control" asp-for="DescriptionEn" rows="3" maxlength="2000"></textarea>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label" asp-for="DescriptionAr">@T("Introduction (Arabic)", "المقدمة (بالعربية)")</label>
+        <textarea class="form-control" asp-for="DescriptionAr" dir="rtl" rows="3" maxlength="2000"></textarea>
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label" asp-for="OpensAtUtc">@T("Opens at (UTC)", "يفتح في (بالتوقيت العالمي)")</label>
+        <input class="form-control" type="datetime-local" asp-for="OpensAtUtc" />
+    </div>
+    <div class="col-md-6">
+        <label class="form-label" asp-for="ClosesAtUtc">@T("Closes at (UTC)", "يغلق في (بالتوقيت العالمي)")</label>
+        <input class="form-control" type="datetime-local" asp-for="ClosesAtUtc" />
+        <span class="text-danger small" asp-validation-for="ClosesAtUtc"></span>
+    </div>
+</div>
+
+<div class="text-danger small mt-3" asp-validation-summary="ModelOnly"></div>

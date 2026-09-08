@@ -1,4 +1,5 @@
 using GharsPlatform.Data;
+using GharsPlatform.Helpers;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
 using Microsoft.AspNetCore.Authorization;
@@ -30,8 +31,8 @@ public class DashboardController : Controller
         var selectedSeasonId = seasonId ?? activeSeason?.Id;
 
         var seasons = await _db.Seasons.OrderByDescending(x => x.StartDate).ToListAsync();
-        var clubs = await _db.Organizations.Where(x => x.OrganizationType == OrganizationType.Club || x.OrganizationType == OrganizationType.PrivateAcademy).OrderBy(x => x.NameEn).ToListAsync();
-        var partners = await _db.Organizations.Where(x => x.OrganizationType == OrganizationType.GovernmentAuthority || x.OrganizationType == OrganizationType.OtherPartner).OrderBy(x => x.NameEn).ToListAsync();
+        var clubs = await _db.Organizations.ApprovedClubsAndAcademies().ToListAsync();
+        var partners = await _db.Organizations.ApprovedPartners().ToListAsync();
 
         IQueryable<Activity> activities = _db.Activities.Include(x => x.PartnerOrganization).Include(x => x.Season);
         if (selectedSeasonId.HasValue) activities = activities.Where(x => x.SeasonId == selectedSeasonId.Value);
@@ -81,11 +82,11 @@ public class DashboardController : Controller
         if (fromDate.HasValue) library = library.Where(x => x.PublicationDate == null || x.PublicationDate >= fromDate.Value);
         if (toDate.HasValue) library = library.Where(x => x.PublicationDate == null || x.PublicationDate < toDate.Value);
 
-        var totalClubs = await _db.Organizations.CountAsync(x => x.OrganizationType == OrganizationType.Club || x.OrganizationType == OrganizationType.PrivateAcademy);
+        var totalClubs = await _db.Organizations.CountAsync(GharsOrganizations.IsApprovedClubOrAcademy);
         var coveredClubIds = await agenda.Select(x => x.OrganizationId).Distinct().ToListAsync();
         var programCoverage = totalClubs == 0 ? 0 : Math.Round((decimal)coveredClubIds.Count / totalClubs * 100, 1);
 
-        var totalPartners = await _db.Organizations.CountAsync(x => x.OrganizationType == OrganizationType.GovernmentAuthority || x.OrganizationType == OrganizationType.OtherPartner);
+        var totalPartners = await _db.Organizations.CountAsync(GharsOrganizations.IsApprovedPartner);
         var totalPrograms = await activities.CountAsync();
         var totalBookings = await bookings.CountAsync();
         var pendingApprovals = await bookings.CountAsync(x => x.Status == BookingStatus.Pending || x.Status == BookingStatus.PendingPartnerApproval || x.Status == BookingStatus.PartnerProposedNewTime)
@@ -107,13 +108,24 @@ public class DashboardController : Controller
 
         var approvedKpis = await kpis.Where(x => x.Status == KpiSubmissionStatus.Approved).ToListAsync();
 
-        // Official satisfaction comes ONLY from approved club submissions (backed by the official survey
-        // report). The internal Ghars survey star rating is reported separately and must never stand in
-        // for the official KPI value - with no approved data the tile shows "No Data", not the internal
-        // score, which measures different respondents against a different instrument.
-        var starValues = await _db.SurveyAnswers.Where(x => x.StarsValue != null).Select(x => (int)x.StarsValue!).ToListAsync();
-        decimal? internalStarScore = starValues.Count == 0 ? null : Math.Round((decimal)starValues.Average() / 5 * 100, 1);
-        decimal? satisfactionScore = approvedKpis.Count == 0 ? null : Math.Round(approvedKpis.Average(x => x.SatisfactionRate), 1);
+        // Official satisfaction comes from the one shared calculator: the native official survey for the
+        // selected season once it has enough responses, and the approved club-submitted average until
+        // then. Computing it here instead would let this tile drift away from the KPI screen, the
+        // reports and the annual report, all of which read the same function.
+        var satisfaction = await SatisfactionCalculator.ForSeasonAsync(_db, selectedSeasonId);
+        decimal? satisfactionScore = satisfaction.Percent;
+        ViewBag.SatisfactionSource = satisfaction;
+
+        // Activity surveys, reported separately. They measure different respondents against a different
+        // instrument, so they never stand in for the official figure.
+        var activityStars = await _db.SurveyAnswers
+            .Where(x => x.StarsValue != null
+                        && x.SurveyQuestion != null
+                        && x.SurveyQuestion.Survey != null
+                        && x.SurveyQuestion.Survey.Purpose == SurveyPurpose.General)
+            .Select(x => (int)x.StarsValue!)
+            .ToListAsync();
+        decimal? internalStarScore = SatisfactionCalculator.PercentFromStars(activityStars);
 
         decimal? avgPlayerParticipation = approvedKpis.Count == 0 ? null : Math.Round(approvedKpis.Average(x => x.PlayerParticipationRate), 1);
         decimal? avgEthics = approvedKpis.Count == 0 ? null : Math.Round(approvedKpis.Average(x => x.EthicalValuesAdherenceRate), 1);

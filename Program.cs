@@ -83,10 +83,11 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("RequireAdmin", p => p.RequireRole(RoleNames.SuperAdmin, RoleNames.DscAdmin));
 });
 
-// Rate limiting. The public contact form is the only anonymous POST in the application, so it is the
-// only endpoint that an unauthenticated caller can use to write rows; everything else is behind
-// Identity, which has its own lockout. Partitioned by client IP: 5 submissions per 10 minutes, no
-// queue — a rejected caller is told to wait rather than being held open.
+// Rate limiting. The contact form and the official satisfaction survey are the only anonymous POSTs
+// in the application, so they are the only endpoints an unauthenticated caller can use to write rows;
+// everything else is behind Identity, which has its own lockout. Both are partitioned by client IP,
+// with no queue — a rejected caller is told to wait rather than being held open. The partition key is
+// used in memory and never stored.
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -96,6 +97,19 @@ builder.Services.AddRateLimiter(options =>
         factory: _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 5,
+            Window = TimeSpan.FromMinutes(10),
+            QueueLimit = 0
+        }));
+
+    // Anonymous survey submissions. Set generously on purpose: a whole club sharing one venue's
+    // Wi-Fi arrives from a single address, and throttling genuine participants would cost more than
+    // the skew it prevents. The per-browser cookie guard handles ordinary double submission; this
+    // exists to stop a script, not a crowd.
+    options.AddPolicy("survey-response", context => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
             Window = TimeSpan.FromMinutes(10),
             QueueLimit = 0
         }));
@@ -131,6 +145,19 @@ if (args.Length > 0 && string.Equals(args[0], "reset-demo-passwords", StringComp
 {
     using var resetScope = app.Services.CreateScope();
     return await DbSeeder.ResetDevelopmentDemoPasswordsAsync(resetScope.ServiceProvider, app.Environment);
+}
+
+// Brings an existing development database in line with the approved Ghars organization roster.
+// Deliberately a command rather than a startup step: it prints the exact plan and changes nothing
+// without --commit, and it never deletes an organization. Refused outside Development.
+//   dotnet run -- reconcile-organizations [--commit]
+if (args.Length > 0 && string.Equals(args[0], "reconcile-organizations", StringComparison.OrdinalIgnoreCase))
+{
+    using var reconcileScope = app.Services.CreateScope();
+    return await OrganizationReconciler.RunAsync(
+        reconcileScope.ServiceProvider,
+        app.Environment,
+        commit: args.Contains("--commit"));
 }
 
 // Migrate and seed at startup. Structural data (roles, the active season) and the configured bootstrap

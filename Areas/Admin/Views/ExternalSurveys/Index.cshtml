@@ -4,15 +4,28 @@
 @{
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string e, string a) => ar ? a : e;
-    ViewData["Title"] = T("Official Surveys", "الاستبيانات الرسمية");
+    ViewData["Title"] = T("Legacy external surveys", "الاستبيانات الخارجية (سجل تاريخي)");
     ViewData["PageTitle"] = ViewData["Title"];
 }
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
     <div>
         <h1 class="h4 mb-0">@ViewData["Title"]</h1>
-        <div class="text-muted">@T("Publish the official survey link and the analysis report received from the Dubai Digital Authority.", "نشر رابط الاستبيان الرسمي والتقرير التحليلي الوارد من هيئة دبي الرقمية.")</div>
+        <div class="text-muted">@T("Historical records from before the official satisfaction survey moved into Ghars.", "سجلات تاريخية من قبل نقل استبيان الرضا الرسمي إلى داخل منصة غرس.")</div>
     </div>
-    <a class="btn btn-primary super-admin-action" asp-area="Admin" asp-controller="ExternalSurveys" asp-action="Create"><i class="bi bi-plus-lg"></i> @T("Add survey", "إضافة استبيان")</a>
+</div>
+
+@* No "add" action. Nothing new belongs here: the official participant satisfaction survey is native
+   now. These rows are kept because a published, externally analysed report is evidence of what
+   happened, and deleting it would erase that. *@
+<div class="alert alert-secondary d-flex gap-2 align-items-start">
+    <i class="bi bi-archive fs-5"></i>
+    <div>
+        <div class="fw-semibold">@T("This module is retained for historical records only.", "يُحتفظ بهذه الوحدة للسجلات التاريخية فقط.")</div>
+        <div class="small">
+            @T("The Ghars Program Participant Satisfaction Survey is now completed inside Ghars and is managed under Ghars Surveys. Existing rows and their published reports stay readable here, and KPI submissions that cite one keep the reference.", "يُستكمل استبيان قياس رضا المشاركين في برنامج غرس الآن داخل منصة غرس ويُدار من قسم استبيانات غرس. تبقى السجلات الحالية وتقاريرها المنشورة قابلة للاطلاع هنا، وتحتفظ إرسالات مؤشرات الأداء المرتبطة بها بالمرجع.")
+        </div>
+        <a class="btn btn-sm btn-primary mt-2" asp-area="Admin" asp-controller="Surveys" asp-action="Index">@T("Go to Ghars Surveys", "الانتقال إلى استبيانات غرس")</a>
+    </div>
 </div>
 
 <div class="card border-0 shadow-sm rounded-4">

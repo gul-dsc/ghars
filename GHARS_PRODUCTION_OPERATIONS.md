@@ -39,7 +39,7 @@ path. The bytes live on disk under `protected-uploads/`. The two are useless apa
 ├── kpi/          KPI supporting evidence uploaded by clubs
 ├── org/          Organization licences and supporting registration documents
 ├── programs/     Supporting documents attached to partner offerings
-└── surveys/      Official Program Survey analysed reports (PDF)
+└── surveys/      Legacy externally-analysed survey reports (PDF), historical only
 ```
 
 `<ContentRoot>` is the application's content root — the folder containing `GharsPlatform.dll` in a published
@@ -55,7 +55,7 @@ Defined in `Helpers/ProtectedFileStore.cs` (`RootFolderName`, category constants
 | `kpi/` | Club evidence for KPI submissions — medical aggregates, attendance records, participation reports | Organization-confidential; visible only to the owning club and DSC | **No.** Uploaded once by the club; there is no second copy |
 | `org/` | Licences and registration documents | Legal documents supporting an approval decision | **No** |
 | `programs/` | Programme outlines, brochures, session plans and trainer profiles attached to partner offerings | Visible to the owning entity and DSC while under review; readable by any signed-in user once the offering is approved and published. Never anonymous | **No.** Uploaded once by the implementing entity |
-| `surveys/` | Analysed official survey reports | Public *only after* DSC publishes them; confidential while under review | Possibly from the external authority, but not on any defined timeline |
+| `surveys/` | Analysed reports from the **legacy** externally-run surveys. No new file is written here: the official satisfaction survey is native, and its responses live in the database | Public *only after* DSC publishes them; confidential while under review | **No.** The external providers are no longer engaged, so a lost report is gone |
 
 None of this content is reproducible by the platform. Losing it means asking every club to re-upload
 evidence for approvals that have already been granted — and the evidence for an approval that has already

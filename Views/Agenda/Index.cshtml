@@ -49,10 +49,21 @@
         <td>@(x.Media?.Count ?? 0)</td>
         <td><span class="badge @StatusClass(x.Status)">@StatusText(x.Status)</span></td>
         <td class="text-end">
-            @if(x.Status != AgendaEntryStatus.Approved)
-            {
-                <a class="btn btn-sm btn-outline-primary" href="/agenda/edit/@x.Id">@(x.Status==AgendaEntryStatus.Draft?T("Complete & submit","استكمال وإرسال"):T("Edit","تعديل"))</a>
-            }
+            <div class="d-flex gap-1 justify-content-end flex-wrap">
+                @if(x.Status != AgendaEntryStatus.Approved)
+                {
+                    <a class="btn btn-sm btn-outline-primary" href="/agenda/edit/@x.Id">@(x.Status==AgendaEntryStatus.Draft?T("Complete & submit","استكمال وإرسال"):T("Edit","تعديل"))</a>
+                }
+                @* Once an activity has been delivered, the club hands participants the satisfaction
+                   survey. The link carries only this entry's id; the club it counts towards comes from
+                   the entry itself, never from the URL. *@
+                @if(x.Status == AgendaEntryStatus.Submitted || x.Status == AgendaEntryStatus.Approved)
+                {
+                    <a class="btn btn-sm btn-outline-success" href="/surveys/distribute/@x.Id">
+                        <i class="bi bi-qr-code me-1"></i>@T("Survey link","رابط الاستبيان")
+                    </a>
+                }
+            </div>
         </td>
     </tr>
 }

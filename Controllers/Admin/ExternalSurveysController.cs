@@ -11,10 +11,16 @@ using System.Globalization;
 namespace GharsPlatform.Controllers.Admin;
 
 /// <summary>
-/// Official Ghars survey administration: DSC staff publish the survey link provided by the
-/// Dubai Digital Authority and, once the authority returns its analysis, upload and publish the
-/// PDF report alongside it. The internal Ghars survey engine remains available separately.
+/// LEGACY. Administration of surveys that were run on an external platform, with an analysed PDF
+/// report published afterwards.
 /// </summary>
+/// <remarks>
+/// The official participant satisfaction survey is native now — see
+/// <see cref="SurveysController"/> and <see cref="Models.Core.SurveyPurpose.OfficialSatisfaction"/>.
+/// This controller is retained so historical rows and their published reports stay readable, and so a
+/// KPI submission that cites one still resolves. Nothing new is created here: the Create action and
+/// its view have been removed, not merely hidden, so the route cannot be reached by typing it either.
+/// </remarks>
 [Area("Admin")]
 [Authorize(Roles = $"{RoleNames.SuperAdmin},{RoleNames.DscAdmin}")]
 public class ExternalSurveysController : Controllers.BaseController
@@ -36,52 +42,10 @@ public class ExternalSurveysController : Controllers.BaseController
         return View(list);
     }
 
-    public async Task<IActionResult> Create()
-    {
-        await LoadLookupsAsync();
-        var activeSeason = await Db.Seasons.Where(x => x.IsActive).OrderByDescending(x => x.StartDate).FirstOrDefaultAsync();
-        return View(new ExternalSurveyVm { IsActive = true, SeasonId = activeSeason?.Id });
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(ExternalSurveyVm vm)
-    {
-        await LoadLookupsAsync();
-        ValidateUrlAndReport(vm);
-        if (!ModelState.IsValid) return View(vm);
-
-        var entity = new ExternalSurvey
-        {
-            TitleEn = vm.TitleEn.Trim(),
-            TitleAr = vm.TitleAr.Trim(),
-            DescriptionEn = vm.DescriptionEn?.Trim(),
-            DescriptionAr = vm.DescriptionAr?.Trim(),
-            ExternalUrl = vm.ExternalUrl.Trim(),
-            SeasonId = vm.SeasonId,
-            IsActive = vm.IsActive,
-            StartsAtUtc = vm.StartsAtUtc,
-            EndsAtUtc = vm.EndsAtUtc,
-            CreatedAtUtc = DateTime.UtcNow,
-            CreatedByUserId = CurrentUserId
-        };
-
-        if (vm.ReportPdf is { Length: > 0 })
-        {
-            // Analysis reports are CONDITIONAL: stored outside wwwroot and released through
-            // /protected-files/survey-report/{id} only once DSC publishes them.
-            entity.ReportPdfPath = await ProtectedFileStore.SaveAsync(vm.ReportPdf, _env, ProtectedFileStore.SurveyReports);
-            entity.IsReportPublished = vm.IsReportPublished;
-            entity.ReportPublishedAtUtc = vm.IsReportPublished ? DateTime.UtcNow : null;
-        }
-
-        Db.ExternalSurveys.Add(entity);
-        await Db.SaveChangesAsync();
-        await AuditAsync("Create", nameof(ExternalSurvey), entity.Id.ToString(), null, new { entity.TitleEn, entity.ExternalUrl, entity.IsActive });
-
-        TempData["ToastSuccess"] = IsAr() ? "تم إنشاء الاستبيان الرسمي." : "Official survey created.";
-        return RedirectToAction(nameof(Index));
-    }
+    // There is deliberately no Create action. The official participant satisfaction survey is native,
+    // so a new external survey has nothing to be: it would appear to participants nowhere, feed no
+    // indicator, and only invite the assumption that the old workflow is still live. Editing an
+    // existing row remains available so a historical record can be corrected or its report published.
 
     public async Task<IActionResult> Edit(int id)
     {

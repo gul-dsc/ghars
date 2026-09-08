@@ -1,51 +1,253 @@
 @model GharsPlatform.Models.Core.Survey
+@using GharsPlatform.Models.Core
+@using GharsPlatform.Controllers.Admin
+@using System.Globalization
 @{
-    ViewData["Title"] = "Survey Results";
-    ViewData["PageTitle"] = "Survey Results";
-    var responses = ViewBag.Responses as List<GharsPlatform.Models.Core.SurveyResponse> ?? new();
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Survey results", "نتائج الاستبيان");
+    ViewData["PageTitle"] = ViewData["Title"];
+
+    var breakdown = ViewBag.Breakdown as List<SurveysController.QuestionBreakdown> ?? new();
+    var byClub = ViewBag.ByClub as List<SurveysController.ClubResultRow> ?? new();
+    var clubs = ViewBag.Clubs as List<Organization> ?? new();
+    var total = ViewBag.TotalResponses as int? ?? 0;
+    var anonymous = ViewBag.AnonymousResponses as int? ?? 0;
+    var percent = ViewBag.SatisfactionPercent as decimal?;
+    var minimum = ViewBag.MinimumResponses as int? ?? 0;
+    var selectedClub = ViewBag.OrganizationId as int?;
+    var official = Model.Purpose == SurveyPurpose.OfficialSatisfaction;
+
+    var starCharts = breakdown
+        .Where(b => b.Question.QuestionType == SurveyQuestionType.Stars || b.Question.QuestionType == SurveyQuestionType.YesNo || b.Question.QuestionType == SurveyQuestionType.Mcq)
+        .ToList();
 }
-<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Surveys"><i class="bi bi-arrow-left"></i> Back</a>
-    <div class="small text-muted">Total: @ViewBag.TotalResponses • Avg Stars: @String.Format("{0:0.0}", ViewBag.AvgStars)</div>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+    <div>
+        <h1 class="h4 mb-1">@(ar ? Model.TitleAr : Model.TitleEn)</h1>
+        <div class="text-muted">
+            @if (official)
+            {
+                <span class="badge text-bg-primary me-1">@T("Official", "رسمي")</span>
+                @(ar ? Model.Season?.TitleAr : Model.Season?.TitleEn)
+            }
+            else
+            {
+                @(ar ? (Model.Activity?.TitleAr ?? Model.Activity?.TitleEn) : (Model.Activity?.TitleEn ?? Model.Activity?.TitleAr))
+            }
+        </div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-outline-secondary" asp-action="Index">@T("Back", "رجوع")</a>
+        <a class="btn btn-outline-primary" asp-action="Questions" asp-route-id="@Model.Id">@T("Questions", "الأسئلة")</a>
+    </div>
 </div>
 
-<div class="card border-0 shadow-sm rounded-4">
-    <div class="card-body">
-        <h5 class="mb-1">@Model.TitleEn</h5>
-        <div class="text-muted">@Model.Activity?.TitleEn</div>
-
-        <hr />
-
-        <div class="table-responsive">
-            <table class="table table-sm align-middle">
-                <thead>
-                    <tr>
-                        <th>Submitted</th>
-                        <th>UserId</th>
-                        <th>Answers</th>
-                    </tr>
-                </thead>
-                <tbody>
-                @foreach (var r in responses)
-                {
-                    <tr>
-                        <td>@r.SubmittedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
-                        <td class="text-truncate" style="max-width:220px;">@r.UserId</td>
-                        <td class="small">
-                            @foreach (var a in r.Answers)
-                            {
-                                <div>
-                                    <strong>@a.SurveyQuestionId:</strong>
-                                    @if (a.StarsValue != null) { @($"{a.StarsValue}★") }
-                                    else if (a.BoolValue != null) { @(a.BoolValue.Value ? "Yes" : "No") }
-                                    else { @a.TextValue }
-                                </div>
-                            }
-                        </td>
-                    </tr>
-                }
-                </tbody>
-            </table>
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card h-100">
+            <div class="text-muted small">@T("Total responses", "إجمالي الاستجابات")</div>
+            <div class="h3 mb-0">@total</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card h-100">
+            <div class="text-muted small">@T("Anonymous", "مجهولة الهوية")</div>
+            <div class="h3 mb-0">@anonymous</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card h-100">
+            <div class="text-muted small">@T("Satisfaction", "نسبة الرضا")</div>
+            <div class="h3 mb-0">@(percent.HasValue ? $"{percent.Value:0.#}%" : T("No data", "لا توجد بيانات"))</div>
+            <div class="small text-muted">@T("Mean of 1-5 ratings ÷ 5 × 100", "متوسط التقييمات من ١ إلى ٥ ÷ ٥ × ١٠٠")</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card h-100">
+            <div class="text-muted small">@T("Average rating", "متوسط التقييم")</div>
+            <div class="h3 mb-0">@(((double)(ViewBag.AvgStars ?? 0d)).ToString("0.00"))<span class="fs-6 text-muted"> / 5</span></div>
         </div>
     </div>
 </div>
+
+@if (official)
+{
+    <div class="alert @(total >= minimum ? "alert-success" : "alert-secondary") d-flex gap-2 align-items-start">
+        <i class="bi @(total >= minimum ? "bi-check-circle" : "bi-info-circle") fs-5"></i>
+        <div>
+            @if (total >= minimum)
+            {
+                <div class="fw-semibold">@T("This survey is the season's official satisfaction figure.", "هذا الاستبيان هو مصدر نسبة الرضا الرسمية للموسم.")</div>
+                <div class="small">@T("Dashboards, KPI screens and the annual report all read this percentage.", "تقرأ لوحات المعلومات وشاشات مؤشرات الأداء والتقرير السنوي هذه النسبة.")</div>
+            }
+            else
+            {
+                <div class="fw-semibold">@string.Format(T("{0} of {1} responses collected.", "تم جمع {0} من {1} استجابة."), total, minimum)</div>
+                <div class="small">@T("Until the minimum is reached, the satisfaction indicator continues to use the approved club-submitted average. Responses are still being recorded.", "حتى بلوغ الحد الأدنى، يستمر مؤشر الرضا في استخدام متوسط إدخالات الأندية المعتمدة. ولا تزال الاستجابات تُسجّل.")</div>
+            }
+        </div>
+    </div>
+}
+
+@if (clubs.Any())
+{
+    <form method="get" class="row g-2 align-items-end mb-3">
+        <input type="hidden" name="id" value="@Model.Id" />
+        <div class="col-md-4">
+            <label class="form-label small" for="organizationId">@T("Filter by club", "تصفية حسب النادي")</label>
+            <select class="form-select" id="organizationId" name="organizationId" onchange="this.form.submit()">
+                <option value="">@T("All clubs", "جميع الأندية")</option>
+                @foreach (var c in clubs)
+                {
+                    <option value="@c.Id" selected="@(selectedClub == c.Id)">@(ar ? c.NameAr : c.NameEn)</option>
+                }
+            </select>
+        </div>
+        @if (selectedClub.HasValue)
+        {
+            <div class="col-md-3"><a class="btn btn-outline-secondary" asp-action="Results" asp-route-id="@Model.Id">@T("Clear filter", "إلغاء التصفية")</a></div>
+        }
+    </form>
+}
+
+@if (byClub.Any() && !selectedClub.HasValue)
+{
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body">
+            <h2 class="h6 mb-3">@T("By club", "حسب النادي")</h2>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>@T("Club", "النادي")</th>
+                            <th>@T("Responses", "الاستجابات")</th>
+                            <th>@T("Satisfaction", "نسبة الرضا")</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var row in byClub)
+                    {
+                        <tr>
+                            <td>@(ar ? row.NameAr : row.NameEn)</td>
+                            <td>@row.Responses</td>
+                            <td>@(row.Percent.HasValue ? $"{row.Percent.Value:0.#}%" : T("No data", "لا توجد بيانات"))</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+<h2 class="h6 text-uppercase text-muted mb-2">@T("Per question", "حسب السؤال")</h2>
+<div class="vstack gap-3">
+@foreach (var b in breakdown)
+{
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                <div class="fw-semibold">@(ar ? b.Question.QuestionAr : b.Question.QuestionEn)</div>
+                <span class="badge text-bg-light border">@b.AnswerCount @T("answers", "إجابة")</span>
+            </div>
+
+            @if (b.Question.QuestionType == SurveyQuestionType.Stars)
+            {
+                <div class="text-muted small mb-2">
+                    @T("Average", "المتوسط"): <strong>@(b.Average?.ToString("0.00") ?? T("No data", "لا توجد بيانات"))</strong> / 5
+                    @if (b.Percent.HasValue) { <span> · @b.Percent.Value.ToString("0.#")%</span> }
+                </div>
+            }
+            else if (b.Question.QuestionType == SurveyQuestionType.YesNo && b.Percent.HasValue)
+            {
+                <div class="text-muted small mb-2">@T("Yes", "نعم"): <strong>@b.Percent.Value.ToString("0.#")%</strong></div>
+            }
+
+            @if (b.Distribution.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr><th>@T("Answer", "الإجابة")</th><th style="width:120px;">@T("Count", "العدد")</th><th style="width:120px;">@T("Share", "النسبة")</th></tr>
+                        </thead>
+                        <tbody>
+                        @{ var totalForQ = b.Distribution.Sum(d => d.Count); }
+                        @foreach (var d in b.Distribution)
+                        {
+                            <tr>
+                                <td>@(ar ? d.LabelAr : d.LabelEn)</td>
+                                <td>@d.Count</td>
+                                <td>@(totalForQ == 0 ? "-" : $"{(decimal)d.Count / totalForQ * 100:0.#}%")</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (b.Comments.Any())
+            {
+                <ul class="list-group list-group-flush mt-2">
+                    @foreach (var comment in b.Comments)
+                    {
+                        <li class="list-group-item px-0 small">@comment</li>
+                    }
+                </ul>
+            }
+            else if (b.Question.QuestionType == SurveyQuestionType.Text)
+            {
+                <div class="text-muted small">@T("No written comments.", "لا توجد ملاحظات مكتوبة.")</div>
+            }
+        </div>
+    </div>
+}
+@if (!breakdown.Any())
+{
+    <div class="alert alert-secondary mb-0">@T("This survey has no questions.", "لا توجد أسئلة في هذا الاستبيان.")</div>
+}
+</div>
+
+@if (starCharts.Any(c => c.Distribution.Sum(d => d.Count) > 0))
+{
+    <div class="card border-0 shadow-sm rounded-4 mt-4">
+        <div class="card-body">
+            <h2 class="h6 mb-3">@T("Answer distribution", "توزيع الإجابات")</h2>
+            <div class="row g-4">
+            @for (var i = 0; i < starCharts.Count; i++)
+            {
+                var c = starCharts[i];
+                if (c.Distribution.Sum(d => d.Count) == 0) { continue; }
+                <div class="col-md-6">
+                    <div class="small fw-semibold mb-2">@(ar ? c.Question.QuestionAr : c.Question.QuestionEn)</div>
+                    <canvas id="surveyChart_@i" height="180"
+                            data-labels="@System.Text.Json.JsonSerializer.Serialize(c.Distribution.Select(d => ar ? d.LabelAr : d.LabelEn))"
+                            data-values="@System.Text.Json.JsonSerializer.Serialize(c.Distribution.Select(d => d.Count))"></canvas>
+                </div>
+            }
+            </div>
+        </div>
+    </div>
+}
+
+@* Top level: Razor sections cannot be declared inside a conditional block. The script is a no-op
+   when no canvas was rendered. *@
+@section Scripts {
+<script>
+    document.querySelectorAll('canvas[id^="surveyChart_"]').forEach(function (canvas) {
+        new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: JSON.parse(canvas.dataset.labels),
+                datasets: [{ label: '@T("Responses", "الاستجابات")', data: JSON.parse(canvas.dataset.values) }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+            }
+        });
+    });
+</script>
+}

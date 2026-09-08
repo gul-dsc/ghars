@@ -1,4 +1,5 @@
 using GharsPlatform.Data;
+using GharsPlatform.Helpers;
 using GharsPlatform.Hubs;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
@@ -37,7 +38,7 @@ public class KpiController : Controllers.BaseController
         if (clubId.HasValue) q = q.Where(x => x.OrganizationId == clubId);
 
         ViewBag.Seasons = await Db.Seasons.OrderByDescending(x => x.StartDate).ToListAsync();
-        ViewBag.Clubs = await Db.Organizations.Where(x => x.OrganizationType == OrganizationType.Club || x.OrganizationType == OrganizationType.PrivateAcademy).OrderBy(x => x.NameEn).ToListAsync();
+        ViewBag.Clubs = await Db.Organizations.ApprovedClubsAndAcademies().ToListAsync();
         ViewBag.SelectedStatus = status; ViewBag.SelectedSeasonId = seasonId; ViewBag.SelectedClubId = clubId;
         return View(await q.OrderByDescending(x => x.Id).Take(300).ToListAsync());
     }
@@ -51,13 +52,12 @@ public class KpiController : Controllers.BaseController
             .FirstOrDefaultAsync(x => x.Id == id);
         if (e is null) return NotFound();
 
-        // Official Program Surveys the reviewer may cite as evidence for the satisfaction figure: active
-        // surveys for this submission's season, plus programme-wide surveys that carry no season.
-        // Internal Ghars surveys are deliberately absent - they are not an official satisfaction source.
-        ViewBag.SatisfactionSurveys = await Db.ExternalSurveys
-            .Where(x => x.IsActive && (x.SeasonId == null || x.SeasonId == e.SeasonId))
-            .OrderByDescending(x => x.Id)
-            .ToListAsync();
+        // The satisfaction figure for this season, from the native official survey where it has enough
+        // responses and from approved club submissions otherwise. Shown to the reviewer as context;
+        // it never alters the submitted SatisfactionRate.
+        ViewBag.SeasonSatisfaction = await SatisfactionCalculator.ForSeasonAsync(Db, e.SeasonId);
+        ViewBag.NativeSatisfaction = await SatisfactionCalculator.FromOfficialSurveyAsync(Db, e.SeasonId);
+        ViewBag.MinimumResponses = SatisfactionCalculator.MinimumResponses;
 
         // Previous season submission for the same club drives the violations-reduction KPI.
         var currentSeason = await Db.Seasons.FirstOrDefaultAsync(x => x.Id == e.SeasonId);
@@ -81,7 +81,7 @@ public class KpiController : Controllers.BaseController
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Review(int id, KpiSubmissionStatus status, string? notes, int? satisfactionExternalSurveyId)
+    public async Task<IActionResult> Review(int id, KpiSubmissionStatus status, string? notes)
     {
         var e = await Db.KpiSubmissions.Include(x => x.Organization).FirstOrDefaultAsync(x => x.Id == id);
         if (e is null) return NotFound();
@@ -92,35 +92,18 @@ public class KpiController : Controllers.BaseController
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        // The reviewer records which Official Program Survey supports the satisfaction figure. This is
-        // evidence lineage only: SatisfactionRate itself stays exactly as the club submitted it, so
-        // attaching or detaching a report can never move an approved KPI value.
-        int? resolvedSurveyId = null;
-        if (satisfactionExternalSurveyId.HasValue)
-        {
-            var valid = await Db.ExternalSurveys.AnyAsync(x =>
-                x.Id == satisfactionExternalSurveyId.Value &&
-                x.IsActive &&
-                (x.SeasonId == null || x.SeasonId == e.SeasonId));
-
-            if (!valid)
-            {
-                TempData["ToastWarning"] = IsAr()
-                    ? "الاستبيان الرسمي المحدد غير صالح لهذا الموسم؛ لم يتم تغيير الربط."
-                    : "The selected official survey is not valid for this season; the link was left unchanged.";
-                return RedirectToAction(nameof(Details), new { id });
-            }
-            resolvedSurveyId = satisfactionExternalSurveyId.Value;
-        }
-
-        var old = new { e.Status, e.ReviewNotes, e.SatisfactionExternalSurveyId };
+        // SatisfactionExternalSurveyId is deliberately NOT written here any more. The official
+        // satisfaction survey is native now (see SatisfactionCalculator), so no new submission is ever
+        // linked to a third-party survey — and the links historical submissions already carry are left
+        // exactly as they are, because they record what evidence supported a figure DSC approved at
+        // the time. Reviewing an old submission again must not erase that.
+        var old = new { e.Status, e.ReviewNotes };
         e.Status = status;
         e.ReviewNotes = notes;
-        e.SatisfactionExternalSurveyId = resolvedSurveyId;
         e.ReviewedAtUtc = DateTime.UtcNow;
         e.ReviewedByUserId = CurrentUserId;
         await Db.SaveChangesAsync();
-        await AuditAsync("KpiReviewed", nameof(KpiSubmission), id.ToString(), old, new { e.Status, e.ReviewNotes, e.SatisfactionExternalSurveyId });
+        await AuditAsync("KpiReviewed", nameof(KpiSubmission), id.ToString(), old, new { e.Status, e.ReviewNotes });
 
         var (titleEn, titleAr, messageEn, messageAr) = status switch
         {

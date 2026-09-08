@@ -1,0 +1,34 @@
+@model GharsPlatform.Models.Core.Survey
+@using System.Globalization
+@{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Thank you", "شكراً لك");
+}
+
+<div class="row justify-content-center">
+    <div class="col-lg-7 col-xl-6">
+        <div class="card shadow-sm border-0 rounded-4 text-center">
+            <div class="card-body p-4 p-md-5">
+                <img src="~/img/brand/ghars-logo.png" alt="@T("Ghars Program", "برنامج غرس")" style="height:64px;width:auto;" class="mb-4" />
+
+                <div class="display-6 text-success mb-3" aria-hidden="true"><i class="bi bi-check-circle-fill"></i></div>
+
+                <h1 class="h3 mb-2">@T("Thank you!", "شكراً لك!")</h1>
+                <p class="text-muted mb-4">
+                    @T("Your feedback has been submitted and recorded in the Ghars platform.", "تم إرسال ملاحظاتك وتسجيلها في منصة غرس.")
+                </p>
+
+                <div class="text-muted small mb-4">
+                    <div class="fw-semibold">@(ar ? Model.TitleAr : Model.TitleEn)</div>
+                    @if (Model.Season != null)
+                    {
+                        <div>@(ar ? Model.Season.TitleAr : Model.Season.TitleEn)</div>
+                    }
+                </div>
+
+                <a class="btn btn-outline-primary" href="~/">@T("Go to the Ghars home page", "الانتقال إلى الصفحة الرئيسية لغرس")</a>
+            </div>
+        </div>
+    </div>
+</div>

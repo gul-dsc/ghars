@@ -77,7 +77,7 @@ public class GalleryController : Controller
             .ToDictionary(g => g.Key, g => g.Count());
         ViewBag.SelectedCategory = selected;
         ViewBag.Seasons = await _db.Seasons.OrderByDescending(x => x.StartDate).ToListAsync();
-        ViewBag.Clubs = await _db.Organizations.Where(x => x.OrganizationType == OrganizationType.Club).OrderBy(x => x.NameEn).ToListAsync();
+        ViewBag.Clubs = await _db.Organizations.ApprovedClubs().ToListAsync();
         ViewBag.SelectedSeasonId = seasonId; ViewBag.SelectedClubId = clubId;
         ViewBag.From = from?.ToString("yyyy-MM-dd"); ViewBag.To = to?.ToString("yyyy-MM-dd");
         ViewBag.CanContribute = User.IsInRole(RoleNames.ClubAdmin);

@@ -9,7 +9,19 @@ public enum KpiSource : byte
 {
     SystemDerived = 1,
     ClubSubmitted = 2,
-    ExternalApproved = 3
+
+    /// <summary>
+    /// LEGACY. An instrument run and analysed outside Ghars. No indicator uses this any more; it is
+    /// kept so historical records and any stored value still resolve to a label.
+    /// </summary>
+    ExternalApproved = 3,
+
+    /// <summary>
+    /// Computed from responses to the official Ghars participant satisfaction survey, collected inside
+    /// the platform. Falls back to the approved club-submitted average until a season has enough
+    /// responses — see <see cref="Helpers.SatisfactionCalculator"/>.
+    /// </summary>
+    OfficialSurvey = 4
 }
 
 public sealed record KpiDefinition(
@@ -87,9 +99,9 @@ public static class GharsKpiCatalog
 
     public static readonly KpiDefinition Satisfaction = new(
         "Satisfaction", "Participant Satisfaction / Happiness", "رضا وسعادة المشاركين", "%", 85m, "≥ 85%", true,
-        KpiSource.ExternalApproved,
-        "Results of the official participant satisfaction survey (analyzed report)",
-        "نتائج استبيان رضا المشاركين الرسمي (التقرير التحليلي المعتمد)");
+        KpiSource.OfficialSurvey,
+        "Mean of the 1-5 ratings in the official Ghars participant satisfaction survey ÷ 5 × 100",
+        "متوسط التقييمات من ١ إلى ٥ في استبيان رضا المشاركين الرسمي لغرس ÷ ٥ × ١٠٠");
 
     public static readonly IReadOnlyList<KpiDefinition> All = new[]
     {
@@ -107,7 +119,8 @@ public static class GharsKpiCatalog
     public static string SourceLabel(KpiSource source, bool ar) => source switch
     {
         KpiSource.SystemDerived => ar ? "محتسب آلياً من بيانات المنصة" : "System Calculated",
-        KpiSource.ExternalApproved => ar ? "الاستبيان الرسمي للبرنامج / اعتماد مجلس دبي الرياضي" : "Official Program Survey / DSC Approved",
+        KpiSource.OfficialSurvey => ar ? "الاستبيان الرسمي لرضا المشاركين داخل غرس" : "Official Ghars Satisfaction Survey",
+        KpiSource.ExternalApproved => ar ? "مصدر خارجي (سجل تاريخي)" : "External source (historical)",
         _ => ar ? "إدخال النادي / اعتماد مجلس دبي الرياضي" : "Club Submitted / DSC Approved"
     };
 

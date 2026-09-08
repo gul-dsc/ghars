@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using GharsPlatform.Helpers;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -337,82 +339,50 @@ public static class DbSeeder
         return user;
     }
 
+    /// <summary>
+    /// Creates the approved Ghars organizations from <see cref="GharsMasterData"/>.
+    /// </summary>
+    /// <remarks>
+    /// A brand-new development database gets exactly the approved roster — the 7 clubs, the 17
+    /// implementing entities and Dubai Sports Council — and nothing else. Organizations outside the
+    /// roster are never created here, so a fresh database cannot reintroduce the ones an existing
+    /// database had deactivated. Existing rows are matched by name and are only ever updated, never
+    /// duplicated under a spelling variant.
+    /// </remarks>
     private static async Task SeedOrganizationsAsync(AppDbContext db, ILogger logger)
     {
-        var governmentEntities = new (string En, string Ar, string OverviewEn, string OverviewAr, string Logo)[]
-        {
-            ("Community Development Authority", "هيئة تنمية المجتمع في دبي", "Community programs and youth development initiatives for Dubai society.", "برامج مجتمعية ومبادرات لتنمية الشباب في دبي.", "/img/partners/community-development-authority.svg"),
-            ("Digital Dubai", "هيئة دبي الرقمية", "Digital transformation, innovation, data and smart city learning programs.", "برامج في التحول الرقمي والابتكار والبيانات والمدينة الذكية.", "/img/partners/digital-dubai.svg"),
-            ("Dubai Academic Health Corporation", "مؤسسة دبي الصحية الأكاديمية", "Health awareness, wellbeing and academic development programs.", "برامج التوعية الصحية والرفاه والتطوير الأكاديمي.", "/img/partners/dubai-academic-health-corporation.svg"),
-            ("Dubai Civil Defence", "الإدارة العامة للدفاع المدني – دبي", "Safety, emergency readiness and prevention awareness programs.", "برامج السلامة والاستعداد للطوارئ والتوعية الوقائية.", "/img/partners/dubai-civil-defence.svg"),
-            ("Dubai Corporation for Ambulance Services", "مؤسسة دبي لخدمات الإسعاف", "First aid, response readiness and community health training.", "التدريب على الإسعافات الأولية والجاهزية والاستجابة الصحية المجتمعية.", "/img/partners/dubai-ambulance.svg"),
-            ("Dubai Courts", "محاكم دبي", "Legal awareness, civic responsibility and institutional values programs.", "برامج الوعي القانوني والمسؤولية المجتمعية والقيم المؤسسية.", "/img/partners/dubai-courts.svg"),
-            ("Dubai Culture", "هيئة الثقافة والفنون في دبي", "Culture, heritage, creativity and identity learning experiences.", "تجارب تعليمية في الثقافة والتراث والإبداع والهوية.", "/img/partners/dubai-culture.svg"),
-            ("Dubai Customs", "دائرة جمارك دبي", "Trade awareness, compliance and economic security programs.", "برامج التوعية التجارية والامتثال والأمن الاقتصادي.", "/img/partners/dubai-customs.svg"),
-            ("Dubai Economy and Tourism", "دائرة الاقتصاد والسياحة بدبي", "Entrepreneurship, tourism culture and economic awareness programs.", "برامج ريادة الأعمال والثقافة السياحية والوعي الاقتصادي.", "/img/partners/dubai-economy-tourism.svg"),
-            ("Dubai Electricity and Water Authority", "هيئة كهرباء ومياه دبي", "Sustainability, energy, water and climate awareness programs.", "برامج الاستدامة والطاقة والمياه والتوعية المناخية.", "/img/partners/dewa.svg"),
-            ("Dubai Health Authority", "هيئة الصحة في دبي والمؤسسات التابعة لها", "Wellbeing, preventive health and sports culture learning programs.", "برامج الرفاه والصحة الوقائية والثقافة الرياضية.", "/img/partners/dha.svg"),
-            // The Arabic name here was half-untranslated ("دبي Islamic Economy Development Centre").
-            // Entities are matched on NameEn, so correcting it affects newly seeded databases only —
-            // existing rows keep whatever they hold and no duplicate is created.
-            ("Dubai Islamic Economy Development Centre", "مركز دبي لتطوير الاقتصاد الإسلامي", "Ethics, values and Islamic economy awareness programs.", "برامج القيم والأخلاقيات والتوعية بالاقتصاد الإسلامي.", "/img/partners/default-partner.svg"),
-            ("Dubai Judicial Institute", "معهد دبي القضائي", "Legal culture and responsible citizenship learning initiatives.", "مبادرات تعليمية في الثقافة القانونية والمواطنة المسؤولة.", "/img/partners/default-partner.svg"),
-            ("Dubai Media Council", "مجلس دبي للإعلام", "Media literacy, responsible communication and creative content programs.", "برامج الثقافة الإعلامية والتواصل المسؤول والمحتوى الإبداعي.", "/img/partners/default-partner.svg"),
-            ("Dubai Media Incorporated", "مؤسسة دبي للإعلام", "Media production, storytelling and public communication programs.", "برامج الإنتاج الإعلامي والسرد والتواصل العام.", "/img/partners/default-partner.svg"),
-            ("Dubai Municipality", "بلدية دبي", "Environment, city services and community responsibility programs.", "برامج البيئة وخدمات المدينة والمسؤولية المجتمعية.", "/img/partners/default-partner.svg"),
-            ("Dubai Police", "القيادة العامة لشرطة دبي", "Safety, citizenship, prevention and community security awareness.", "برامج السلامة والمواطنة والوقاية والأمن المجتمعي.", "/img/partners/default-partner.svg"),
-            ("Dubai Public Prosecution", "النيابة العامة", "Legal awareness and social responsibility programs.", "برامج الوعي القانوني والمسؤولية الاجتماعية.", "/img/partners/default-partner.svg"),
-            ("Dubai Sports Council", "مجلس دبي الرياضي", "Sports values, culture and youth development programs.", "برامج القيم الرياضية والثقافة وتنمية الشباب.", "/img/partners/default-partner.svg"),
-            ("Dubai Statistics Center", "مركز دبي للإحصاء", "Data literacy, statistics and evidence-based decision programs.", "برامج الثقافة الإحصائية والبيانات واتخاذ القرار المبني على الأدلة.", "/img/partners/default-partner.svg"),
-            ("Dubai Women’s Establishment", "مؤسسة دبي للمرأة", "Leadership, empowerment and community development programs.", "برامج القيادة والتمكين والتنمية المجتمعية.", "/img/partners/default-partner.svg"),
-            ("Endowment And Minors' Trust Foundation", "مؤسسة الأوقاف وإدارة أموال القصَّر", "Social responsibility, endowment and community values programs.", "برامج المسؤولية المجتمعية والوقف والقيم المجتمعية.", "/img/partners/default-partner.svg"),
-            ("General Directorate of Residency and Foreigners Affairs-Dubai", "الإدارة العامة للإقامة وشؤون الأجانب - دبــــــي", "Identity, citizenship services and public awareness programs.", "برامج الهوية وخدمات المتعاملين والتوعية العامة.", "/img/partners/default-partner.svg"),
-            ("Hamdan Bin Mohammed Smart University", "جامعة حمدان بن محمد الذكية", "Smart learning, innovation and future skills programs.", "برامج التعلم الذكي والابتكار ومهارات المستقبل.", "/img/partners/default-partner.svg"),
-            ("Islamic Affairs and Charitable Activities", "دائرة الشؤون الإسلامية والعمل الخيري", "Values, giving, volunteering and social cohesion programs.", "برامج القيم والعطاء والتطوع والتلاحم المجتمعي.", "/img/partners/default-partner.svg"),
-            ("Knowledge and Human Development Authority", "هيئة المعرفة والتنمية البشرية", "Education, wellbeing and lifelong learning programs.", "برامج التعليم والرفاه والتعلم مدى الحياة.", "/img/partners/default-partner.svg"),
-            ("Mohammed Bin Rashid Space Centre", "مركز محمد بن راشد للفضاء", "Space science, exploration and future skills learning programs.", "برامج علوم الفضاء والاستكشاف ومهارات المستقبل.", "/img/partners/default-partner.svg"),
-            ("Roads and Transport Authority", "هيئة الطرق والمواصلات والمؤسسات التابعة لها", "Mobility, safety, sustainability and public service programs.", "برامج التنقل والسلامة والاستدامة والخدمة العامة.", "/img/partners/default-partner.svg"),
-            ("Hamdan Bin Mohammed Heritage Center", "مركز حمدان بن محمد لإحياء التراث", "Heritage, identity and national culture learning programs.", "برامج التراث والهوية والثقافة الوطنية.", "/img/partners/default-partner.svg")
-        };
-
-        var clubs = new (string En, string Ar)[]
-        {
-            ("Shabab Al Ahli Club", "نادي شباب الأهلي"),
-            ("Al Nasr Club", "نادي النصر"),
-            ("Al Wasl Club", "نادي الوصل"),
-            ("Hatta Club", "نادي حتا"),
-            ("Dubai Club for People of Determination", "نادي دبي لأصحاب الهمم"),
-            ("Dubai Chess & Culture Club", "نادي دبي للشطرنج والثقافة"),
-            ("Al Habtoor Polo Club", "نادي الحبتور للبولو")
-        };
-
         var sort = 1;
-        foreach (var item in governmentEntities)
+        foreach (var item in GharsMasterData.All())
         {
-            var org = await db.Organizations.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.NameEn == item.En);
+            var org = await db.Organizations.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.NameEn == item.NameEn);
             if (org is null)
             {
                 org = new Organization
                 {
-                    OrganizationType = OrganizationType.GovernmentAuthority,
-                    NameEn = item.En,
-                    NameAr = item.Ar,
-                    Email = MakeSeedEmail(item.En),
+                    OrganizationType = item.Type,
+                    NameEn = item.NameEn,
+                    NameAr = item.NameAr,
+                    Email = MakeSeedEmail(item.NameEn),
                     Phone = "0000000000",
                     AddressEn = "Dubai, United Arab Emirates",
                     AddressAr = "دبي، الإمارات العربية المتحدة",
                     Status = ApprovalStatus.Approved,
                     CreatedAtUtc = DateTime.UtcNow,
-                    Notes = "Seeded government entity"
+                    Notes = "Approved Ghars organization"
                 };
                 db.Organizations.Add(org);
                 await db.SaveChangesAsync();
             }
 
+            // The roster is authoritative for type, approval and logo. A row that drifted — a partner
+            // deactivated by hand, a logo left on a placeholder — is brought back in line here.
+            org.OrganizationType = item.Type;
+            org.NameAr = item.NameAr;
             org.Status = ApprovalStatus.Approved;
-            org.OrganizationType = OrganizationType.GovernmentAuthority;
-            org.LogoPath = string.IsNullOrWhiteSpace(org.LogoPath) ? item.Logo : org.LogoPath;
-            org.Notes = string.IsNullOrWhiteSpace(org.Notes) ? "Seeded government entity" : org.Notes;
+            org.IsDeleted = false;
+            org.LogoPath = item.LogoPath;
+
+            if (item.Type == OrganizationType.Club) continue;
 
             var profile = await db.PartnerProfiles.FirstOrDefaultAsync(x => x.OrganizationId == org.Id);
             if (profile is null)
@@ -420,55 +390,38 @@ public static class DbSeeder
                 db.PartnerProfiles.Add(new PartnerProfile
                 {
                     OrganizationId = org.Id,
-                    OverviewEn = item.OverviewEn,
-                    OverviewAr = item.OverviewAr,
-                    IsFeatured = sort <= 12,
+                    OverviewEn = item.OverviewEn ?? "",
+                    OverviewAr = item.OverviewAr ?? "",
+                    IsFeatured = true,
                     FeatureSortOrder = sort,
                     CreatedAtUtc = DateTime.UtcNow
                 });
             }
             else
             {
-                profile.OverviewEn = string.IsNullOrWhiteSpace(profile.OverviewEn) ? item.OverviewEn : profile.OverviewEn;
-                profile.OverviewAr = string.IsNullOrWhiteSpace(profile.OverviewAr) ? item.OverviewAr : profile.OverviewAr;
+                profile.OverviewEn = string.IsNullOrWhiteSpace(profile.OverviewEn) ? item.OverviewEn ?? "" : profile.OverviewEn;
+                profile.OverviewAr = string.IsNullOrWhiteSpace(profile.OverviewAr) ? item.OverviewAr ?? "" : profile.OverviewAr;
                 profile.IsFeatured = true;
                 profile.FeatureSortOrder = profile.FeatureSortOrder <= 0 ? sort : profile.FeatureSortOrder;
             }
             sort++;
         }
 
-        foreach (var item in clubs)
-        {
-            if (!await db.Organizations.IgnoreQueryFilters().AnyAsync(x => x.NameEn == item.En))
-            {
-                db.Organizations.Add(new Organization
-                {
-                    OrganizationType = OrganizationType.Club,
-                    NameEn = item.En,
-                    NameAr = item.Ar,
-                    Email = MakeSeedEmail(item.En),
-                    Phone = "0000000000",
-                    AddressEn = "Dubai, United Arab Emirates",
-                    AddressAr = "دبي، الإمارات العربية المتحدة",
-                    Status = ApprovalStatus.Approved,
-                    CreatedAtUtc = DateTime.UtcNow,
-                    Notes = "Seeded club"
-                });
-            }
-        }
-
         await db.SaveChangesAsync();
-        logger.LogInformation("Seed organizations and partner profiles completed.");
+        logger.LogInformation(
+            "Seeded the approved Ghars roster: {Clubs} clubs, {Partners} implementing entities and Dubai Sports Council.",
+            GharsMasterData.Clubs.Count, GharsMasterData.Partners.Count);
     }
+
 
     private static async Task SeedOrgUsersAndLearningProgramsAsync(AppDbContext db, UserManager<ApplicationUser> userManager, string? demoPassword, ILogger logger)
     {
         var season = await db.Seasons.OrderByDescending(x => x.IsActive).ThenByDescending(x => x.Id).FirstAsync();
 
-        var partnerOrganizations = await db.Organizations
-            .Where(x => x.OrganizationType == OrganizationType.GovernmentAuthority || x.OrganizationType == OrganizationType.OtherPartner)
-            .OrderBy(x => x.NameEn)
-            .ToListAsync();
+        // Approved implementing entities only. A partner admin account is never created for a
+        // deactivated or legacy organization: the account would sign in to a dashboard scoped to an
+        // entity no club can book, which is worse than having no account at all.
+        var partnerOrganizations = await db.Organizations.ApprovedPartners().ToListAsync();
 
         foreach (var org in partnerOrganizations)
         {
@@ -482,10 +435,7 @@ public static class DbSeeder
             await SeedProgramsForPartnerAsync(db, season.Id, org, user.Id);
         }
 
-        var clubs = await db.Organizations
-            .Where(x => x.OrganizationType == OrganizationType.Club)
-            .OrderBy(x => x.NameEn)
-            .ToListAsync();
+        var clubs = await db.Organizations.ApprovedClubs().ToListAsync();
 
         foreach (var club in clubs)
         {
@@ -525,9 +475,9 @@ public static class DbSeeder
         var baseDate = new DateTime(DateTime.UtcNow.Year, 5, 15, 10, 0, 0, DateTimeKind.Utc);
         var programs = org.NameEn switch
         {
-            "Digital Dubai" => new[]
+            "Ministry of Education" => new[]
             {
-                ("Ghars values course", "دورة قيم غرس", ActivityType.Course, 0, 35, "A focused course on digital values, responsible technology, and public service culture.", "دورة مركزة حول القيم الرقمية والتقنية المسؤولة وثقافة الخدمة العامة."),
+                ("Ghars values course", "دورة قيم غرس", ActivityType.Course, 0, 35, "A focused course on Ghars values, responsible behaviour, and public service culture.", "دورة مركزة حول قيم غرس والسلوك المسؤول وثقافة الخدمة العامة."),
                 ("Youth development training program", "برنامج تدريبي لتنمية الشباب", ActivityType.TrainingProgram, 6, 40, "Hands-on training in innovation, teamwork, and digital transformation skills.", "تدريب عملي في الابتكار والعمل الجماعي ومهارات التحول الرقمي."),
                 ("Values-based leadership workshop", "ورشة القيادة المبنية على القيم", ActivityType.Workshop, 12, 30, "Interactive workshop for building leadership behavior around Ghars values.", "ورشة تفاعلية لبناء السلوك القيادي حول قيم غرس.")
             },
@@ -605,7 +555,7 @@ public static class DbSeeder
                 new LibraryItem { LibraryCategoryId = cat.Id, TitleEn = "Positive Conduct Lecture", TitleAr = "محاضرة السلوك الإيجابي", DescriptionEn = "Lecture material for clubs and youth teams.", DescriptionAr = "مادة محاضرة للأندية وفرق الشباب.", PublishingEntityEn = "Dubai Police", PublishingEntityAr = "شرطة دبي", PublicationDate = new DateTime(2026,2,1), ContentType = LibraryContentType.Lecture, ExternalUrl = "https://www.dsc.gov.ae", CoverImagePath = "/img/brand/ghars-logo.png", IsPublic = true, IsPublished = true, CreatedAtUtc = DateTime.UtcNow },
                 new LibraryItem { LibraryCategoryId = cat.Id, TitleEn = "Wellbeing Awareness Video", TitleAr = "فيديو توعوي عن الرفاه", DescriptionEn = "Awareness video provided by health partners.", DescriptionAr = "فيديو توعوي مقدم من شركاء الصحة.", PublishingEntityEn = "Dubai Health Authority", PublishingEntityAr = "هيئة الصحة بدبي", PublicationDate = new DateTime(2026,3,1), ContentType = LibraryContentType.AwarenessVideo, ExternalUrl = "https://www.dha.gov.ae", CoverImagePath = "/img/brand/ghars-logo.png", IsPublic = true, IsPublished = true, CreatedAtUtc = DateTime.UtcNow });
         }
-        var club = await db.Organizations.FirstOrDefaultAsync(x=>x.OrganizationType==OrganizationType.Club);
+        var club = await db.Organizations.ApprovedClubs().FirstOrDefaultAsync();
         if (club != null && !await db.KpiSubmissions.AnyAsync(x=>x.SeasonId==season.Id && x.OrganizationId==club.Id))
         {
             db.KpiSubmissions.Add(new KpiSubmission { SeasonId=season.Id, OrganizationId=club.Id, NumberOfLecturesActivities=6, NumberOfLecturers=4, NumberOfImplementingEntities=3, NumberOfParticipants=180, PlayerParticipationRate=60, AttendanceRate=82, EthicalValuesAdherenceRate=90, WeeklyTrainingMinutes=180, HealthyDietaryHabitsRate=80, SatisfactionRate=86, CommunityEventsCount=5, Status=KpiSubmissionStatus.Approved, SubmittedAtUtc=DateTime.UtcNow, ReviewedAtUtc=DateTime.UtcNow, CreatedAtUtc=DateTime.UtcNow });
@@ -629,8 +579,8 @@ public static class DbSeeder
     {
         var baseline = await EnsureSeasonAsync(db, 2026);
         var comparison = await EnsureSeasonAsync(db, 2027);
-        var clubs = await db.Organizations.Where(x => x.OrganizationType == OrganizationType.Club).OrderBy(x => x.NameEn).Take(7).ToListAsync();
-        var partners = await db.Organizations.Where(x => x.OrganizationType == OrganizationType.GovernmentAuthority || x.OrganizationType == OrganizationType.OtherPartner).OrderBy(x => x.NameEn).Take(8).ToListAsync();
+        var clubs = await db.Organizations.ApprovedClubs().ToListAsync();
+        var partners = await db.Organizations.ApprovedPartners().Take(8).ToListAsync();
         var adminUser = await userManager.Users.FirstOrDefaultAsync(x => x.Email == "superadmin@ghars.local");
         var adminId = adminUser?.Id ?? "seed";
 
@@ -642,7 +592,18 @@ public static class DbSeeder
         }
         await db.SaveChangesAsync();
 
-        var activities = await db.Activities.Where(x => x.PartnerOrganizationId != null && x.Status == ActivityStatus.Published).OrderBy(x => x.Id).Take(12).ToListAsync();
+        // Only offerings owned by an approved implementing entity. Without this the demo bookings are
+        // drawn from every published activity in the database, including those left behind by
+        // organizations that reconciliation deactivated — which quietly recreates, as booking data,
+        // exactly the partners the roster removed.
+        var approvedPartnerIds = await db.Organizations.ApprovedPartnerIds().ToListAsync();
+        var activities = await db.Activities
+            .Where(x => x.PartnerOrganizationId != null
+                        && approvedPartnerIds.Contains(x.PartnerOrganizationId.Value)
+                        && x.Status == ActivityStatus.Published)
+            .OrderBy(x => x.Id)
+            .Take(12)
+            .ToListAsync();
         var clubUsers = await userManager.Users.Where(x => x.PrimaryOrganizationId != null).ToListAsync();
         var statuses = new[] { BookingStatus.PendingPartnerApproval, BookingStatus.Approved, BookingStatus.Rejected, BookingStatus.PartnerProposedNewTime, BookingStatus.Confirmed };
         var idx = 0;
@@ -798,24 +759,10 @@ public static class DbSeeder
                 new LibraryItem { LibraryCategoryId = cat.Id, TitleEn = "Healthy Lifestyle Awareness", TitleAr = "التوعية بنمط الحياة الصحي", DescriptionEn = "External health awareness resource.", DescriptionAr = "مورد خارجي للتوعية الصحية.", PublishingEntityEn = "Dubai Health Authority", PublishingEntityAr = "هيئة الصحة بدبي", PublicationDate = new DateTime(2026, 5, 1), ContentType = LibraryContentType.AwarenessVideo, ExternalUrl = "https://www.dha.gov.ae", CoverImagePath = "/img/brand/ghars-logo.png", IsPublic = true, IsPublished = true, CreatedAtUtc = DateTime.UtcNow });
         }
 
-        // Official (Dubai Digital Authority) survey sample: link only - the analysis report is
-        // uploaded by DSC staff after the authority returns its analysis.
-        if (!await db.ExternalSurveys.AnyAsync())
-        {
-            db.ExternalSurveys.Add(new ExternalSurvey
-            {
-                TitleEn = "Ghars Program Participant Satisfaction Survey",
-                TitleAr = "استبيان رضا المشاركين في برنامج غرس",
-                DescriptionEn = "Official satisfaction survey developed and analyzed by the Dubai Digital Authority.",
-                DescriptionAr = "الاستبيان الرسمي لقياس الرضا، تم تطويره وتحليله من قبل هيئة دبي الرقمية.",
-                ExternalUrl = "https://www.digitaldubai.ae",
-                SeasonId = baseline.Id,
-                IsActive = true,
-                IsReportPublished = false,
-                CreatedAtUtc = DateTime.UtcNow
-            });
-            await db.SaveChangesAsync();
-        }
+        // The official participant satisfaction survey: native, completed inside Ghars, one per season.
+        // Nothing is seeded into ExternalSurveys any more — that entity is retained for historical
+        // records only and should never gain a new row.
+        await SeedOfficialSatisfactionSurveyAsync(db, baseline, clubs, logger);
 
         var firstClubUser = clubUsers.FirstOrDefault(x => clubs.Any(c => c.Id == x.PrimaryOrganizationId));
         var firstPartnerUser = clubUsers.FirstOrDefault(x => partners.Any(c => c.Id == x.PrimaryOrganizationId));
@@ -824,6 +771,112 @@ public static class DbSeeder
         await AddNotificationAsync(db, adminUser?.Id, "KPI submitted", "تم إرسال مؤشرات الأداء", "A club KPI submission is ready for review.", "يوجد إرسال مؤشرات أداء من نادٍ بانتظار المراجعة.", "/Admin/Kpi");
         await db.SaveChangesAsync();
         logger.LogInformation("Seeded comprehensive Ghars dummy data for users, clubs, partners, bookings, KPI, agenda, library, gallery and notifications.");
+    }
+
+    /// <summary>
+    /// The official Ghars participant satisfaction survey for a season, with demo responses so the
+    /// satisfaction indicator has something to show in Development.
+    /// </summary>
+    /// <remarks>
+    /// The responses are anonymous, deterministic and attributed to seeded agenda entries, exactly as
+    /// real ones collected through a club's QR link would be. They exist so a reviewer can see the
+    /// indicator working end to end; a production database seeds none of this, because
+    /// <see cref="SeedDevelopmentDemoDataAsync"/> never runs outside Development.
+    /// </remarks>
+    private static async Task SeedOfficialSatisfactionSurveyAsync(AppDbContext db, Season season, List<Organization> clubs, ILogger logger)
+    {
+        var survey = await db.Surveys.FirstOrDefaultAsync(x =>
+            x.Purpose == SurveyPurpose.OfficialSatisfaction && x.SeasonId == season.Id);
+
+        if (survey is null)
+        {
+            survey = new Survey
+            {
+                Purpose = SurveyPurpose.OfficialSatisfaction,
+                SeasonId = season.Id,
+                ActivityId = null,
+                TitleEn = OfficialSurveyTemplate.TitleEn,
+                TitleAr = OfficialSurveyTemplate.TitleAr,
+                DescriptionEn = OfficialSurveyTemplate.DescriptionEn,
+                DescriptionAr = OfficialSurveyTemplate.DescriptionAr,
+                IsActive = true,
+                PublicToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant(),
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            db.Surveys.Add(survey);
+            await db.SaveChangesAsync();
+
+            db.SurveyQuestions.AddRange(OfficialSurveyTemplate.Questions(survey.Id));
+            await db.SaveChangesAsync();
+            logger.LogInformation("Seeded the official Ghars satisfaction survey for {Season}.", season.TitleEn);
+        }
+
+        if (await db.SurveyResponses.AnyAsync(x => x.SurveyId == survey.Id)) return;
+
+        var questions = await db.SurveyQuestions.Where(x => x.SurveyId == survey.Id).OrderBy(x => x.SortOrder).ToListAsync();
+        if (questions.Count == 0) return;
+
+        // Approved clubs only. A demo response attributed to a deactivated organization would add its
+        // ratings to the season's headline percentage while that club is absent from every filter that
+        // could explain where the ratings came from.
+        var approvedClubIds = await db.Organizations.ApprovedClubs().Select(x => x.Id).ToListAsync();
+        var agendaEntries = await db.AgendaEntries
+            .Where(x => x.SeasonId == season.Id && approvedClubIds.Contains(x.OrganizationId))
+            .OrderBy(x => x.Id)
+            .ToListAsync();
+
+        // Fixed rating pattern rather than a random one, so every developer's database reports the
+        // same satisfaction percentage and a changed figure always means changed code.
+        var ratings = new byte[] { 5, 4, 5, 5, 4, 3, 5, 4, 5, 4, 4, 5, 5, 3, 4, 5, 4, 5, 5, 4, 5, 4, 4, 5, 3, 5, 4, 5, 5, 4, 4, 5, 5, 4, 5, 4 };
+        var comments = new[]
+        {
+            "Very useful session for our players.",
+            "The lecturer explained the values clearly.",
+            null,
+            "Would like more practical activities.",
+            null,
+            "Well organised and on time."
+        };
+
+        for (var i = 0; i < ratings.Length; i++)
+        {
+            var entry = agendaEntries.Count == 0 ? null : agendaEntries[i % agendaEntries.Count];
+            var response = new SurveyResponse
+            {
+                SurveyId = survey.Id,
+                UserId = null,
+                AgendaEntryId = entry?.Id,
+                OrganizationId = entry?.OrganizationId ?? (clubs.Count == 0 ? null : clubs[i % clubs.Count].Id),
+                SubmittedAtUtc = DateTime.UtcNow.AddDays(-30).AddHours(i * 7)
+            };
+            db.SurveyResponses.Add(response);
+            await db.SaveChangesAsync();
+
+            foreach (var q in questions)
+            {
+                var answer = new SurveyAnswer { SurveyResponseId = response.Id, SurveyQuestionId = q.Id };
+                switch (q.QuestionType)
+                {
+                    case SurveyQuestionType.Stars:
+                        // The second rating question runs a little below the first, so the per-question
+                        // breakdown shows a spread instead of two identical columns.
+                        answer.StarsValue = q.SortOrder == 1
+                            ? ratings[i]
+                            : (byte)Math.Max(1, ratings[(i + 3) % ratings.Length] - (i % 4 == 0 ? 1 : 0));
+                        break;
+                    case SurveyQuestionType.YesNo:
+                        answer.BoolValue = ratings[i] >= 4;
+                        break;
+                    case SurveyQuestionType.Text:
+                        answer.TextValue = comments[i % comments.Length];
+                        break;
+                }
+                db.SurveyAnswers.Add(answer);
+            }
+        }
+
+        await db.SaveChangesAsync();
+        logger.LogInformation("Seeded {Count} demo responses for the official satisfaction survey.", ratings.Length);
     }
 
     private static async Task<Season> EnsureSeasonAsync(AppDbContext db, int startYear)

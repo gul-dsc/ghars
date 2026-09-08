@@ -1,64 +1,23 @@
 @model GharsPlatform.Controllers.Admin.SurveysController.SurveyVm
+@using GharsPlatform.Models.Core
+@using System.Globalization
 @{
-    ViewData["Title"] = "Create Survey";
-    ViewData["PageTitle"] = "Create Survey";
-    var activities = ViewBag.Activities as List<GharsPlatform.Models.Core.Activity> ?? new();
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var official = Model.Purpose == SurveyPurpose.OfficialSatisfaction;
+    ViewData["Title"] = official ? T("New official survey", "استبيان رسمي جديد") : T("New activity survey", "استبيان نشاط جديد");
+    ViewData["PageTitle"] = ViewData["Title"];
 }
-<div class="card border-0 shadow-sm rounded-4">
-    <div class="card-body p-4">
-        <form method="post">
-            @Html.AntiForgeryToken()
 
-            <div class="row g-3">
-                <div class="col-md-8">
-                    <label class="form-label">Activity</label>
-                    <select class="form-select" asp-for="ActivityId">
-                        @foreach (var a in activities)
-                        {
-                            <option value="@a.Id">@a.TitleEn (@a.StartDateTime.ToString("yyyy-MM-dd"))</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Active</label>
-                    <div class="form-check mt-2">
-                        <input class="form-check-input" asp-for="IsActive" />
-                        <label class="form-check-label">Enabled</label>
-                    </div>
-                </div>
+<h1 class="h4 mb-3">@ViewData["Title"]</h1>
 
-                <div class="col-md-6">
-                    <label class="form-label">Title (EN)</label>
-                    <input class="form-control" asp-for="TitleEn" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Title (AR)</label>
-                    <input class="form-control" asp-for="TitleAr" />
-                </div>
+<form method="post" class="card border-0 shadow-sm rounded-4 p-3 p-md-4">
+    @Html.AntiForgeryToken()
+    <partial name="_SurveyForm" model="Model" />
 
-                <div class="col-md-6">
-                    <label class="form-label">Opens At (UTC)</label>
-                    <input class="form-control" asp-for="OpensAtUtc" type="datetime-local" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Closes At (UTC)</label>
-                    <input class="form-control" asp-for="ClosesAtUtc" type="datetime-local" />
-                </div>
-            </div>
-
-            <div class="d-flex justify-content-end gap-2 mt-4">
-                <a class="btn btn-outline-secondary" href="/Admin/Surveys">Back</a>
-                <button class="btn btn-primary" type="submit">Create</button>
-            </div>
-
-            <div class="small text-muted mt-3">
-                Default questions are automatically created (overall satisfaction, content quality, recommend, comments).
-            </div>
-            <div class="text-danger small mt-2" asp-validation-summary="All"></div>
-        </form>
+    <div class="d-flex justify-content-between align-items-center mt-4 flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" asp-action="Index">@T("Cancel", "إلغاء")</a>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-check2 me-1"></i>@T("Create with default questions", "إنشاء مع الأسئلة الافتراضية")</button>
     </div>
-</div>
-
-@section Scripts{
-    <partial name="_ValidationScriptsPartial" />
-}
+    <div class="text-muted small mt-2">@T("The default questions are the set already used by the Ghars survey engine. You can edit, reorder, add and remove them on the next screen.", "الأسئلة الافتراضية هي المجموعة المستخدمة حالياً في محرك استبيانات غرس. يمكنك تعديلها وإعادة ترتيبها وإضافة أسئلة وحذفها في الشاشة التالية.")</div>
+</form>

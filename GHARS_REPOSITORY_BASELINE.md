@@ -95,10 +95,26 @@ restore procedures instead — see `GHARS_PRODUCTION_OPERATIONS.md`.
 | `*.mdf`, `*.ldf`, `*.bak`, `*.db` | The database itself. The repository holds migrations and seed code, not data. |
 | `appsettings.Development.json`, `appsettings.Production.json`, `.env`, `secrets.json` | Local and deployment configuration that may carry credentials. |
 | `*.log`, `.remember/` | Generated logs and local tooling state. |
+| `/clubs/`, `/partners/` | Supplied logo artwork drops. Already reconciled, byte for byte, into the tracked `wwwroot/img/clubs` and `wwwroot/img/partners` assets — committing them would duplicate ~4 MB and give a second answer to "which logo is current". Root-anchored, so a `clubs` or `partners` directory elsewhere stays visible. |
 
 One deliberate exception: `wwwroot/uploads/library/sample-ghars-values.pdf` is committed because
 `DbSeeder` references it by a fixed path, so omitting it would leave a freshly seeded database with a
 broken link.
+
+### Supplied source documents
+
+Business source documents live in `docs/` and **are** committed: the nine approved bilingual `.docx`
+specifications, plus `Ghars Workshops & Lectures Statistics 2020-2026 …pdf`, the Dubai Sports Council
+deck recording lectures, workshops, participants and beneficiaries per club for the six seasons from
+2020-2021 to 2025-2026.
+
+`docs/` sits outside `wwwroot`, and `Program.cs` calls `app.UseStaticFiles()` with no additional file
+provider, so nothing in it is web-reachable. It is also excluded from build output — the Web SDK's
+default content globs cover `wwwroot/**` and the config/view file types, not `.docx` or `.pdf` — so it
+is neither published nor deployed.
+
+Those figures are reference material. **No part of the platform reads them**, and the historical
+seasons they describe predate the 2026 baseline the KPI catalogue is built on.
 
 **A restored database without the matching restored protected files is an incomplete restore.** The
 file endpoints report a missing file as an ordinary `404`, so the loss is silent.

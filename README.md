@@ -57,14 +57,7 @@ If that matches your machine, no further configuration is needed.
 **Never put real credentials in `appsettings.json`.** To point at a different server, override
 `DefaultConnection` outside source control by any of these means:
 
-*.NET User Secrets (recommended for local development):*
-
-```bash
-dotnet user-secrets init
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=<host>;Database=GharsPlatformDb;User Id=<user>;Password=<password>;TrustServerCertificate=True;MultipleActiveResultSets=true"
-```
-
-*Environment variable (works for local runs, CI and servers):*
+*Environment variable (works for local runs, CI and servers — the documented path):*
 
 ```bash
 # bash
@@ -80,7 +73,12 @@ $env:ConnectionStrings__DefaultConnection = "Server=<host>;Database=GharsPlatfor
 (IIS configuration editor, container/environment secrets, or `appsettings.Production.json` kept
 outside Git). `appsettings.Production.json` and `appsettings.Development.json` are both git-ignored.
 
-Configuration precedence means the environment variable or user secret always wins over the file, so
+*.NET User Secrets* work as well, but need one extra step. This project deliberately carries no
+`UserSecretsId`, so `dotnet user-secrets set` on its own fails; `dotnet user-secrets init` adds one to
+`GharsPlatform.csproj`, which is a change to a tracked file. Environment variables avoid that, which is
+why they are documented first here.
+
+Configuration precedence means an environment variable or user secret always wins over the file, so
 you do not need to edit `appsettings.json` to change servers.
 
 ## Database setup
@@ -178,21 +176,43 @@ Demo and sample data — organizations, clubs, demo users, bookings, KPIs, agend
 Demo accounts share one password that you choose and keep out of source control:
 
 ```bash
-# The project has no UserSecretsId, so use the environment variable:
 export GHARS_SEED_DEMO_PASSWORD="<your own password>"     # PowerShell: $env:GHARS_SEED_DEMO_PASSWORD = '...'
 ```
 
-Without it the application still starts; it logs one warning and does not create the missing demo
-accounts. An account that already exists never has its password changed, so a value set now applies
-only to accounts created from now on. Account names, and how to recover a forgotten demo password with
+The same value can come from any configuration source under the key `Ghars:Seed:DemoPassword`; the
+environment variable is documented because it needs no `UserSecretsId`. No demo password is compiled
+into the application and **there is no fallback** — without a configured value the application still
+starts, logs one warning, and simply does not create the missing demo accounts. Nothing guessable is
+substituted.
+
+An account that already exists never has its password changed, so a value set now applies only to
+accounts created from now on. Account name patterns, and how to align or recover demo passwords with
 `dotnet run -- reset-demo-passwords`, are in [`SEED_CREDENTIALS.md`](SEED_CREDENTIALS.md).
 
 ### Organization master data
 
 The clubs and implementing entities Ghars exposes are the approved roster in
-[`Data/GharsMasterData.cs`](Data/GharsMasterData.cs) — 7 clubs and 17 implementing entities,
-reconciled from the approved logo assets in `clubs/` and `partners/`. Seeding a fresh development
-database creates that roster and nothing else.
+[`Data/GharsMasterData.cs`](Data/GharsMasterData.cs) — 7 clubs and 17 implementing entities. Seeding a
+fresh development database creates that roster and nothing else.
+
+**Where master-data truth lives.** Three things, and only these three:
+
+| Source of truth | What it decides |
+| --- | --- |
+| [`Data/GharsMasterData.cs`](Data/GharsMasterData.cs) | Which organizations are approved, their bilingual names, type and logo path. |
+| `wwwroot/img/clubs/`, `wwwroot/img/partners/` | The logo files those paths resolve to. Tracked, versioned, and the only copies the application reads. |
+| [`Data/DbSeeder.cs`](Data/DbSeeder.cs) and `reconcile-organizations` | How that roster reaches a database — creating what is missing, suspending what is not on the list. |
+
+The original artwork was delivered as two loose folders, `clubs/` and `partners/`, at the repository
+root. **They are source inputs, not part of the application.** Every file in them was reconciled into
+the tracked `wwwroot/img/` assets above and they are git-ignored, so a developer who never receives
+them can still build, seed and run everything.
+
+Nothing about a logo file grants anything. A filename is presentation; it is never read as
+authorization, membership or approval. Eligibility at request time is decided entirely by
+`OrganizationType` and `Status` through the single definition in
+[`Helpers/GharsOrganizations.cs`](Helpers/GharsOrganizations.cs) — an organization with a logo and the
+wrong status is invisible, and one with no logo at all is fully functional.
 
 To bring an **existing** development database in line:
 
@@ -204,10 +224,6 @@ dotnet run -- reconcile-organizations --commit   # applies it
 It is Development-only and refused elsewhere, and it **never deletes an organization**: rows outside
 the roster are set to `Suspended`, which removes them from every selector, catalogue and report while
 leaving their bookings, agenda entries, KPI submissions and audit history untouched.
-
-Eligibility at request time comes from `OrganizationType` and `Status` through the single definition in
-[`Helpers/GharsOrganizations.cs`](Helpers/GharsOrganizations.cs). The logo folders guided which
-organizations were approved; they are not consulted at request time and grant nothing.
 
 > **This repository is public, and earlier commits contain literal demo passwords.** Those values are
 > permanently exposed. Any database seeded before 2026-09-06 should have its demo passwords rotated —

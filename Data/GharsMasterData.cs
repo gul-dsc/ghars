@@ -15,9 +15,16 @@ namespace GharsPlatform.Data;
 /// </para>
 /// <para>
 /// <b>Provenance.</b> The roster was reconciled from the approved logo asset drops supplied with the
-/// project: <c>partners/</c> (17 implementing entities) and <c>clubs/</c> (7 clubs). Those folders
-/// decided <i>which</i> organizations are approved; they are not consulted at runtime and grant
-/// nothing. Eligibility at request time is decided entirely by
+/// project: <c>partners/</c> (17 implementing entities) and <c>clubs/</c> (7 clubs). Those folders are
+/// <i>source inputs</i> and are not in source control — their contents were copied into the tracked
+/// assets under <c>wwwroot/img/clubs</c> and <c>wwwroot/img/partners</c>, which are the only copies the
+/// application reads. This file and those assets are the master data; the drop folders are how it
+/// arrived, once.
+/// </para>
+/// <para>
+/// <b>A logo grants nothing.</b> The folders decided <i>which</i> organizations are approved, at
+/// reconciliation time, by a person. They are never consulted at runtime, and a filename is never read
+/// as authorization. Eligibility at request time is decided entirely by
 /// <see cref="Models.Core.Organization.OrganizationType"/> and
 /// <see cref="Models.Core.Organization.Status"/> — see <see cref="Helpers.GharsOrganizations"/>.
 /// </para>

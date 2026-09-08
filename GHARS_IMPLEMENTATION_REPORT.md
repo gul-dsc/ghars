@@ -1139,10 +1139,11 @@ now set once, at account creation, and never touched again. Recovering a forgott
 an explicit operator action — `dotnet run -- reset-demo-passwords` — which refuses to run outside
 `Development` and only ever touches `@ghars.local` accounts.
 
-**No hard-coded passwords remain.** The demo password comes from `Ghars:Seed:DemoPassword`; when it
-is absent, demo accounts are not created and everything depending on them is skipped, with one
-warning naming the `dotnet user-secrets set` command that fixes it. Existing databases are
-unaffected, because their demo accounts already exist.
+**No hard-coded passwords remain.** The demo password comes from `Ghars:Seed:DemoPassword`, or from
+the flat environment variable `GHARS_SEED_DEMO_PASSWORD`; when it is absent, demo accounts are not
+created and everything depending on them is skipped, with one warning naming the variable to set.
+Existing databases are unaffected, because their demo accounts already exist. (The warning originally
+named a `dotnet user-secrets set` command that cannot work in this project — corrected in §36.)
 
 ### 23.4 Bootstrap administrator
 
@@ -3310,7 +3311,7 @@ exists, so accounts created before this pass keep theirs and only new ones use t
 > Worth knowing: `DbSeeder` tells operators to run `dotnet user-secrets set` for the demo password,
 > but `GharsPlatform.csproj` has no `UserSecretsId`, so that command fails. The environment variable
 > works. Not fixed here — it is unrelated to this pass — but it will confuse whoever follows the log
-> message.
+> message. **Fixed in §36.**
 
 ### 35.11 Verification
 
@@ -3403,3 +3404,138 @@ express approval, and `DubaiSportsCouncil` is a new value in an existing `tinyin
 
 **Build** — `dotnet build --no-incremental` → **0 errors, 1 warning**, the retained `CS0108` on
 `Activity.CreatedByUserId`, not suppressed.
+
+---
+
+## 36. Master-Data Inputs and Demo Credential Configuration (2026-09-08)
+
+Housekeeping after §35. No feature changed: the native satisfaction survey, the satisfaction formula,
+the KPI source, the club and partner rosters, booking eligibility, agenda, annual report, channel,
+library, organization scoping and the retained `ExternalSurvey` history are all exactly as §35 left
+them. This section settles two loose ends — what happens to the supplied source files, and a log
+message that told developers to run a command this project cannot run.
+
+### 36.1 The supplied inputs
+
+Three things were sitting untracked in the working tree, delivered together in an eleven-minute window
+on 2026-09-08 and used as the inputs to the §35 reconciliation:
+
+| Input | Contents |
+|---|---|
+| `clubs/` | 7 PNG logos, 639,341 bytes |
+| `partners/` | 17 PNG logos, 4,065,346 bytes |
+| `عدد ورش العمل والمحاضرات التوعوية.pdf` | 11 pages, 2,203,203 bytes, exported from PowerPoint |
+
+**Every one of the 24 logo files is byte-identical to a file already tracked** under
+`wwwroot/img/clubs` and `wwwroot/img/partners` — verified by SHA-256, 24 matches, 0 unmatched.
+Committing the drops would add 4.49 MB of duplicate artwork and, worse, a second unversioned answer to
+"which logo is current". They are git-ignored instead, with both patterns root-anchored (`/clubs/`,
+`/partners/`) so that a directory of either name anywhere else in the tree stays visible.
+
+The PDF is a different kind of object. It is a Dubai Sports Council deck recording lectures,
+workshops, participants and beneficiaries per club across six seasons — 2020-2021 through 2025-2026 —
+and nothing in the platform implements or reads it. It is not a working input whose output already
+exists; it is the programme's own record, and it belongs with the nine approved `.docx` specifications
+in `docs/`. One canonical copy now lives there as `Ghars Workshops & Lectures Statistics 2020-2026
+عدد ورش العمل والمحاضرات التوعوية.pdf`, with the English descriptor first so it sorts and reads
+alongside its siblings.
+
+It is not web-reachable and not deployed. `docs/` sits outside `wwwroot`, `Program.cs` calls
+`app.UseStaticFiles()` with no additional file provider, and the Web SDK's default content globs cover
+`wwwroot/**` and the config and view file types — not `.docx` or `.pdf`. Build output was checked
+directly: no `docs` directory, no PDF.
+
+> The figures in that deck cover seasons that predate the 2026 baseline the KPI catalogue is built on,
+> and no part of the platform loads them. Recorded here so that a future reader does not mistake the
+> presence of the file for the presence of the data.
+
+### 36.2 Where master-data truth lives
+
+Written down in `README.md`, `Data/GharsMasterData.cs` and `GHARS_REPOSITORY_BASELINE.md`, because
+"the logos decided the roster" is one short step away from someone deciding the logos *are* the roster:
+
+| Source of truth | What it decides |
+|---|---|
+| `Data/GharsMasterData.cs` | Which organizations are approved, their bilingual names, type and logo path. |
+| `wwwroot/img/clubs`, `wwwroot/img/partners` | The logo files those paths resolve to — tracked, versioned, the only copies read. |
+| `Data/DbSeeder.cs` and `reconcile-organizations` | How the roster reaches a database. |
+
+The drop folders decided which organizations were approved **once, at reconciliation time, by a
+person**. They are never consulted at runtime. A filename grants nothing: an organization with a logo
+and the wrong status is invisible everywhere, and one with no logo at all is fully functional.
+Eligibility is `OrganizationType` and `Status` through `Helpers/GharsOrganizations.cs`, and nothing
+else.
+
+### 36.3 The demo password
+
+Audited every occurrence of a demo credential in the repository. The result is worth stating plainly:
+
+| Classification | Occurrences |
+|---|---|
+| Executable hard-coded password | **none** |
+| Configuration key or environment variable name | `Ghars:Seed:DemoPassword`, `GHARS_SEED_DEMO_PASSWORD` — `DbSeeder`, `README.md`, `SEED_CREDENTIALS.md`, deployment checklist |
+| Documentation placeholder | `"<your own password>"` |
+| Historical text | the compromise notice at the top of `SEED_CREDENTIALS.md` |
+
+A search for the literal values used on this machine, and for anything shaped like the retired
+per-role strings, returns nothing. No password is compiled into the application and none is committed.
+
+Behaviour was already correct and is unchanged: the demo password is read from configuration only,
+`EnsureUserAsync` **skips** account creation when it is absent rather than substituting anything
+guessable, required data (roles, active season) seeds regardless, and no path resets an existing
+user's password.
+
+**What was wrong was the advice.** Both `DbSeeder` messages named `dotnet user-secrets set`, which
+fails in this project — there is no `UserSecretsId`, and `set` alone cannot create one. A developer
+following the log message hit an error while doing exactly what they were told. Both messages now name
+`GHARS_SEED_DEMO_PASSWORD` first, mention the configuration key as the alternative, and state the
+`dotnet user-secrets init` prerequisite instead of hiding it. `README.md` and `SEED_CREDENTIALS.md`
+were aligned to match, including the connection-string section, which had the same defect.
+
+No `UserSecretsId` was added. Adding one is a change to a tracked project file for a facility the
+environment variable already provides, and §8 of the request left it optional.
+
+`SEED_CREDENTIALS.md` also listed seven club accounts and three partner examples by name — a list that
+went stale the moment §35 changed the roster, and which already named two deactivated organizations. It
+now documents the `club-<slug>@` / `partner-<slug>@` patterns and points at `GharsMasterData.cs`. A
+stale credentials document is worse than none.
+
+### 36.4 Verification
+
+**Fresh database, demo password configured** — scratch database built from the migration chain, then
+started:
+
+| Check | Result |
+|---|---|
+| Roles / active season | 7 / 1 |
+| Organizations | 25 — 7 clubs, 17 implementing entities, DSC |
+| Organizations outside the roster | **0** |
+| Accounts created | 30 — 1 Super Admin, 4 DSC Admin, 8 Club Admin, 17 Partner Admin |
+| Organization admin links | 25 |
+| Club admin signs in with the configured password, reaches `/club` | 302, 200 |
+| Partner admin signs in with the configured password, reaches `/partner` | 302, 200 |
+| Both reject a wrong password | 200 (redisplay, no sign-in) |
+
+**Fresh database, demo password absent** — same path, variable removed:
+
+| Check | Result |
+|---|---|
+| Roles / active season | 7 / 1 — required data seeds regardless |
+| Accounts created | **0** |
+| Organizations | 25, still exactly the roster, 0 outside it |
+| Dependants of demo accounts (admin links, bookings) | 0 — skipped, not faked |
+| Hard-coded fallback used | **none** — one warning naming the variable, then nothing |
+
+**No password is ever rewritten.** Proven twice rather than asserted. On the scratch database, a
+restart with a *different* configured demo password left all 30 hashes byte-identical and the original
+password still signed both accounts in. On the populated development database, a normal startup left
+all **50** password hashes *and* all 50 security stamps identical, and all eleven row counts unchanged
+— 50 users, 44 organizations, 2 surveys, 36 responses, 144 answers, 32 bookings, 12 agenda entries, 16
+KPI submissions, 74 activities, 1 external survey.
+
+Both scratch databases were dropped; `GharsPlatformDb` is the only Ghars database on the server.
+
+**Build** — `dotnet build --no-incremental` → **0 errors, 1 warning**, the retained `CS0108` on
+`Activity.CreatedByUserId`, not suppressed.
+
+**Migration** — none created, and none needed. Nothing in this section touches the schema.

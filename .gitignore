@@ -58,6 +58,19 @@ protected-uploads/
 /wwwroot/uploads/library/*
 !/wwwroot/uploads/library/sample-ghars-values.pdf
 
+# --- Supplied source-input drops -------------------------------------------
+# Original club and implementing-entity logo artwork, delivered as loose folders
+# at the repository root. Every one of those 24 files has already been reconciled
+# into the tracked runtime assets under wwwroot/img/clubs and wwwroot/img/partners
+# — byte for byte, verified by hash — so committing the drops would duplicate
+# ~4 MB of identical artwork and give a second, unversioned answer to "which logo
+# is current".
+#
+# Both patterns are root-anchored deliberately. A directory named "clubs" or
+# "partners" anywhere else in the tree is ordinary source and must stay visible.
+/clubs/
+/partners/
+
 # --- Databases and backups -------------------------------------------------
 *.mdf
 *.ldf

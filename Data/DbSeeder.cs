@@ -225,9 +225,11 @@ public static class DbSeeder
             // Warn once here rather than once per account. Existing demo users still resolve normally,
             // so an established development database is unaffected by this.
             logger.LogWarning(
-                "No demo password configured, so missing demo accounts will not be created. To enable them run: " +
-                "dotnet user-secrets set \"{Key}\" \"<a password meeting the Identity policy>\"",
-                DemoPasswordKey);
+                "No demo password configured, so missing demo accounts will not be created. Set the environment " +
+                "variable {EnvironmentVariable} to a password meeting the Identity policy, or supply {Key} from any " +
+                "other configuration source. (User Secrets needs \"dotnet user-secrets init\" first — this project " +
+                "carries no UserSecretsId, so \"dotnet user-secrets set\" alone fails.)",
+                DemoPasswordEnv, DemoPasswordKey);
         }
 
         await EnsureUserAsync(userManager, "superadmin@ghars.local", "Super Admin", RoleNames.SuperAdmin, null, demoPassword, logger);
@@ -264,9 +266,9 @@ public static class DbSeeder
         if (demoPassword is null)
         {
             logger.LogError(
-                "reset-demo-passwords refused: {Key} is not configured. Set it first with " +
-                "dotnet user-secrets set \"{Key}\" \"<password>\".",
-                DemoPasswordKey, DemoPasswordKey);
+                "reset-demo-passwords refused: no demo password is configured. Set the environment variable " +
+                "{EnvironmentVariable}, or supply {Key} from any other configuration source, then run this again.",
+                DemoPasswordEnv, DemoPasswordKey);
             return 1;
         }
 

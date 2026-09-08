@@ -60,7 +60,8 @@
             @foreach (OfferingApprovalStatus s in Enum.GetValues(typeof(OfferingApprovalStatus))) { <option value="@s" selected="@(fApproval == s)">@OfferingWorkflow.Label(s)</option> }
         </select>
     </div>
-    <div class="col-md-2 d-flex gap-2">
+    @* flex-wrap: the pair is wider than the column at tablet widths and would otherwise spill. *@
+    <div class="col-md-2 d-flex flex-wrap gap-2">
         <button class="btn btn-primary">Filter</button>
         <a class="btn btn-outline-secondary" href="/Admin/Activities">Reset</a>
     </div>

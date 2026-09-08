@@ -4,6 +4,10 @@
     var isRtl = culture == "ar";
     var dir = isRtl ? "rtl" : "ltr";
     var pageTitle = (ViewData["PageTitle"] as string) ?? (ViewData["Title"] as string) ?? "Dashboard";
+
+    // Below the lg breakpoint the sidebar is a Bootstrap off-canvas drawer. It is anchored to the
+    // side the language reads from, so Arabic opens from the right rather than mirroring awkwardly.
+    var sidebarSide = isRtl ? "offcanvas-end" : "offcanvas-start";
 }
 <!doctype html>
 <html lang="@culture" dir="@dir">
@@ -27,7 +31,18 @@
 </head>
 <body class="admin-shell">
 
-    <aside class="admin-sidebar" id="adminSidebar">
+    <aside class="admin-sidebar offcanvas-lg @sidebarSide" tabindex="-1" id="adminSidebar" aria-labelledby="adminSidebarLabel">
+
+        @* Visible only while the sidebar is a drawer; Bootstrap hides it from the lg breakpoint up. *@
+        <div class="offcanvas-header">
+            <h2 class="offcanvas-title h6 mb-0" id="adminSidebarLabel">@(isRtl ? "قائمة الإدارة" : "Admin menu")</h2>
+            <button type="button" class="btn-close btn-close-white"
+                    data-bs-dismiss="offcanvas" data-bs-target="#adminSidebar"
+                    aria-label="@(isRtl ? "إغلاق القائمة" : "Close menu")"></button>
+        </div>
+
+        <div class="offcanvas-body">
+
         <div class="brand">
             <a href="/" class="d-block text-decoration-none">
                 <img src="~/img/brand/ghars-logo.png" alt="Ghars" />
@@ -54,9 +69,9 @@
             }
         }
 
-        <div class="nav-section-title">Navigation</div>
+        <div class="nav-section-title" id="adminNavLabel">@(isRtl ? "التنقل" : "Navigation")</div>
 
-        <nav class="nav flex-column px-2 pb-3">
+        <nav class="nav flex-column px-2 pb-3" aria-labelledby="adminNavLabel">
             <a class="nav-link @ActiveIf("Dashboard")" asp-area="Admin" asp-controller="Dashboard" asp-action="Index">
                 <i class="bi bi-speedometer2"></i> <span>@(isRtl ? "لوحة التحكم" : "Dashboard")</span>
             </a>
@@ -131,26 +146,34 @@
         </nav>
 
         <div class="mt-auto p-3" style="border-top: 1px solid rgba(255,255,255,.10);">
-            <div class="small" style="color: rgba(255,255,255,.70);">Signed in</div>
+            <div class="small" style="color: rgba(255,255,255,.70);">@(isRtl ? "تم تسجيل الدخول" : "Signed in")</div>
             <div class="d-flex align-items-center justify-content-between gap-2">
                 <div class="text-truncate text-white">@User.Identity?.Name</div>
 
                 <form asp-area="" asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
                     @Html.AntiForgeryToken()
-                    <button class="btn btn-sm btn-outline-light" type="submit" title="Logout">
-                        <i class="bi bi-box-arrow-right"></i>
+                    <button class="btn btn-sm btn-outline-light" type="submit"
+                            aria-label="@(isRtl ? "تسجيل الخروج" : "Log out")">
+                        <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
                     </button>
                 </form>
             </div>
         </div>
+
+        </div>@* /.offcanvas-body *@
     </aside>
 
     <main class="admin-content">
         <header class="admin-topbar">
             <div class="d-flex align-items-center justify-content-between gap-3">
                 <div class="d-flex align-items-center gap-2">
-                    <button class="btn btn-sm btn-outline-secondary d-lg-none" id="btnToggleSidebar" type="button" aria-label="Toggle sidebar">
-                        <i class="bi bi-list"></i>
+                    @* The visible word carries the meaning; the icon is decorative. *@
+                    <button class="btn btn-sm btn-outline-secondary d-lg-none flex-shrink-0"
+                            id="btnToggleSidebar" type="button"
+                            data-bs-toggle="offcanvas" data-bs-target="#adminSidebar"
+                            aria-controls="adminSidebar" aria-expanded="false">
+                        <i class="bi bi-list" aria-hidden="true"></i>
+                        <span class="ms-1">@(isRtl ? "القائمة" : "Menu")</span>
                     </button>
                     <div>
                         <div class="fw-semibold">@pageTitle</div>
@@ -197,14 +220,23 @@
     <script src="~/js/admin.js" asp-append-version="true"></script>
 
     <script>
+        // Bootstrap's offcanvas owns opening, the backdrop, Escape and focus handling. It does not
+        // maintain aria-expanded on the toggle, and it does not close the drawer when the viewport
+        // grows past the breakpoint that turns the sidebar back into a static column -- so do both.
         (function () {
             const btn = document.getElementById('btnToggleSidebar');
             const sidebar = document.getElementById('adminSidebar');
-            if (!btn || !sidebar) return;
+            if (!btn || !sidebar || !window.bootstrap) return;
 
-            btn.addEventListener('click', function () {
-                sidebar.classList.toggle('open');
-            });
+            sidebar.addEventListener('show.bs.offcanvas', () => btn.setAttribute('aria-expanded', 'true'));
+            sidebar.addEventListener('hidden.bs.offcanvas', () => btn.setAttribute('aria-expanded', 'false'));
+
+            const desktop = window.matchMedia('(min-width: 992px)');
+            const closeOnDesktop = (e) => {
+                if (!e.matches) return;
+                bootstrap.Offcanvas.getInstance(sidebar)?.hide();
+            };
+            desktop.addEventListener('change', closeOnDesktop);
         })();
     </script>
 

@@ -2086,3 +2086,188 @@ four `CS8714` warnings from a nullable dictionary key; those were fixed rather t
 **No migration was required.** Every change in this section is presentation or query-filter only; no
 entity, no column and no index changed. Nothing was scaffolded.
 
+
+---
+
+## 30. Admin Shell Accessibility & Mobile Hardening (2026-09-08)
+
+Two platform-wide defects recorded at the end of §29 as pre-existing and out of scope there. This
+section fixes both in the shared admin shell, so every page in the Admin area benefits rather than
+one. **No business behaviour changed**: no controller, no C# file, no authorization attribute, no
+query and no migration. The ten changed files are the admin layout, four admin views, three
+stylesheets and `admin.js`.
+
+Inspecting the shell first corrected two beliefs recorded in §29.9.
+
+**The sidebar did collapse.** `ghars-theme.css` already turned it into a fixed off-canvas panel below
+992px. What it lacked was everything around that: no backdrop, no Escape, no focus handling, no
+`aria-controls`, no `aria-expanded`, an English-only `aria-label` on an icon-only button, and no way
+to dismiss it other than the toggle.
+
+**The overflow was never the sidebar.** Two rules in the same stylesheet listed
+`.table-responsive` twice, and the second reset it to `overflow: visible`:
+
+```css
+body.admin-shell .admin-page .table-responsive { overflow-x: auto; }
+body.admin-shell .admin-page .card,
+body.admin-shell .admin-page .table,
+body.admin-shell .admin-page .table-responsive { overflow: visible; }   /* wins -- same specificity, later */
+```
+
+So wide tables were not scrolling inside their wrapper; they spilled onto the page. And because
+`body.admin-shell` sets `overflow-x: hidden`, which propagates to the viewport, the spilled columns
+were **clipped with no scrollbar** — unreachable rather than merely awkward. This is why KPI
+(520px) and Reports (485px) overflowed at 390px, and why both still overflowed at 1024px, a width
+where the sidebar is a normal static column and cannot be the cause.
+
+### 30.1 Mobile sidebar
+
+The sidebar is now Bootstrap's own responsive off-canvas rather than a hand-rolled imitation:
+`class="admin-sidebar offcanvas-lg offcanvas-start"`, toggled by `data-bs-toggle="offcanvas"`.
+Bootstrap therefore owns the backdrop, Escape, focus trapping, focus restoration, body scroll lock
+and the transition. The hand-written transform/`.open` block was deleted.
+
+Bootstrap does two things above the breakpoint that had to be reconciled: it forces
+`background-color: transparent !important` on the element and turns `.offcanvas-body` into a flex
+row. Both are overridden for `.admin-sidebar` so the desktop column keeps its charcoal background
+and its original block flow. The desktop layout rules (`width: 280px`, `position: sticky`,
+`height: 100vh`) are now scoped to `@media (min-width: 992px)`, since below that Bootstrap positions
+the element.
+
+Also removed: a `@media (max-width: 992px)` block that shrank the sidebar to an 86px icon rail. It
+never applied — a later, more specific `body.admin-shell .admin-sidebar` rule overrode its width —
+and it would have conflicted with the drawer.
+
+### 30.2 Toggle and dismissal
+
+A real `<button>`, keyboard operable by default, carrying `aria-controls="adminSidebar"` and an
+`aria-expanded` that is kept in sync from the `show.bs.offcanvas` / `hidden.bs.offcanvas` events —
+Bootstrap does not maintain it for offcanvas. It no longer relies on the icon: the icon is
+`aria-hidden` and the accessible name comes from visible text, **Menu / القائمة**. The drawer has an
+`.offcanvas-header` with a titled heading and a close button labelled *Close menu / إغلاق القائمة*,
+both hidden automatically from `lg` up.
+
+The only other script added closes the drawer when the viewport grows past the breakpoint; without
+it a drawer opened on a phone and then widened leaves a backdrop and a locked body behind.
+
+Keyboard focus is now visible on the shell's own controls (`3px` teal outline on `:focus-visible`
+for sidebar and topbar links and buttons).
+
+### 30.3 RTL
+
+The drawer opens from the side the language reads from. Rather than mirroring Bootstrap's transforms
+in `admin.rtl.css` — which needs a matching override for the shown state or the drawer never appears
+— the layout picks the class: `offcanvas-end` under RTL, `offcanvas-start` otherwise. Bootstrap's own
+rules then anchor and animate it correctly with no custom CSS at all.
+
+Measured at 390px in Arabic, the open drawer occupies x 110–390, i.e. flush to the right edge and
+fully on screen; in English, x 0–280. The toggle sits in the topbar's leading group, so it too moves
+to the right under RTL, on the same side as the drawer.
+
+`admin.rtl.css` previously held a border rule for `.sidebar`, a class the admin layout does not use,
+so it never applied. It was **not** restored: the LTR sidebar has no matching border, and adding one
+only in Arabic would make the two languages differ for no reason.
+
+### 30.4 Filter bar accessibility (`admin.js`)
+
+The injected filter panel already rendered visible `<label>` text, but no label was bound to any
+control — six unnamed form controls on every admin list page.
+
+Every control now has a deterministic unique id (`ghars-filter-<n>-<key>`, from a module-level
+counter so a second initialisation cannot duplicate an id) and a `<label for>` that matches exactly
+one control.
+
+The labels themselves were also wrong, not just unbound. The panel is generic and cannot know a
+page's business vocabulary, yet it labelled column 0 "Main entity" and column 2 "Type / Category"
+whatever those columns actually held — on Bookings, "Main entity" was a dropdown of numeric row IDs.
+Each column filter is now named from **the table's own `<thead>` cell**, which is metadata already
+present in the markup and already localized by the view. A column is dropped entirely when it cannot
+be filtered honestly:
+
+| Dropped when | Why |
+| --- | --- |
+| header cell is blank | no accessible name available (action columns) |
+| fewer than two distinct values | selecting the only value filters nothing |
+| every value is numeric | an id or count column is not a filter |
+
+The visible effect: Bookings offers *Search, Status, Activity, From, To* instead of *Keyword, Status,
+Type / Category, Main entity, From, To*; the ID dropdown is gone. Library, whose columns are ID / Name
+/ Sort, correctly offers only *Search, From, To*. The approval queue drops its Status filter because
+every queued item has the same status.
+
+This also satisfies the Arabic requirement through the existing localization approach rather than a
+new one: on a bilingual admin view the headers are Arabic, so the filter labels are Arabic
+(`الموسم` on KPI Review). The static labels use the `label(en, ar)` helper already in the file.
+
+Two smaller fixes in the same file: the panel is now inserted **outside** the table's horizontal
+scroll container — with scrolling restored it would otherwise have scrolled away and lost width — and
+the dead sidebar toggle handler was removed, since it queried `.sidebar` and never ran.
+
+### 30.5 Page-level filter forms
+
+The shell fix left 24 unnamed controls per language on four pages whose own filter forms had
+`<label>` elements with no `for`. Those were bound mechanically — ids and `for` attributes only, no
+text or layout change — on Admin Dashboard (7), KPI Review (3) and Reports Analytics (10). Admin
+Gallery (4) had no labels at all, only a placeholder, so it received `visually-hidden` labels, which
+give an accessible name without altering the row.
+
+The Activities filter row's Filter/Reset pair was given `flex-wrap`; it was 4px wider than its
+column at 1024px.
+
+### 30.6 A second, subtler overflow source
+
+With table scrolling restored, Admin Activities still overflowed by 105px at 390px, and nothing
+inside `.admin-page` appeared to be over-wide. The cause was
+`<span class="visually-hidden">Actions</span>` in a table header. Bootstrap declares
+`.visually-hidden:not(caption) { position: absolute !important }`, and `.table-responsive` was
+`position: static`, so the span's containing block was not the scroll wrapper and it escaped the
+clip — a 1px element sitting at x = 494 pushing the page 105px wide.
+
+`position: relative` on the wrapper makes it a containing block, so absolutely positioned descendants
+are clipped with everything else. This protects any future screen-reader label inside a wide table.
+
+### 30.7 Verification
+
+Chrome, 1440 / 1024 / 768 / 390px, English and Arabic.
+
+**Page-level horizontal overflow** (`documentElement.scrollWidth − clientWidth`):
+
+| | 1440 | 1024 | 768 | 390 |
+| --- | --- | --- | --- | --- |
+| Worst admin page, before | 0px | 166px | 142px | **520px** |
+| Worst admin page, after | 0px | 0px | 0px | **0px** |
+
+Sixteen admin pages — Dashboard, Activities, Approval queue, Bookings, KPI, Reports, Organizations,
+External Surveys, Gallery, Library, Attendance, Certificates, Surveys, News, Notifications, Contact
+Messages — at four widths in both languages: 128 page loads, every one HTTP 200 with **0px** overflow,
+**0** unnamed controls, **0** duplicate ids and no badge without text. Wide tables scroll inside their
+own wrapper, as before; no admin table was converted to cards.
+
+**Accessible names**, at 1440px across ten list pages in both languages: **156 unnamed controls
+before, 0 after**; duplicate ids 0 before and after; every `label[for]` resolves to exactly one
+control.
+
+**Drawer behaviour**, 23 checks per language at 390px, all passing: hidden at load with no backdrop
+and no overflow; Tab reaches the toggle and it shows a visible focus ring; Enter opens it;
+`aria-expanded` flips to `true`; the backdrop appears; the drawer is fully on screen, on the reading
+side; opening adds no page overflow; focus moves into the drawer; all 16 nav links stay keyboard
+reachable and the active item stays marked; Escape closes it and returns focus to the toggle; the
+backdrop click and the in-drawer close button both close it; and resizing to desktop leaves no
+backdrop and no scroll lock.
+
+**Desktop regression.** The pre-change build was rebuilt from a stash and measured, then compared
+element by element against the post-change build — sidebar, brand, logo, nav container, active link,
+footer, content, topbar and page boxes plus all 16 nav-link rectangles, on three pages at 1440px and
+1024px in both languages. **132 of 132 measurements identical, 0 differing.** The desktop admin
+layout is unchanged.
+
+**Public site.** All shell rules are scoped to `body.admin-shell`, `.admin-sidebar` or
+`.admin-topbar`; public pages were checked at 1440px and 390px in both languages and are unaffected.
+
+**Security.** Presentation only: `git diff --name-only` lists four admin views, the admin layout,
+three stylesheets and `admin.js`. **No C# file changed** — no controller, no `[Authorize]` attribute,
+no role check, no organization filter, no server-side query. Sidebar visibility is not authorization,
+and the Users link remains rendered only for Super Admin as before.
+
+`dotnet build --no-incremental` → **0 errors, 1 warning**, the retained `CS0108` on
+`Activity.CreatedByUserId`, not suppressed. **No migration required** and none created.

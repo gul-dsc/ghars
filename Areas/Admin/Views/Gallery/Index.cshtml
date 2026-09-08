@@ -17,10 +17,12 @@
 </div>
 <form method="get" class="card p-3 rounded-4 border-0 shadow-sm mb-3">
     <div class="row g-2">
-        <div class="col-md-3"><input class="form-control" name="keyword" value="@keywordValue" placeholder="Search albums" /></div>
-        <div class="col-md-2"><select class="form-select" name="seasonId"><option value="">All seasons</option>@foreach(var s in seasons){<option value="@s.Id">@s.TitleEn</option>}</select></div>
-        <div class="col-md-3"><select class="form-select" name="organizationId"><option value="">All clubs/entities</option>@foreach(var o in orgs){<option value="@o.Id">@o.NameEn</option>}</select></div>
-        <div class="col-md-2"><select class="form-select" name="isPublic"><option value="">All status</option><option value="true">Published</option><option value="false">Hidden</option></select></div>
+        @* These filters are labelled by their option text alone, which a screen reader does not
+           announce. Visually-hidden labels give each an accessible name without altering the row. *@
+        <div class="col-md-3"><label class="visually-hidden" for="f-gal-keyword">Search albums</label><input class="form-control" id="f-gal-keyword" name="keyword" value="@keywordValue" placeholder="Search albums" /></div>
+        <div class="col-md-2"><label class="visually-hidden" for="f-gal-seasonId">Season</label><select class="form-select" id="f-gal-seasonId" name="seasonId"><option value="">All seasons</option>@foreach(var s in seasons){<option value="@s.Id">@s.TitleEn</option>}</select></div>
+        <div class="col-md-3"><label class="visually-hidden" for="f-gal-organizationId">Club or entity</label><select class="form-select" id="f-gal-organizationId" name="organizationId"><option value="">All clubs/entities</option>@foreach(var o in orgs){<option value="@o.Id">@o.NameEn</option>}</select></div>
+        <div class="col-md-2"><label class="visually-hidden" for="f-gal-isPublic">Status</label><select class="form-select" id="f-gal-isPublic" name="isPublic"><option value="">All status</option><option value="true">Published</option><option value="false">Hidden</option></select></div>
         <div class="col-md-2"><button class="btn btn-outline-primary w-100">Filter</button></div>
     </div>
 </form>

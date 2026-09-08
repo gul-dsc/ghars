@@ -1,2 +1,9 @@
-/* RTL adjustments */
-.sidebar{ border-left: 1px solid rgba(255,255,255,.1); border-right: none; }
+/* RTL adjustments.
+
+   Nothing is needed here for the sidebar. Its drawer side is chosen in the layout, which emits
+   .offcanvas-end instead of .offcanvas-start under RTL, so Bootstrap's own rules anchor and animate
+   the drawer from the right without any mirrored transforms.
+
+   This file previously carried a border rule for ".sidebar", a class the admin layout does not use,
+   so it never applied. It is not restored: the LTR sidebar has no matching border, and adding one
+   only in Arabic would make the two languages differ for no reason. */

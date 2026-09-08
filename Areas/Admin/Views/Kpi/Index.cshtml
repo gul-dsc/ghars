@@ -46,9 +46,9 @@
 
 <form method="get" class="card p-3 rounded-4 border-0 shadow-sm mb-3">
     <div class="row g-2 align-items-end">
-        <div class="col-md-3"><label class="form-label">@T("Status", "الحالة")</label><select class="form-select" name="status"><option value="">@T("All", "الكل")</option>@foreach (KpiSubmissionStatus s in Enum.GetValues(typeof(KpiSubmissionStatus))){<option value="@s" selected="@(selectedStatus==s)">@StatusText(s)</option>}</select></div>
-        <div class="col-md-3"><label class="form-label">@T("Season", "الموسم")</label><select class="form-select" name="seasonId"><option value="">@T("All", "الكل")</option>@foreach (var s in seasons){<option value="@s.Id" selected="@(selectedSeasonId==s.Id)">@(ar?s.TitleAr:s.TitleEn)</option>}</select></div>
-        <div class="col-md-3"><label class="form-label">@T("Club", "النادي")</label><select class="form-select" name="clubId"><option value="">@T("All", "الكل")</option>@foreach (var c in clubs){<option value="@c.Id" selected="@(selectedClubId==c.Id)">@N(c)</option>}</select></div>
+        <div class="col-md-3"><label class="form-label" for="f-kpi-status">@T("Status", "الحالة")</label><select id="f-kpi-status" class="form-select" name="status"><option value="">@T("All", "الكل")</option>@foreach (KpiSubmissionStatus s in Enum.GetValues(typeof(KpiSubmissionStatus))){<option value="@s" selected="@(selectedStatus==s)">@StatusText(s)</option>}</select></div>
+        <div class="col-md-3"><label class="form-label" for="f-kpi-seasonId">@T("Season", "الموسم")</label><select id="f-kpi-seasonId" class="form-select" name="seasonId"><option value="">@T("All", "الكل")</option>@foreach (var s in seasons){<option value="@s.Id" selected="@(selectedSeasonId==s.Id)">@(ar?s.TitleAr:s.TitleEn)</option>}</select></div>
+        <div class="col-md-3"><label class="form-label" for="f-kpi-clubId">@T("Club", "النادي")</label><select id="f-kpi-clubId" class="form-select" name="clubId"><option value="">@T("All", "الكل")</option>@foreach (var c in clubs){<option value="@c.Id" selected="@(selectedClubId==c.Id)">@N(c)</option>}</select></div>
         <div class="col-md-3 d-flex gap-2"><button class="btn btn-primary">@T("Filter", "تصفية")</button><a class="btn btn-outline-secondary" href="/Admin/Kpi">@T("Reset", "إعادة ضبط")</a></div>
     </div>
 </form>

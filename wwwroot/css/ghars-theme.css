@@ -22,8 +22,12 @@ a { color: var(--brand-primary); }
 /* Admin shell */
 .admin-shell { min-height: 100vh; display: flex; }
 
-/* Sidebar */
-.admin-sidebar { width: 280px; background: var(--sidebar-bg); color: var(--sidebar-text); position: sticky; top: 0; height: 100vh; }
+/* Sidebar. Layout (width, sticky column) applies only from the lg breakpoint up; below it the
+   sidebar is a Bootstrap off-canvas drawer and Bootstrap owns its position. See "ADMIN SIDEBAR". */
+.admin-sidebar { background: var(--sidebar-bg); color: var(--sidebar-text); }
+@media (min-width: 992px) {
+    .admin-sidebar { width: 280px; position: sticky; top: 0; height: 100vh; }
+}
     .admin-sidebar .brand { padding: 18px 18px 10px 18px; border-bottom: 1px solid rgba(255,255,255,.08); }
         .admin-sidebar .brand img { max-width: 200px; height: auto; display: block; /* keep safe whitespace around the logo in the layout, don’t crop */ }
     .admin-sidebar .nav-section-title { padding: 14px 18px 6px; color: var(--sidebar-muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; }
@@ -44,15 +48,6 @@ a { color: var(--brand-primary); }
     .table thead th { background: #f3f5f7; border-bottom: 1px solid var(--ui-border) !important; color: #2b2f34; font-weight: 700; }
 .badge.bg-teal { background: var(--brand-primary) !important; }
 
-/* Responsive sidebar */
-@media (max-width: 992px) {
-    .admin-sidebar { width: 86px; }
-        .admin-sidebar .brand img { max-width: 54px; }
-        .admin-sidebar .nav-section-title { display: none; }
-        .admin-sidebar .nav-link span { display: none; }
-}
-
-
 /* =========================================================
    ADMIN ONLY SCROLL FIX
    ========================================================= */
@@ -61,7 +56,9 @@ body.admin-shell { min-height: 100vh; overflow-x: hidden; overflow-y: auto; }
 
     body.admin-shell .admin-shell { min-height: 100vh; display: flex; align-items: stretch; overflow: visible; }
 
+@media (min-width: 992px) {
     body.admin-shell .admin-sidebar { width: 280px; min-height: 100vh; height: 100vh; overflow-y: auto; overflow-x: hidden; position: sticky; top: 0; flex-shrink: 0; }
+}
 
     body.admin-shell .admin-content { flex: 1 1 auto; min-width: 0; min-height: 100vh; display: flex; flex-direction: column; overflow: visible; }
 
@@ -69,24 +66,54 @@ body.admin-shell { min-height: 100vh; overflow-x: hidden; overflow-y: auto; }
 
     body.admin-shell .admin-page { flex: 1 1 auto; padding: 18px; overflow: visible; min-height: calc(100vh - 73px); }
 
-        body.admin-shell .admin-page .table-responsive { overflow-x: auto; }
+        /* A wide table scrolls inside its own wrapper. Listing .table-responsive below as well
+           reset that to visible, so wide tables spilled onto the page instead -- and because the
+           shell hides horizontal page overflow, the spilled columns were unreachable. */
+        /* position:relative makes the wrapper a containing block, so absolutely positioned
+           descendants are clipped by it too. Without it a .visually-hidden label inside a wide
+           table (position:absolute per Bootstrap) escapes the scroller and widens the page. */
+        body.admin-shell .admin-page .table-responsive { overflow-x: auto; position: relative; }
 
         body.admin-shell .admin-page .card,
-        body.admin-shell .admin-page .table,
-        body.admin-shell .admin-page .table-responsive { overflow: visible; }
+        body.admin-shell .admin-page .table { overflow: visible; }
+
+/* =========================================================
+   ADMIN SIDEBAR
+   From lg up the sidebar is a static column. Below lg it is a Bootstrap off-canvas drawer
+   (.offcanvas-lg on the element, .offcanvas-start / .offcanvas-end chosen by reading direction),
+   so Bootstrap provides the backdrop, Escape, focus handling and the transition. These rules only
+   reconcile Bootstrap's own defaults with the admin shell's appearance.
+   ========================================================= */
+
+.admin-sidebar.offcanvas-lg { --bs-offcanvas-width: 280px; }
+
+/* The nav items carry their own spacing; the drawer padding would double it. */
+.admin-sidebar .offcanvas-body { padding: 0; }
+
+.admin-sidebar .offcanvas-header { border-bottom: 1px solid rgba(255,255,255,.10); }
+.admin-sidebar .offcanvas-title { color: #fff; }
+
+@media (min-width: 992px) {
+    /* Above the breakpoint Bootstrap blanks the background and makes the body a flex row.
+       The sidebar keeps its own colour and its original block flow. */
+    .admin-sidebar.offcanvas-lg { background-color: var(--sidebar-bg) !important; }
+    .admin-sidebar .offcanvas-body { display: block; overflow-y: visible; }
+}
 
 @media (max-width: 991.98px) {
-    body.admin-shell .admin-sidebar { position: fixed; top: 0; left: 0; z-index: 1040; transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: 0 0 20px rgba(0,0,0,.18); }
-
-        body.admin-shell .admin-sidebar.open { transform: translateX(0); }
-
-    html[dir="rtl"] body.admin-shell .admin-sidebar { left: auto; right: 0; transform: translateX(100%); }
-
-        html[dir="rtl"] body.admin-shell .admin-sidebar.open { transform: translateX(0); }
-
     body.admin-shell .admin-content { min-height: 100vh; }
 
     body.admin-shell .admin-page { min-height: auto; }
+}
+
+/* Keyboard focus must stay visible on the shell's own controls. */
+.admin-sidebar a:focus-visible,
+.admin-sidebar button:focus-visible,
+.admin-topbar a:focus-visible,
+.admin-topbar button:focus-visible {
+    outline: 3px solid var(--dsc-teal);
+    outline-offset: 2px;
+    box-shadow: none;
 }
 
 /* Super Admin action visibility fix */

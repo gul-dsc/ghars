@@ -1,12 +1,14 @@
 @using GharsPlatform.Models.Core
 @using GharsPlatform.Helpers
 @using System.Globalization
+@* Booking Source labels come from the shared BookingSource helper, so this inbox, booking details
+   and the club's own dashboard cannot describe the same request differently. *@
 @{
     var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string en,string ar)=>isAr?ar:en;
     string A(Activity a)=>isAr?(a.TitleAr??a.TitleEn):(a.TitleEn??a.TitleAr);
-    // Direct (entity-first) requests have no linked program - show the requested subject instead.
-    string BookingTitle(BookingRequest b)=>b.Activity!=null?A(b.Activity):(string.IsNullOrWhiteSpace(b.Subject)?T("Direct request","طلب مباشر"):b.Subject!);
+    // A custom request has no linked program - it shows the program name the club asked for.
+    string BookingTitle(BookingRequest b)=>BookingSource.Title(b);
     string O(Organization? o)=>isAr?(o?.NameAr??o?.NameEn??""):(o?.NameEn??o?.NameAr??"");
     string ActivityTypeText(ActivityType type)=>type switch{ActivityType.Lecture=>T("Lecture","محاضرة"),ActivityType.Event=>T("Event","فعالية"),ActivityType.Workshop=>T("Workshop","ورشة عمل"),ActivityType.TrainingProgram=>T("Training","تدريب"),ActivityType.Course=>T("Course","دورة"),ActivityType.Activity=>T("Activity","نشاط"),_=>type.ToString()};
     string StatusText(BookingStatus st)=>st switch{BookingStatus.Pending=>T("Pending Partner Approval","بانتظار موافقة الشريك"),BookingStatus.Approved=>T("Approved","موافق عليه"),BookingStatus.Rejected=>T("Rejected","مرفوض"),BookingStatus.Cancelled=>T("Cancelled","ملغي"),BookingStatus.PartnerProposedNewTime=>T("Awaiting club response","بانتظار رد النادي"),BookingStatus.Confirmed=>T("Confirmed","مؤكد"),BookingStatus.ClubRejectedProposedTimes=>T("Awaiting partner update","بانتظار تحديث الشريك"),_=>st.ToString()};
@@ -29,8 +31,10 @@
 
     // Where a request came from: a published program of ours, or a club's own custom request.
     // ActivityId is the discriminator — a custom request has none, and none is ever fabricated.
-    bool FromProgram(BookingRequest b)=>b.ActivityId.HasValue;
-    string SourceLabel(BookingRequest b)=>FromProgram(b)?T("From my programs","من برامجي"):T("Custom Booking Request","طلب حجز مخصص");
+    bool FromProgram(BookingRequest b)=>!BookingSource.IsCustom(b);
+    var existingCount = bookings.Count(FromProgram);
+    var customCount = bookings.Count - existingCount;
+    var selectedSource = ViewBag.Source as BookingSourceFilter?;
 }
 <div class="dashboard-hero d-flex flex-wrap justify-content-between align-items-center gap-3">
     <div>
@@ -47,6 +51,7 @@
     <div class="col-md-2"><label class="form-label" for="pd-programType">@T("Program type","نوع البرنامج")</label><select class="form-select" id="pd-programType" name="programType"><option value="">@T("All","الكل")</option>@foreach(ActivityType t in Enum.GetValues(typeof(ActivityType))){<option value="@t" selected="@(ViewBag.ProgramType==t)">@ActivityTypeText(t)</option>}</select></div>
     <div class="col-md-2"><label class="form-label" for="pd-status">@T("Status","الحالة")</label><select class="form-select" id="pd-status" name="status"><option value="">@T("All","الكل")</option>@foreach(BookingStatus s in Enum.GetValues(typeof(BookingStatus))){<option value="@s" selected="@(ViewBag.Status==s)">@StatusText(s)</option>}</select></div>
     <div class="col-md-2"><label class="form-label" for="pd-club">@T("Club","النادي")</label><select class="form-select" id="pd-club" name="clubId"><option value="">@T("All","الكل")</option>@foreach(var c in clubs){<option value="@c.Id" selected="@(ViewBag.ClubId==c.Id)">@O(c)</option>}</select></div>
+    <div class="col-md-2"><label class="form-label" for="pd-source">@T("Booking source","مصدر الحجز")</label><select class="form-select" id="pd-source" name="source"><option value="">@T("All","الكل")</option><option value="@BookingSourceFilter.ExistingProgram" selected="@(selectedSource == BookingSourceFilter.ExistingProgram)">@T("Existing Program","برنامج قائم")</option><option value="@BookingSourceFilter.CustomProgram" selected="@(selectedSource == BookingSourceFilter.CustomProgram)">@T("Custom Program Request","طلب برنامج مخصص")</option></select></div>
     <div class="col-md-2"><label class="form-label" for="pd-q">@T("Search","بحث")</label><input class="form-control" id="pd-q" name="q" value="@ViewBag.Query" /></div>
     <div class="col-12"><button class="btn btn-primary">@T("Apply filters","تطبيق الفلاتر")</button><a class="btn btn-outline-secondary" href="/partner">@T("Reset","إعادة تعيين")</a></div>
 </form>
@@ -57,6 +62,29 @@
     <div class="col-md-2"><div class="metric-card"><div class="label">@T("Rejected","مرفوضة")</div><div class="value">@rejected</div></div></div>
     <div class="col-md-2"><div class="metric-card"><div class="label">@T("Upcoming programs","برامج قادمة")</div><div class="value">@upcoming</div></div></div>
     <div class="col-md-2"><div class="metric-card"><div class="label">@T("Low capacity","سعة منخفضة")</div><div class="value">@lowCap</div></div></div>
+</div>
+
+@* The two request kinds counted separately, each a shortcut into the filtered inbox. One inbox,
+   two views of it — a partner never has to remember to check a second screen. *@
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <a class="metric-card d-flex justify-content-between align-items-center text-decoration-none text-reset h-100" href="/partner?source=@BookingSourceFilter.ExistingProgram">
+            <div>
+                <div class="label"><i class="bi bi-collection me-1" aria-hidden="true"></i>@T("Existing Program requests","طلبات على برامج قائمة")</div>
+                <div class="small text-muted">@T("Bookings against programs you published.","حجوزات على برامج قمتم بنشرها.")</div>
+            </div>
+            <div class="value">@existingCount</div>
+        </a>
+    </div>
+    <div class="col-md-6">
+        <a class="metric-card d-flex justify-content-between align-items-center text-decoration-none text-reset h-100" href="/partner?source=@BookingSourceFilter.CustomProgram">
+            <div>
+                <div class="label"><i class="bi bi-pencil-square me-1" aria-hidden="true"></i>@T("Custom Program requests","طلبات برامج مخصصة")</div>
+                <div class="small text-muted">@T("Programs clubs described and addressed to you.","برامج وصفتها الأندية وأرسلتها إليكم.")</div>
+            </div>
+            <div class="value">@customCount</div>
+        </a>
+    </div>
 </div>
 
 @* A compact pointer into the separate content-management surface, not a second copy of it: three
@@ -75,7 +103,7 @@
     </div>
 </div>
 @if (bookings.Any(x=>x.Status==BookingStatus.Pending || x.Status==BookingStatus.ClubRejectedProposedTimes)){
-<div class="action-panel mb-4"><h2 class="h5">@T("Pending action", "إجراءات مطلوبة")</h2><div class="table-responsive"><table class="table"><tbody>@foreach(var b in bookings.Where(x=>x.Status==BookingStatus.Pending||x.Status==BookingStatus.ClubRejectedProposedTimes).Take(5)){<tr><td class="small fw-semibold">@b.ReferenceNumber</td><td>@O(b.Organization)</td><td>@(BookingTitle(b))<div><span class="badge rounded-pill @(FromProgram(b)?"text-bg-light border":"text-bg-info")">@SourceLabel(b)</span></div></td><td><span class="badge text-bg-warning">@StatusText(b.Status)</span></td><td class="text-end"><a class="btn btn-sm btn-primary" href="/bookings/details/@b.Id">@T("Review","مراجعة")</a></td></tr>}</tbody></table></div></div>}
+<div class="action-panel mb-4"><h2 class="h5">@T("Pending action", "إجراءات مطلوبة")</h2><div class="table-responsive"><table class="table"><tbody>@foreach(var b in bookings.Where(x=>x.Status==BookingStatus.Pending||x.Status==BookingStatus.ClubRejectedProposedTimes).Take(5)){<tr><td class="small fw-semibold">@b.ReferenceNumber</td><td>@O(b.Organization)</td><td>@(BookingTitle(b))<div><span class="badge rounded-pill @BookingSource.BadgeClass(b)"><i class="bi @BookingSource.Icon(b) me-1" aria-hidden="true"></i>@BookingSource.Label(b)</span></div></td><td><span class="badge text-bg-warning">@StatusText(b.Status)</span></td><td class="text-end"><a class="btn btn-sm btn-primary" href="/bookings/details/@b.Id">@T("Review","مراجعة")</a></td></tr>}</tbody></table></div></div>}
 <div class="row g-3 mb-4"><div class="col-lg-6"><div class="chart-card"><h3 class="h6">@T("Bookings by status","الحجوزات حسب الحالة")</h3><canvas id="statusChart"></canvas></div></div><div class="col-lg-6"><div class="chart-card"><h3 class="h6">@T("Programs by type","البرامج حسب النوع")</h3><canvas id="typeChart"></canvas></div></div></div>
-<div class="row g-3"><div class="col-lg-8"><div class="metric-card"><h2 class="h5">@T("Recent booking requests", "أحدث طلبات الحجز")</h2><div class="table-responsive"><table class="table align-middle"><thead><tr><th>@T("Reference","المرجع")</th><th>@T("Club","النادي")</th><th>@T("Program","البرنامج")</th><th>@T("Source","المصدر")</th><th>@T("Status","الحالة")</th><th></th></tr></thead><tbody>@foreach(var b in bookings.Take(12)){<tr><td class="small fw-semibold">@b.ReferenceNumber</td><td>@O(b.Organization)</td><td>@(BookingTitle(b))</td><td><span class="badge rounded-pill @(FromProgram(b)?"text-bg-light border":"text-bg-info")">@SourceLabel(b)</span></td><td><span class="badge text-bg-secondary">@StatusText(b.Status)</span></td><td><a class="btn btn-sm btn-outline-primary" href="/bookings/details/@b.Id">@T("Details","تفاصيل")</a></td></tr>}@if(!bookings.Any()){<tr><td colspan="6"><div class="empty-state">@T("No booking requests found.", "لا توجد طلبات حجز.")</div></td></tr>}</tbody></table></div></div></div><div class="col-lg-4"><div class="metric-card mb-3"><h2 class="h5">@T("Notifications", "الإشعارات")</h2>@foreach(var n in notes){<a class="d-block border-bottom py-2 text-decoration-none" href="/notifications/open/@n.Id"><strong>@(isAr?n.Notification!.TitleAr:n.Notification!.TitleEn)</strong><div class="small text-muted">@(isAr?n.Notification!.MessageAr:n.Notification!.MessageEn)</div></a>}@if(!notes.Any()){<div class="empty-state">@T("No unread notifications.", "لا توجد إشعارات غير مقروءة.")</div>}</div><div class="metric-card"><h2 class="h5">@T("Upcoming workshops/trainings/courses", "ورش ودورات وبرامج قادمة")</h2>@foreach(var a in activities.Take(8)){<div class="border-bottom py-2"><strong>@A(a)</strong><div class="small text-muted">@ActivityTypeText(a.Type) · @a.StartDateTime.ToString("g") · @T("Capacity","السعة") @a.Capacity</div></div>}</div></div></div>
+<div class="row g-3"><div class="col-lg-8"><div class="metric-card"><h2 class="h5">@T("Recent booking requests", "أحدث طلبات الحجز")</h2><div class="table-responsive"><table class="table align-middle"><thead><tr><th>@T("Reference","المرجع")</th><th>@T("Club","النادي")</th><th>@T("Program","البرنامج")</th><th>@T("Booking source","مصدر الحجز")</th><th>@T("Status","الحالة")</th><th></th></tr></thead><tbody>@foreach(var b in bookings.Take(12)){<tr><td class="small fw-semibold">@b.ReferenceNumber</td><td>@O(b.Organization)</td><td>@(BookingTitle(b))</td><td><span class="badge rounded-pill @BookingSource.BadgeClass(b)"><i class="bi @BookingSource.Icon(b) me-1" aria-hidden="true"></i>@BookingSource.Label(b)</span></td><td><span class="badge text-bg-secondary">@StatusText(b.Status)</span></td><td><a class="btn btn-sm btn-outline-primary" href="/bookings/details/@b.Id">@T("Details","تفاصيل")</a></td></tr>}@if(!bookings.Any()){<tr><td colspan="6"><div class="empty-state">@T("No booking requests found.", "لا توجد طلبات حجز.")</div></td></tr>}</tbody></table></div></div></div><div class="col-lg-4"><div class="metric-card mb-3"><h2 class="h5">@T("Notifications", "الإشعارات")</h2>@foreach(var n in notes){<a class="d-block border-bottom py-2 text-decoration-none" href="/notifications/open/@n.Id"><strong>@(isAr?n.Notification!.TitleAr:n.Notification!.TitleEn)</strong><div class="small text-muted">@(isAr?n.Notification!.MessageAr:n.Notification!.MessageEn)</div></a>}@if(!notes.Any()){<div class="empty-state">@T("No unread notifications.", "لا توجد إشعارات غير مقروءة.")</div>}</div><div class="metric-card"><h2 class="h5">@T("Upcoming workshops/trainings/courses", "ورش ودورات وبرامج قادمة")</h2>@foreach(var a in activities.Take(8)){<div class="border-bottom py-2"><strong>@A(a)</strong><div class="small text-muted">@ActivityTypeText(a.Type) · @a.StartDateTime.ToString("g") · @T("Capacity","السعة") @a.Capacity</div></div>}</div></div></div>
 @section Scripts{<script src="https://cdn.jsdelivr.net/npm/chart.js"></script><script>new Chart(document.getElementById('statusChart'),{type:'doughnut',data:{labels:@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Enum.GetNames(typeof(BookingStatus)))),datasets:[{data:@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Enum.GetValues(typeof(BookingStatus)).Cast<BookingStatus>().Select(s=>bookings.Count(b=>b.Status==s)).ToList()))}]}});new Chart(document.getElementById('typeChart'),{type:'bar',data:{labels:@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Enum.GetNames(typeof(ActivityType)))),datasets:[{label:'@T("Programs","البرامج")',data:@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Enum.GetValues(typeof(ActivityType)).Cast<ActivityType>().Select(t=>activities.Count(a=>a.Type==t)).ToList()))}]}});</script>}

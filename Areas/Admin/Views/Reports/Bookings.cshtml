@@ -1,17 +1,32 @@
 @model List<GharsPlatform.Models.Core.BookingRequest>
+@using GharsPlatform.Helpers
 @{
     ViewData["Title"] = "Bookings Report";
     ViewData["PageTitle"] = "Bookings Report";
+    var existing = Model.Count(x => !BookingSource.IsCustom(x));
+    var custom = Model.Count - existing;
 }
+@* Both booking paths appear here. A Custom Program Request has no Activity row, so every column
+   below reads from the booking itself and falls back to the Activity only where one exists —
+   joining through Activities would have made custom requests disappear from this report. *@
+<div class="d-flex flex-wrap gap-3 align-items-center mb-3 small">
+    <span><strong>@Model.Count</strong> bookings</span>
+    <span><i class="bi bi-collection me-1" aria-hidden="true"></i>Existing Program: <strong>@existing</strong></span>
+    <span><i class="bi bi-pencil-square me-1" aria-hidden="true"></i>Custom Program: <strong>@custom</strong></span>
+</div>
 <div class="card border-0 shadow-sm rounded-4">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
             <tr>
                 <th>ID</th>
-                <th>Organization</th>
-                <th>Activity</th>
-                <th>Seats</th>
+                <th>Club</th>
+                <th>Implementing entity</th>
+                <th>Program</th>
+                <th>Booking source</th>
+                <th>Type</th>
+                <th>Proposed date</th>
+                <th>Participants</th>
                 <th>Status</th>
                 <th>Created</th>
             </tr>
@@ -22,11 +37,23 @@
                 <tr>
                     <td>@b.Id</td>
                     <td>@b.Organization?.NameEn</td>
-                    <td>@b.Activity?.TitleEn</td>
+                    <td>@(b.PartnerOrganization?.NameEn ?? "—")</td>
+                    <td>@BookingSource.Title(b)</td>
+                    <td>
+                        <span class="badge rounded-pill @BookingSource.BadgeClass(b)">
+                            <i class="bi @BookingSource.Icon(b) me-1" aria-hidden="true"></i>@BookingSource.Label(b)
+                        </span>
+                    </td>
+                    <td>@(b.Activity?.Type ?? b.RequestedActivityType)</td>
+                    <td>@(b.ProposedStartDateTime?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
                     <td>@b.RequestedSeats</td>
                     <td>@b.Status</td>
                     <td>@b.CreatedAtUtc.ToString("yyyy-MM-dd")</td>
                 </tr>
+            }
+            @if (Model.Count == 0)
+            {
+                <tr><td colspan="10" class="text-muted p-3">No bookings recorded.</td></tr>
             }
             </tbody>
         </table>

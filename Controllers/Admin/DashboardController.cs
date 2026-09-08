@@ -41,10 +41,14 @@ public class DashboardController : Controller
         if (toDate.HasValue) activities = activities.Where(x => x.StartDateTime < toDate.Value);
 
         IQueryable<BookingRequest> bookings = _db.BookingRequests.Include(x => x.Activity).Include(x => x.Organization).Include(x => x.PartnerOrganization);
-        if (selectedSeasonId.HasValue) bookings = bookings.Where(x => x.Activity != null && x.Activity.SeasonId == selectedSeasonId.Value);
+        // Both booking paths must survive these filters. A Custom Program Request carries its own
+        // SeasonId and RequestedActivityType and has no Activity at all — testing the Activity alone
+        // dropped every custom request from the executive counts the moment a season or a type was
+        // selected, which is exactly the kind of silent undercount these tiles must not produce.
+        if (selectedSeasonId.HasValue) bookings = bookings.Where(x => x.SeasonId != null ? x.SeasonId == selectedSeasonId.Value : (x.Activity != null && x.Activity.SeasonId == selectedSeasonId.Value));
         if (clubId.HasValue) bookings = bookings.Where(x => x.OrganizationId == clubId.Value);
         if (partnerId.HasValue) bookings = bookings.Where(x => x.PartnerOrganizationId == partnerId.Value || (x.Activity != null && x.Activity.PartnerOrganizationId == partnerId.Value));
-        if (activityType.HasValue) bookings = bookings.Where(x => x.Activity != null && x.Activity.Type == activityType.Value);
+        if (activityType.HasValue) bookings = bookings.Where(x => x.Activity != null ? x.Activity.Type == activityType.Value : x.RequestedActivityType == activityType.Value);
         if (fromDate.HasValue) bookings = bookings.Where(x => x.CreatedAtUtc >= fromDate.Value);
         if (toDate.HasValue) bookings = bookings.Where(x => x.CreatedAtUtc < toDate.Value);
 

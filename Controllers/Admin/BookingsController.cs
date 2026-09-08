@@ -1,4 +1,5 @@
 using GharsPlatform.Data;
+using GharsPlatform.Helpers;
 using GharsPlatform.Hubs;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
@@ -21,15 +22,25 @@ public class BookingsController : Controllers.BaseController
         _hub = hub;
     }
 
-    public async Task<IActionResult> Index(string? status = null)
+    public async Task<IActionResult> Index(string? status = null, BookingSourceFilter? source = null)
     {
         IQueryable<BookingRequest> q = Db.BookingRequests
             .Include(x => x.Activity)
-            .Include(x => x.Organization);
+            .Include(x => x.Organization)
+            // Custom requests carry no Activity, so the implementing entity is the only place their
+            // destination is recorded. Without this the admin list could not name it.
+            .Include(x => x.PartnerOrganization);
 
         if (Enum.TryParse<BookingStatus>(status ?? "", out var st))
             q = q.Where(x => x.Status == st);
 
+        // Booking Source. Derived from ActivityId at query time rather than stored, so it cannot
+        // disagree with the data.
+        if (source == BookingSourceFilter.ExistingProgram) q = q.Where(x => x.ActivityId != null);
+        if (source == BookingSourceFilter.CustomProgram) q = q.Where(x => x.ActivityId == null);
+
+        ViewBag.Status = status;
+        ViewBag.Source = source;
         var list = await q.OrderByDescending(x => x.CreatedAtUtc).ToListAsync();
         return View(list);
     }

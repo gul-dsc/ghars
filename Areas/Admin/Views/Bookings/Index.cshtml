@@ -1,16 +1,40 @@
 @model List<GharsPlatform.Models.Core.BookingRequest>
+@using GharsPlatform.Helpers
 @{
     ViewData["Title"] = "Bookings";
     ViewData["PageTitle"] = "Bookings";
+    var status = ViewBag.Status as string;
+    var source = ViewBag.Source as BookingSourceFilter?;
+    // Preserved across the two filter rows so choosing a source does not silently clear the status.
+    string Q(string? s, BookingSourceFilter? src)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(s)) parts.Add("status=" + s);
+        if (src.HasValue) parts.Add("source=" + src.Value);
+        return parts.Count == 0 ? "/Admin/Bookings" : "/Admin/Bookings?" + string.Join("&", parts);
+    }
+    string Active(bool on) => on ? "btn-secondary" : "btn-outline-secondary";
 }
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-    <div class="fw-semibold">Bookings</div>
-    <div class="d-flex gap-2">
-        <a class="btn btn-sm btn-outline-secondary" href="/Admin/Bookings?status=Pending">Pending</a>
-        <a class="btn btn-sm btn-outline-secondary" href="/Admin/Bookings?status=Approved">Approved</a>
-        <a class="btn btn-sm btn-outline-secondary" href="/Admin/Bookings?status=Rejected">Rejected</a>
-        <a class="btn btn-sm btn-outline-secondary" href="/Admin/Bookings">All</a>
+    <div class="fw-semibold">Bookings <span class="text-muted">(@Model.Count)</span></div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-sm @Active(status == "Pending")" href="@Q("Pending", source)">Pending</a>
+        <a class="btn btn-sm @Active(status == "Approved")" href="@Q("Approved", source)">Approved</a>
+        <a class="btn btn-sm @Active(status == "Rejected")" href="@Q("Rejected", source)">Rejected</a>
+        <a class="btn btn-sm @Active(string.IsNullOrWhiteSpace(status))" href="@Q(null, source)">All statuses</a>
     </div>
+</div>
+
+@* Booking Source filter. Both paths stay in this one list — DSC sees every request either way. *@
+<div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+    <span class="text-muted small">Booking source:</span>
+    <a class="btn btn-sm @Active(source is null)" href="@Q(status, null)">All</a>
+    <a class="btn btn-sm @Active(source == BookingSourceFilter.ExistingProgram)" href="@Q(status, BookingSourceFilter.ExistingProgram)">
+        <i class="bi bi-collection me-1" aria-hidden="true"></i>Existing Program
+    </a>
+    <a class="btn btn-sm @Active(source == BookingSourceFilter.CustomProgram)" href="@Q(status, BookingSourceFilter.CustomProgram)">
+        <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>Custom Program
+    </a>
 </div>
 
 <div class="card border-0 shadow-sm rounded-4">
@@ -19,8 +43,10 @@
             <thead class="table-light">
             <tr>
                 <th>ID</th>
-                <th>Organization</th>
-                <th>Activity</th>
+                <th>Club</th>
+                <th>Program</th>
+                <th>Booking source</th>
+                <th>Implementing entity</th>
                 <th>Seats</th>
                 <th>Status</th>
                 <th>Created</th>
@@ -33,7 +59,15 @@
                 <tr>
                     <td>@b.Id</td>
                     <td class="fw-semibold">@b.Organization?.NameEn</td>
-                    <td>@b.Activity?.TitleEn</td>
+                    @* Never b.Activity?.TitleEn alone: a custom request has no Activity and would
+                       show an empty cell where the requested program name belongs. *@
+                    <td>@BookingSource.Title(b)</td>
+                    <td>
+                        <span class="badge rounded-pill @BookingSource.BadgeClass(b)">
+                            <i class="bi @BookingSource.Icon(b) me-1" aria-hidden="true"></i>@BookingSource.Label(b)
+                        </span>
+                    </td>
+                    <td>@(b.PartnerOrganization?.NameEn ?? "—")</td>
                     <td>@b.RequestedSeats</td>
                     <td><span class="badge text-bg-@(b.Status==BookingStatus.Approved?"success":b.Status==BookingStatus.Pending?"warning":"danger")">@b.Status</span></td>
                     <td>@b.CreatedAtUtc.ToString("yyyy-MM-dd")</td>
@@ -41,6 +75,10 @@
                         <a class="btn btn-sm btn-primary" href="/Admin/Bookings/Details/@b.Id">Details</a>
                     </td>
                 </tr>
+            }
+            @if (Model.Count == 0)
+            {
+                <tr><td colspan="9" class="text-muted p-3">No bookings match this filter.</td></tr>
             }
             </tbody>
         </table>

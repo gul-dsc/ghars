@@ -35,7 +35,12 @@ public class ReportsController : Controller
 
     public async Task<IActionResult> Bookings()
     {
-        var list = await _db.BookingRequests.Include(x => x.Activity).Include(x => x.Organization)
+        // PartnerOrganization is included because a Custom Program Request has no Activity, and the
+        // implementing entity is then the only record of where the request went.
+        var list = await _db.BookingRequests
+            .Include(x => x.Activity)
+            .Include(x => x.Organization)
+            .Include(x => x.PartnerOrganization)
             .OrderByDescending(x => x.CreatedAtUtc).Take(300).ToListAsync();
         return View(list);
     }
@@ -84,7 +89,10 @@ public class ReportsController : Controller
         var bookingsQ = _db.BookingRequests.Include(x => x.Activity).Include(x => x.Organization).Include(x => x.PartnerOrganization).AsQueryable();
         if (clubId.HasValue) bookingsQ = bookingsQ.Where(x => x.OrganizationId == clubId);
         if (entityId.HasValue) bookingsQ = bookingsQ.Where(x => x.PartnerOrganizationId == entityId);
-        if (activityType.HasValue) bookingsQ = bookingsQ.Where(x => x.Activity != null && x.Activity.Type == activityType);
+        // Null-aware: a Custom Program Request has no Activity, so its type lives on the booking
+        // itself. Testing only x.Activity.Type would silently drop every custom request from a
+        // type-filtered report.
+        if (activityType.HasValue) bookingsQ = bookingsQ.Where(x => x.Activity != null ? x.Activity.Type == activityType : x.RequestedActivityType == activityType);
         if (bookingStatus.HasValue) bookingsQ = bookingsQ.Where(x => x.Status == bookingStatus);
         if (from.HasValue) bookingsQ = bookingsQ.Where(x => x.CreatedAtUtc >= from.Value);
         if (to.HasValue) bookingsQ = bookingsQ.Where(x => x.CreatedAtUtc <= to.Value);

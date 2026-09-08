@@ -1,5 +1,6 @@
 @model GharsPlatform.Models.Core.BookingRequest
 @using GharsPlatform.Models.Core
+@using GharsPlatform.Helpers
 @using System.Globalization
 @{
     var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
@@ -9,18 +10,18 @@
     string T(string en, string ar) => isAr ? ar : en;
     // Where the request came from. ActivityId is the discriminator: a custom request has none, and
     // no placeholder Activity is ever created to fill the gap.
-    var fromOffering = Model.ActivityId.HasValue && Model.Activity is not null;
+    var isCustom = BookingSource.IsCustom(Model);
+    var fromOffering = !isCustom && Model.Activity is not null;
+    string ProgramTitle() => BookingSource.Title(Model);
 
-    // A custom request has no linked program, so the requested subject stands in for the title and
-    // the source is labelled rather than left blank.
-    string ProgramTitle()
-    {
-        var title = isAr ? (Model.Activity?.TitleAr ?? Model.Activity?.TitleEn) : (Model.Activity?.TitleEn ?? Model.Activity?.TitleAr);
-        if (!string.IsNullOrWhiteSpace(title)) return title!;
-        return string.IsNullOrWhiteSpace(Model.Subject)
-            ? (isAr ? "طلب حجز مخصص" : "Custom Booking Request")
-            : Model.Subject!;
-    }
+    // The offering's own documents, on the existing-program path only. Rendered on the same terms
+    // the file endpoint enforces — published and approved for the club, always for the owning
+    // entity — so the page never offers a link that would answer 404.
+    var canSeeOfferingDocs = fromOffering
+        && Model.Activity!.Attachments.Count > 0
+        && (isPartnerSide
+            || (Model.Activity.Status == ActivityStatus.Published
+                && Model.Activity.ApprovalStatus is null or OfferingApprovalStatus.Approved));
     string OrgName(Organization? o) => isAr ? (o?.NameAr ?? o?.NameEn ?? "") : (o?.NameEn ?? o?.NameAr ?? "");
     string ActivityTypeText(ActivityType type) => type switch
     {
@@ -97,9 +98,10 @@
             <div class="text-muted small">@T("Program", "البرنامج")</div>
             <div class="fw-semibold">@ProgramTitle()</div>
             @* Visible before the partner acts, so they know whether this is one of their published
-               programs or a request the club described themselves. *@
-            <span class="badge rounded-pill @(fromOffering ? "text-bg-light border" : "text-bg-info") mt-1">
-                @(fromOffering ? T("From published program", "من برنامج منشور") : T("Custom Booking Request", "طلب حجز مخصص"))
+               programs or a request the club described themselves. Icon plus text — the colour is
+               never what carries the distinction. *@
+            <span class="badge rounded-pill @BookingSource.BadgeClass(Model) mt-1">
+                <i class="bi @BookingSource.Icon(Model) me-1" aria-hidden="true"></i>@BookingSource.Label(Model)
             </span>
         </div>
         <div class="col-md-6 col-xl-3"><div class="text-muted small">@T("Sports season", "الموسم الرياضي")</div><div class="fw-semibold">@(isAr ? (Model.Season?.TitleAr ?? Model.Activity?.Season?.TitleAr) : (Model.Season?.TitleEn ?? Model.Activity?.Season?.TitleEn))</div></div>
@@ -111,8 +113,13 @@
         <div class="metric-card booking-section-card h-100">
             <h4 class="h5 mb-3">@T("Program Details", "تفاصيل البرنامج")</h4>
             <div class="row g-3">
-                <div class="col-12"><div class="text-muted small">@T("Program title", "عنوان البرنامج")</div><div class="fw-semibold">@ProgramTitle()</div></div>
-                <div class="col-md-6"><div class="text-muted small">@T("Request source", "مصدر الطلب")</div><div class="fw-semibold">@(fromOffering ? T("Published program from the catalogue", "برنامج منشور من الكتالوج") : T("Custom Booking Request", "طلب حجز مخصص"))</div></div>
+                @* On a custom request the requested program name is the headline, not a footnote —
+                   "Custom Program Request" alone tells the entity nothing about what was asked for. *@
+                <div class="col-12">
+                    <div class="text-muted small">@(isCustom ? T("Requested program name", "اسم البرنامج المطلوب") : T("Program title", "عنوان البرنامج"))</div>
+                    <div class="fw-semibold fs-5">@ProgramTitle()</div>
+                </div>
+                <div class="col-md-6"><div class="text-muted small">@T("Booking source", "مصدر الحجز")</div><div class="fw-semibold"><i class="bi @BookingSource.Icon(Model) me-1" aria-hidden="true"></i>@BookingSource.Label(Model)</div></div>
                 <div class="col-md-6"><div class="text-muted small">@T("Implementing entity", "الجهة المنفذة")</div><div class="fw-semibold">@(OrgName(Model.PartnerOrganization) == "" ? T("Not assigned", "غير محدد") : OrgName(Model.PartnerOrganization))</div></div>
                 <div class="col-md-6"><div class="text-muted small">@T("Program type", "نوع البرنامج")</div><div class="fw-semibold">@(Model.Activity is null ? ActivityTypeText(Model.RequestedActivityType) : ActivityTypeText(Model.Activity.Type))</div></div>
                 <div class="col-md-6"><div class="text-muted small">@T("Original program date/time", "تاريخ / وقت البرنامج الأصلي")</div><div class="fw-semibold">@(Model.Activity is null ? T("Not applicable — custom request", "لا ينطبق — طلب مخصص") : $"{Model.Activity.StartDateTime:g} - {Model.Activity.EndDateTime:g}")</div></div>
@@ -120,6 +127,13 @@
                 <div class="col-md-6"><div class="text-muted small">@T("Subject", "الموضوع")</div><div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.Subject) ? T("Not provided", "غير متوفر") : Model.Subject)</div></div>
                 <div class="col-md-6"><div class="text-muted small">@T("Requested date/time", "التاريخ / الوقت المطلوب")</div><div class="fw-semibold">@(Model.ProposedStartDateTime.HasValue ? $"{Model.ProposedStartDateTime:g} - {Model.ProposedEndDateTime:g}" : T("Not provided", "غير متوفر"))</div></div>
                 <div class="col-md-6"><div class="text-muted small">@T("Confirmed time", "الوقت المؤكد")</div><div class="fw-semibold">@(Model.ConfirmedStartUtc.HasValue ? $"{Model.ConfirmedStartUtc:g} - {Model.ConfirmedEndUtc:g}" : T("Not confirmed yet", "لم يتم التأكيد بعد"))</div></div>
+                @if (canSeeOfferingDocs)
+                {
+                    <div class="col-12">
+                        <div class="text-muted small mb-1">@T("Program documents", "مستندات البرنامج")</div>
+                        @await Html.PartialAsync("~/Views/Shared/_ProgramAttachments.cshtml", Model.Activity!.Attachments.ToList())
+                    </div>
+                }
             </div>
         </div>
     </div>
@@ -226,9 +240,14 @@
 {
     <div class="required-action-banner">
         <i class="bi bi-pencil-square me-2"></i>
-        @T("The implementing entity proposed a new subject:", "اقترحت الجهة المنفذة موضوعاً جديداً:")
-        <strong>@Model.ProposedSubject</strong>
-        <div class="small fw-normal mt-1">@T("Accepting a proposed time will also apply this subject.", "قبول أحد الأوقات المقترحة سيطبّق هذا الموضوع أيضاً.")</div>
+        @T("The implementing entity proposed a different program name:", "اقترحت الجهة المنفذة اسماً مختلفاً للبرنامج:")
+        @* Both names, side by side. The club decides against what it actually asked for, and the
+           original is never overwritten until it accepts. *@
+        <div class="mt-2 fw-normal">
+            <div><span class="small">@T("You requested", "طلبتم"):</span> <strong>@(string.IsNullOrWhiteSpace(Model.Subject) ? T("Not provided", "غير متوفر") : Model.Subject)</strong></div>
+            <div><span class="small">@T("Entity proposes", "تقترح الجهة"):</span> <strong>@Model.ProposedSubject</strong></div>
+        </div>
+        <div class="small fw-normal mt-1">@T("Accepting a proposed time will also apply this program name.", "قبول أحد الأوقات المقترحة سيطبّق اسم البرنامج هذا أيضاً.")</div>
     </div>
 }
 
@@ -237,10 +256,10 @@
     <form method="post" action="/partner/bookings/propose-times" class="metric-card booking-section-card mb-4" id="proposalForm">
         @Html.AntiForgeryToken()
         <input type="hidden" name="bookingId" value="@Model.Id" />
-        <h4 class="h5 mb-3">@T("Propose modification (date / time / subject)", "اقتراح تعديل (التاريخ / التوقيت / الموضوع)")</h4>
+        <h4 class="h5 mb-3">@T("Propose modification (date / time / program name)", "اقتراح تعديل (التاريخ / التوقيت / اسم البرنامج)")</h4>
         <div class="mb-3">
-            <label class="form-label">@T("Proposed subject (optional)", "الموضوع المقترح (اختياري)")</label>
-            <input class="form-control" name="proposedSubject" value="@Model.ProposedSubject" placeholder="@T("Leave empty to keep the requested subject", "اتركه فارغاً للإبقاء على الموضوع المطلوب")" />
+            <label class="form-label" for="proposedSubject">@T("Proposed program name (optional)", "اسم البرنامج المقترح (اختياري)")</label>
+            <input class="form-control" id="proposedSubject" name="proposedSubject" maxlength="250" value="@Model.ProposedSubject" placeholder="@T("Leave empty to keep the requested program name", "اتركه فارغاً للإبقاء على اسم البرنامج المطلوب")" />
         </div>
         <textarea name="partnerComments" class="form-control mb-3" rows="2" placeholder="@T("Optional partner comments", "تعليقات اختيارية من الشريك")"></textarea>
         <div id="proposalRows">

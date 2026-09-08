@@ -25,7 +25,7 @@ public class PartnerDashboardController : Controller
     }
 
     [HttpGet("/partner")]
-    public async Task<IActionResult> Index(DateTime? from = null, DateTime? to = null, ActivityType? programType = null, BookingStatus? status = null, int? clubId = null, string? q = null, string? capacity = null)
+    public async Task<IActionResult> Index(DateTime? from = null, DateTime? to = null, ActivityType? programType = null, BookingStatus? status = null, int? clubId = null, string? q = null, string? capacity = null, BookingSourceFilter? source = null)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         var partnerOrgIds = await PartnerOrganizationIds(userId);
@@ -49,6 +49,10 @@ public class PartnerDashboardController : Controller
         if (partnerOrgIds.Count > 0) bookingQuery = bookingQuery.Where(x => (x.PartnerOrganizationId.HasValue && partnerOrgIds.Contains(x.PartnerOrganizationId.Value)) || (x.Activity != null && ((x.Activity.PartnerOrganizationId.HasValue && partnerOrgIds.Contains(x.Activity.PartnerOrganizationId.Value)) || partnerUserIds.Contains(x.Activity.CreatedByUserId))));
         if (status.HasValue) bookingQuery = bookingQuery.Where(x => x.Status == status.Value);
         if (clubId.HasValue) bookingQuery = bookingQuery.Where(x => x.OrganizationId == clubId.Value);
+        // Booking Source. Both kinds live in this one inbox — the filter separates them on demand
+        // rather than splitting the partner's work across two screens.
+        if (source == BookingSourceFilter.ExistingProgram) bookingQuery = bookingQuery.Where(x => x.ActivityId != null);
+        if (source == BookingSourceFilter.CustomProgram) bookingQuery = bookingQuery.Where(x => x.ActivityId == null);
         if (!string.IsNullOrWhiteSpace(q)) bookingQuery = bookingQuery.Where(x => (x.Activity != null && (x.Activity.TitleEn.Contains(q) || x.Activity.TitleAr.Contains(q))) || (x.Subject != null && x.Subject.Contains(q)));
         if (from.HasValue) bookingQuery = bookingQuery.Where(x => x.CreatedAtUtc >= from.Value.Date);
         if (to.HasValue) bookingQuery = bookingQuery.Where(x => x.CreatedAtUtc < to.Value.Date.AddDays(1));
@@ -76,7 +80,7 @@ public class PartnerDashboardController : Controller
         ViewBag.Bookings = bookings;
         ViewBag.Notifications = unread;
         ViewBag.Clubs = await _db.Organizations.Where(x => x.OrganizationType == OrganizationType.Club && x.Status == ApprovalStatus.Approved).OrderBy(x => x.NameEn).ToListAsync();
-        ViewBag.From = from?.ToString("yyyy-MM-dd"); ViewBag.To = to?.ToString("yyyy-MM-dd"); ViewBag.ProgramType = programType; ViewBag.Status = status; ViewBag.ClubId = clubId; ViewBag.Query = q; ViewBag.Capacity = capacity;
+        ViewBag.From = from?.ToString("yyyy-MM-dd"); ViewBag.To = to?.ToString("yyyy-MM-dd"); ViewBag.ProgramType = programType; ViewBag.Status = status; ViewBag.ClubId = clubId; ViewBag.Query = q; ViewBag.Capacity = capacity; ViewBag.Source = source;
         return View();
     }
 
@@ -101,6 +105,15 @@ public class PartnerDashboardController : Controller
         if (valid.Count == 0)
         {
             TempData["ToastWarning"] = "Add at least one valid proposed start and end time.";
+            return RedirectToAction("Details", "Bookings", new { area = "", id = bookingId });
+        }
+
+        // Every free-text field here maps to a bounded column. Refused with a message rather than
+        // left to fail as a SQL truncation error, and refused rather than silently trimmed so the
+        // entity knows its wording did not reach the club intact.
+        if (proposedSubject?.Trim().Length > 250 || partnerComments?.Length > 2000 || valid.Any(x => x.Note?.Length > 1000))
+        {
+            TempData["ToastWarning"] = "One of the values you entered is too long. | إحدى القيم المدخلة طويلة جداً.";
             return RedirectToAction("Details", "Bookings", new { area = "", id = bookingId });
         }
 
@@ -158,9 +171,17 @@ public class PartnerDashboardController : Controller
         if (booking is null) return NotFound();
 
         // Docs: confirmation must include the lecturer's name (contact + logistics accompany it).
+        // The same requirement applies to both booking paths — a custom program is confirmed with
+        // exactly the operational detail an existing-program booking is.
         if (string.IsNullOrWhiteSpace(lecturerName))
         {
             TempData["ToastWarning"] = "Lecturer name is required to confirm the booking. | اسم المحاضر مطلوب لتأكيد الحجز.";
+            return RedirectToAction("Details", "Bookings", new { area = "", id });
+        }
+
+        if (lecturerName.Trim().Length > 200 || lecturerContact?.Trim().Length > 200 || logistics?.Length > 2000)
+        {
+            TempData["ToastWarning"] = "One of the values you entered is too long. | إحدى القيم المدخلة طويلة جداً.";
             return RedirectToAction("Details", "Bookings", new { area = "", id });
         }
 

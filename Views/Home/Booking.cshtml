@@ -34,17 +34,73 @@
         ? Url.Content("~/img/partners/default-partner.svg")
         : Url.Content(o.LogoPath);
 
-    // The custom-booking fallback, used in two places: once as the secondary action beneath the
-    // catalogue and once inside the empty state.
-    var customHref = isClub ? "/bookings/create" : null;
+    // The Custom Program Request entry point, used in three places: the choice card at the top of the
+    // page, the secondary action beneath the catalogue, and the empty state. Its own route, so the
+    // path a club took is unambiguous from the URL alone.
+    var customHref = isClub ? "/bookings/custom" : null;
 }
 
 <div class="partner-hero mb-4">
-    <h1 class="display-6 fw-bold mb-2">@T("Book a Ghars Activity", "حجز نشاط غرس")</h1>
+    <h1 class="display-6 fw-bold mb-2">@T("Booking", "الحجز")</h1>
     <p class="mb-0 opacity-75">
-        @T("Browse the training sessions and workshops offered by implementing entities, and request the one your club needs.",
-           "تصفح الدورات التدريبية وورش العمل التي تقدمها الجهات المنفذة، واطلب ما يحتاجه ناديك.")
+        @T("There are two ways to book with a Ghars implementing entity: request one of their published programs, or ask for a program of your own.",
+           "هناك طريقتان للحجز مع الجهات المنفذة في غرس: طلب أحد برامجها المنشورة، أو طلب برنامج خاص بكم.")
     </p>
+</div>
+
+@* The two booking paths, given equal weight. A custom request is not a fallback for a failed
+   search — it is the second way in, and burying it at the bottom of the page said otherwise. *@
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card h-100 border-0 shadow-sm rounded-4">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-collection fs-4 text-primary" aria-hidden="true"></i>
+                    <h2 class="h5 mb-0">@T("Book an Existing Program", "حجز برنامج قائم")</h2>
+                </div>
+                <p class="text-muted small flex-grow-1 mb-3">
+                    @T("Browse Training and Workshop programs already offered by Ghars implementing entities and request a booking.",
+                       "تصفحوا برامج التدريب وورش العمل التي تقدمها الجهات المنفذة في غرس واطلبوا حجزها.")
+                </p>
+                <a class="btn btn-ghars" href="#programs">
+                    <i class="bi bi-search me-1" aria-hidden="true"></i>@T("Browse Programs", "تصفح البرامج")
+                    <span class="badge text-bg-light ms-1">@total</span>
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100 border-0 shadow-sm rounded-4">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-pencil-square fs-4 text-primary" aria-hidden="true"></i>
+                    <h2 class="h5 mb-0">@T("Request a Custom Program", "طلب برنامج مخصص")</h2>
+                </div>
+                <p class="text-muted small flex-grow-1 mb-3">
+                    @T("If the program you need is not listed, send a custom request directly to an implementing entity.",
+                       "إذا لم يكن البرنامج الذي تحتاجونه مدرجاً، أرسلوا طلباً مخصصاً مباشرة إلى إحدى الجهات المنفذة.")
+                </p>
+                @if (isClub)
+                {
+                    <a class="btn btn-ghars" href="@customHref">
+                        <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>@T("Request Custom Program", "طلب برنامج مخصص")
+                    </a>
+                }
+                else if (!isAuthenticated)
+                {
+                    <a class="btn btn-outline-success"
+                       asp-controller="Account" asp-action="Login" asp-route-returnUrl="/bookings/custom">
+                        <i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>@T("Sign in to request", "سجّل الدخول للطلب")
+                    </a>
+                }
+                else
+                {
+                    @* An administrator has no club to book for; saying so beats a button that 403s. *@
+                    <div class="small text-muted">@T("Available to club accounts.", "متاح لحسابات الأندية.")</div>
+                }
+            </div>
+        </div>
+    </div>
 </div>
 
 @if (!isAuthenticated)
@@ -107,8 +163,9 @@ else if (isAdmin)
     </div>
 </form>
 
-<h2 class="h4 mb-3">
-    @T("Available Programs", "البرامج المتاحة")
+@* Anchor for the "Browse Programs" choice card above. *@
+<h2 class="h4 mb-3" id="programs">
+    @T("Existing Programs", "البرامج القائمة")
     <span class="text-muted fs-6">(@total)</span>
 </h2>
 
@@ -120,7 +177,7 @@ else if (isAdmin)
         {
             <div class="mb-3 small text-muted">@T("You can still describe what your club needs and send it to an implementing entity.",
                                                   "يمكنكم مع ذلك وصف ما يحتاجه ناديكم وإرساله إلى إحدى الجهات المنفذة.")</div>
-            <a class="btn btn-ghars" href="@customHref"><i class="bi bi-pencil-square me-1" aria-hidden="true"></i>@T("Request Custom Booking", "طلب حجز مخصص")</a>
+            <a class="btn btn-ghars" href="@customHref"><i class="bi bi-pencil-square me-1" aria-hidden="true"></i>@T("Request Custom Program", "طلب برنامج مخصص")</a>
         }
         else if (!isAuthenticated)
         {
@@ -233,18 +290,18 @@ else
         </section>
     }
 
-    @* Secondary by design, but not an error path: the catalogue is the primary journey and a custom
-       request is the legitimate fallback when it holds nothing suitable. *@
+    @* The same second path offered again at the point a club is most likely to conclude the
+       catalogue has nothing for it — having scrolled the whole list. *@
     @if (isClub)
     {
         <div class="ghars-filter-empty d-flex flex-wrap align-items-center justify-content-between gap-3">
             <div>
-                <div class="fw-semibold">@T("Can't find the training or workshop you need?", "لم تجدوا التدريب أو الورشة التي تحتاجونها؟")</div>
-                <div class="small text-muted mb-0">@T("Describe what your club needs and send it directly to an implementing entity.",
-                                                      "صِفوا ما يحتاجه ناديكم وأرسلوه مباشرة إلى إحدى الجهات المنفذة.")</div>
+                <div class="fw-semibold">@T("Can't find what you need?", "لم تجدوا ما تحتاجونه؟")</div>
+                <div class="small text-muted mb-0">@T("Request a specific program directly from an implementing entity.",
+                                                      "اطلبوا برنامجاً محدداً مباشرة من إحدى الجهات المنفذة.")</div>
             </div>
             <a class="btn btn-outline-primary" href="@customHref">
-                <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>@T("Request Custom Booking", "طلب حجز مخصص")
+                <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>@T("Request Custom Program", "طلب برنامج مخصص")
             </a>
         </div>
     }

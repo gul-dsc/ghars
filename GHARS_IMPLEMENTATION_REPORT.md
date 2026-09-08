@@ -2755,3 +2755,181 @@ orphaned files in `protected-uploads/programs/`.
 booking 20 against activity 35, created during this work by a person exercising the booking flow — the
 test harness only ever renders `/bookings/create` and never posts it. It is ordinary data and was
 deliberately left in place.
+
+---
+
+## 33. Dual Club Booking Flow (2026-09-08)
+
+The booking system already supported two shapes of request — one anchored to a published partner
+offering, one written by the club itself — but only the first was presented as a real path. The
+second was reachable through a link at the bottom of the catalogue labelled "Request Custom
+Booking", which read as a fallback for a failed search rather than a way in. This pass makes both
+paths explicit, end to end, without adding a second workflow behind either of them.
+
+### 33.1 The two paths
+
+| | **Book an Existing Program** | **Request a Custom Program** |
+|---|---|---|
+| Entry point | `/bookings/create?activityId=N` | `/bookings/custom` |
+| `BookingRequest.ActivityId` | the selected offering | **NULL** |
+| Program name | derived from the offering | entered by the club (`Subject`) |
+| Activity type | derived from the offering | chosen by the club |
+| Implementing entity | derived from the offering | chosen by the club, revalidated on POST |
+| Season | derived from the offering | chosen by the club, must be active |
+| Supporting documents | the offering's attachments | none required |
+
+Both post to the same `/bookings/create` action, produce the same `BookingRequest`, move through the
+same statuses, and land in the same partner inbox. There is no separate custom-request status model
+and no second Partner or Admin screen.
+
+`/bookings/custom` deliberately accepts no `activityId`. The route can only ever produce a custom
+request, so a stray id in the query string cannot quietly turn it into a program booking.
+
+### 33.2 Data model — no migration
+
+`BookingRequest` already carried every field this needed: nullable `ActivityId`, `SeasonId`,
+`PartnerOrganizationId`, `Subject`, `ProposedStartDateTime`/`ProposedEndDateTime`,
+`TargetAudienceCsv`, `OtherTargetAudience`, `RequestedSeats`, `AudienceDetails`, `Notes`, the contact
+fields, `SpecialRequirements` and `ProposedSubject`. **`Subject` is the canonical program-name field
+and is what both paths write to** — no `ProgramName` or `RequestedProgramName` was added, because a
+second field for the same thing is a second thing to keep in step.
+
+`dotnet ef migrations has-pending-model-changes` → *No changes have been made to the model since the
+last migration.* **No migration was created or applied in this pass.**
+
+What the view model gained instead is length limits. Every `MaxLength` column was previously
+unguarded at the view-model layer, so an over-long subject or note reached SQL Server and failed as a
+truncation exception — a 500 where the user should simply be told the field is too long. `Subject`
+(250), `OtherTargetAudience` (150), `AudienceDetails` (1000), `Notes` (2000), the contact fields and
+`SpecialRequirements` now carry `StringLength` attributes mirroring their columns. The partner-side
+free-text fields (`ProposedSubject`, partner comments, lecturer name and contact, proposed-option
+notes) got the same guard as an explicit refusal rather than a silent trim.
+
+### 33.3 Booking source is derived, never stored
+
+`Helpers/BookingSource.cs` is the single definition of the distinction, used by the club catalogue,
+the request form, booking details, both dashboards and both admin lists:
+
+```csharp
+public static bool IsCustom(BookingRequest booking) => !booking.ActivityId.HasValue;
+```
+
+`ActivityId` is the only discriminator and **nothing ever fabricates an Activity to fill the gap** —
+not at submission and not on confirmation. Creating one would make an unapproved request look like an
+available partner program. Because the flag is derived at read time rather than stored in a column,
+it cannot fall out of step with the data.
+
+The helper also owns the bilingual labels — Existing Program / برنامج قائم, Custom Program Request /
+طلب برنامج مخصص — plus a Bootstrap icon per source, so a badge never conveys its meaning by colour
+alone, and `Title(booking)`, which falls back from the offering's localized title to the requested
+program name. Every list that previously printed `b.Activity?.TitleEn` now goes through it, which is
+what removed the blank cells custom requests used to leave in the admin list and the bookings report.
+
+### 33.4 Server-derived identity on both paths
+
+Club identity was already resolved from the authenticated user's organization links and is unchanged:
+a single-club user never sees a selector and the posted `OrganizationId` is overwritten before use.
+Verified again here — a request posting `OrganizationId = 31` while signed in as club 30 stored **30**.
+
+The existing-program path now derives the program identity too:
+
+```csharp
+vm.Subject = activity.TitleEn;
+vm.RequestedActivityType = NormalizeRequestedActivityType(activity.Type);
+ModelState.Remove(nameof(vm.Subject));
+ModelState.Remove(nameof(vm.RequestedActivityType));
+```
+
+and the form renders both read-only. A club booking a published program cannot rewrite its title or
+type into something else; the custom path exists for exactly that, and keeping the two apart is what
+makes the Existing Program badge mean anything.
+
+Two conditions that previously produced a silently invisible error now return `NotFound()`, matching
+what the GET already does for the same ids: an `ActivityId` that resolves to nothing bookable, and an
+offering whose implementing entity cannot be resolved. The second case had been able to create a
+booking with no `PartnerOrganizationId` — notifying nobody and appearing in no partner's inbox.
+
+### 33.5 Reporting — the counts that were wrong
+
+Three filters tested the season or type on the **Activity**, which meant every custom request
+disappeared from the result the moment a filter was applied:
+
+| Location | Was | Now |
+|---|---|---|
+| `DashboardController` season filter | `x.Activity != null && x.Activity.SeasonId == id` | booking's own `SeasonId`, falling back to the Activity |
+| `DashboardController` type filter | `x.Activity != null && x.Activity.Type == t` | `RequestedActivityType` when there is no Activity |
+| `ReportsController` type filter | same | same |
+
+Measured on the test data: with a season selected, the executive **Bookings** tile read **17** of 23
+under the old rule and reads **23** now — a 26% undercount that appeared only when someone filtered.
+Delivered-activity counts are unchanged and still come from the Agenda, not from bookings.
+
+The bookings report and the admin booking list also gained the implementing entity, the requested
+type, the proposed date and the participant count, all read from the booking with the Activity only
+as a fallback — so nothing in either surface depends on a join through `Activities`.
+
+### 33.6 Agenda
+
+`BookingAgendaHelper` already worked from booking fields with an Activity fallback, so a confirmed
+custom request needs no Activity row to produce a Draft agenda entry. Verified for both paths:
+season, club, entity, type, subject, confirmed date, target category, participants and lecturer all
+populate, and the entry stays **Draft** until the club submits actual delivery data.
+
+### 33.7 Verification
+
+**Build** — `dotnet build --no-incremental` → **0 errors, 1 warning**, the retained `CS0108` on
+`Activity.CreatedByUserId`, not suppressed.
+
+**121 automated checks, 0 failures** across six Playwright suites:
+
+| Suite | Checks | Covers |
+|---|---|---|
+| Existing Program E2E | 25 | choice cards, read-only program, submit, partner inbox, confirm |
+| Custom Program E2E | 31 | route, fields, validation, display, propose/accept |
+| Security | 21 | entity spoofing, club spoofing, IDOR, anonymous |
+| Arabic / mobile / reports | 39 | RTL labels, 390px, DSC filter, report completeness |
+| Executive counts | 3 | season- and type-filtered booking tiles |
+| Not-approved entity | 2 | server refusal + absent from the dropdown |
+
+Security results in full: a Club id, another club's id, a non-existent id, a negative id, an empty
+value and a **Pending (not-approved)** entity are each refused as an implementing entity, and no
+booking row was created for any of them. A forged `OrganizationId` is ignored in favour of the
+authenticated club. A foreign partner reading either booking gets **404** and approving one gets
+**400**; the owning entity gets 200. Anonymous visitors are redirected from every booking route while
+`/Home/Booking` itself stays public.
+
+> The validation cases had to be posted straight at the endpoint. Clicking submit only ever proved
+> that jQuery unobtrusive validation refused — the page cancels the request client-side, so a test
+> that clicks the button watches the browser refuse and never reaches the server rule it is supposed
+> to be checking.
+
+Accessibility: the choice cards are real anchors, every form control on the custom form has a bound
+label — three selects (`OrganizationId`, `SeasonId`, `PartnerOrganizationId`) carried unbound labels
+before this pass and were fixed — and each source badge carries an icon and text, never colour alone.
+
+Arabic verified at `dir="rtl"` for all fifteen required labels. No horizontal overflow at 390px on
+the booking page, both forms and booking details, in English and Arabic; the two choice cards stack.
+
+**Test data** was removed afterwards and every metric returned to baseline: **16 bookings, 59
+activities, 11 agenda entries, 20 booking audit rows, 36 organizations, 21 notifications, 14 KPI
+submissions, 9 gallery items, 9 system audit rows**, and no residue. Booking 20 against activity 35 —
+the legitimate row noted in §32 — was left untouched.
+
+> Two fixtures had to be created to test the offering gate and the entity gate honestly, because the
+> seed data contains no unapproved offering and no non-approved organization: a Pending implementing
+> entity and a Draft offering. Both were deleted afterwards. The first attempt to probe the Pending
+> entity used the id `SCOPE_IDENTITY()` reported rather than the row's actual id, so it re-tested the
+> non-existent-id case instead; the probe was re-run against the real id before the fixture was
+> removed.
+
+### 33.8 Deliberately not done
+
+* **No Activity is created for a custom request** — not at submission, and not when the partner
+  confirms it. A confirmed custom program is a one-off booking; if the entity wants to offer it to
+  other clubs it creates it under My Programs and submits it for DSC approval like any other.
+* **Partner program approval is untouched.** Draft → Submit → DSC Approval → Approved/Published is
+  unchanged, and custom booking sits outside it entirely.
+* **Annual Report, Ghars Channel, KPI definitions, Surveys, Digital Library and certificates are
+  untouched.** The only shared surfaces changed are the booking lists and the two filters above, and
+  only so custom requests stop disappearing from them.
+* **Ghars Channel, Digital Library and Surveys remain top-level navigation**, unchanged from §32.

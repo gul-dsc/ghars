@@ -27,13 +27,34 @@ public class BookingsController : Controller
     }
 
 
-    // Supports both entry points:
-    //  - activityId > 0 : booking anchored to a published partner program (existing, stronger flow)
-    //  - partnerId / none: direct entity-first request per the approved booking document
-    //    (club selects implementing entity + season, then describes the requested activity)
+    // ── The two club booking paths ───────────────────────────────────────────────────────────────
+    //
+    //   /bookings/create?activityId=N   Book an Existing Program. Anchored to a DSC-approved,
+    //                                   published offering; title, type, partner and season all
+    //                                   derive from it server-side.
+    //
+    //   /bookings/custom                Request a Custom Program. The club names the program it
+    //                                   needs and addresses it to an implementing entity. No
+    //                                   Activity row is created — ActivityId stays NULL.
+    //
+    // Both render the same form and post to the same action: one workflow, one set of statuses, one
+    // partner inbox. Only the entry point and the fields on show differ.
     [Authorize(Roles = RoleNames.ClubAdmin)]
     [HttpGet("/bookings/create")]
-    public async Task<IActionResult> Create(int? activityId, int? partnerId, ActivityType? type = null)
+    public Task<IActionResult> Create(int? activityId, int? partnerId, ActivityType? type = null)
+        => BuildCreateViewAsync(activityId, partnerId, type);
+
+    /// <summary>
+    /// The Custom Program Request entry point. It deliberately takes no activityId: this route can
+    /// only ever produce a custom request, so a stray id in the query string cannot quietly turn it
+    /// into a program booking.
+    /// </summary>
+    [Authorize(Roles = RoleNames.ClubAdmin)]
+    [HttpGet("/bookings/custom")]
+    public Task<IActionResult> Custom(int? partnerId, ActivityType? type = null)
+        => BuildCreateViewAsync(null, partnerId, type);
+
+    private async Task<IActionResult> BuildCreateViewAsync(int? activityId, int? partnerId, ActivityType? type)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         var orgs = await UserClubsAsync(userId);
@@ -47,9 +68,11 @@ public class BookingsController : Controller
 
         await PopulateCreateViewDataAsync(activity, orgs);
 
+        // Named explicitly: /bookings/custom enters through the Custom action, and view resolution
+        // would otherwise look for a Custom.cshtml that does not exist. Both paths use this form.
         if (activity is not null)
         {
-            return View(new BookingCreateVm
+            return View("Create", new BookingCreateVm
             {
                 ActivityId = activity.Id,
                 OrganizationId = orgs.FirstOrDefault()?.Id ?? 0,
@@ -80,7 +103,7 @@ public class BookingsController : Controller
             ? type.Value
             : ActivityType.TrainingProgram;
 
-        return View(new BookingCreateVm
+        return View("Create", new BookingCreateVm
         {
             OrganizationId = orgs.FirstOrDefault()?.Id ?? 0,
             PartnerOrganizationId = partnerId,
@@ -122,15 +145,29 @@ public class BookingsController : Controller
             // and is never trusted: a draft, withdrawn, expired or foreign-entity offering fails
             // here exactly as it would if it had never been rendered.
             activity = await BookableOfferings().FirstOrDefaultAsync(x => x.Id == vm.ActivityId.Value);
-            if (activity is null)
-            {
-                ModelState.AddModelError(nameof(vm.ActivityId), isAr ? "البرنامج غير متاح للحجز حالياً." : "Program is not available for booking.");
-            }
-            else
-            {
-                partnerOrgId = await ResolvePartnerOrganizationIdAsync(activity);
-                seasonId = activity.SeasonId;
-            }
+
+            // The same answer the GET gives for an id that resolves to nothing bookable — a draft,
+            // withdrawn, expired or foreign-entity offering, or one that never existed. A model
+            // error would be worse than useless here: the id lives in a hidden field with nothing to
+            // anchor a message to, so the club would get the form back with no visible explanation.
+            if (activity is null) return NotFound();
+
+            partnerOrgId = await ResolvePartnerOrganizationIdAsync(activity);
+            seasonId = activity.SeasonId;
+
+            // An offering nobody owns has nobody to review the request: it would be stored with no
+            // PartnerOrganizationId, notify no one, and appear in no partner's inbox. Refused the
+            // same way rather than accepted into a dead end.
+            if (partnerOrgId is null) return NotFound();
+
+            // The program identity comes from the offering, never from the post. A club booking a
+            // published program cannot rewrite its title or type into something else — that is what
+            // a Custom Program Request is for, and keeping the two apart is what makes the Existing
+            // Program badge mean anything.
+            vm.Subject = activity.TitleEn;
+            vm.RequestedActivityType = NormalizeRequestedActivityType(activity.Type);
+            ModelState.Remove(nameof(vm.Subject));
+            ModelState.Remove(nameof(vm.RequestedActivityType));
         }
         else
         {
@@ -186,18 +223,64 @@ public class BookingsController : Controller
         };
         _db.BookingRequests.Add(booking);
         await _db.SaveChangesAsync();
-        _db.BookingAuditTrails.Add(new BookingAuditTrail { BookingRequestId = booking.Id, Action = "ClubSubmitted", AtUtc = DateTime.UtcNow, ByUserId = userId });
+        // The request exactly as the club wrote it. Recorded at submission because a partner may
+        // later propose a different program name or time, and accepting that overwrites the live
+        // row — without this snapshot the original ask would only survive as the "old" half of a
+        // later entry, and would be lost entirely if the club never accepted anything.
+        _db.BookingAuditTrails.Add(new BookingAuditTrail
+        {
+            BookingRequestId = booking.Id,
+            Action = "ClubSubmitted",
+            NewValuesJson = JsonSerializer.Serialize(new
+            {
+                Source = booking.ActivityId.HasValue ? "ExistingProgram" : "CustomProgram",
+                booking.ActivityId,
+                ProgramName = booking.Subject,
+                booking.RequestedActivityType,
+                booking.ProposedStartDateTime,
+                booking.ProposedEndDateTime,
+                booking.TargetAudienceCsv,
+                booking.OtherTargetAudience,
+                booking.RequestedSeats,
+                booking.AudienceDetails,
+                booking.Notes,
+                booking.SpecialRequirements,
+                booking.PartnerOrganizationId
+            }),
+            AtUtc = DateTime.UtcNow,
+            ByUserId = userId
+        });
         await _db.SaveChangesAsync();
 
         var subjectEn = booking.Subject ?? activity?.TitleEn ?? "Ghars activity";
         var subjectAr = booking.Subject ?? activity?.TitleAr ?? subjectEn;
+
+        // Only the entity the request was addressed to is notified — the club's own organization and
+        // every unrelated entity are left alone.
         if (partnerOrgId.HasValue)
         {
-            await CreateAndDispatchNotificationAsync("New Booking Request", "طلب حجز جديد",
-                $"A club submitted booking request {booking.ReferenceNumber} for '{subjectEn}'. Your review is required.",
-                $"قدم نادٍ طلب الحجز {booking.ReferenceNumber} للنشاط '{subjectAr}'. مطلوب المراجعة.",
-                NotificationType.Warning, NotificationTargetType.Organization, partnerOrgId.Value,
-                Url.Action(nameof(Details), "Bookings", new { area = "", id = booking.Id }));
+            var club = orgs.FirstOrDefault(x => x.Id == booking.OrganizationId);
+            var clubEn = club?.NameEn ?? "A club";
+            var clubAr = club?.NameAr ?? club?.NameEn ?? "أحد الأندية";
+
+            // A custom request says so in the title: it is the club's own description of what it
+            // needs, not one of the entity's published programs, and it reads differently to review.
+            if (activity is null)
+            {
+                await CreateAndDispatchNotificationAsync("New Custom Program Request", "طلب برنامج مخصص جديد",
+                    $"{clubEn} requested a custom program '{subjectEn}' ({booking.ReferenceNumber}). Your review is required.",
+                    $"طلب {clubAr} برنامجاً مخصصاً '{subjectAr}' ({booking.ReferenceNumber}). مطلوب المراجعة.",
+                    NotificationType.Warning, NotificationTargetType.Organization, partnerOrgId.Value,
+                    Url.Action(nameof(Details), "Bookings", new { area = "", id = booking.Id }));
+            }
+            else
+            {
+                await CreateAndDispatchNotificationAsync("New Booking Request", "طلب حجز جديد",
+                    $"{clubEn} submitted booking request {booking.ReferenceNumber} for '{subjectEn}'. Your review is required.",
+                    $"قدّم {clubAr} طلب الحجز {booking.ReferenceNumber} للنشاط '{subjectAr}'. مطلوب المراجعة.",
+                    NotificationType.Warning, NotificationTargetType.Organization, partnerOrgId.Value,
+                    Url.Action(nameof(Details), "Bookings", new { area = "", id = booking.Id }));
+            }
         }
 
         TempData["ToastSuccess"] = isAr
@@ -213,6 +296,9 @@ public class BookingsController : Controller
         var orgIds = await UserOrganizationIds(userId);
         var booking = await _db.BookingRequests
             .Include(x => x.Activity).ThenInclude(x => x!.Season)
+            // The offering's supporting documents, shown on the existing-program path. A custom
+            // request has no Activity, so this join simply yields nothing for it.
+            .Include(x => x.Activity).ThenInclude(x => x!.Attachments)
             .Include(x => x.Season)
             .Include(x => x.Organization)
             .Include(x => x.PartnerOrganization)

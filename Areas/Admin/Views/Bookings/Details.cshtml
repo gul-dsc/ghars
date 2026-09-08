@@ -1,7 +1,9 @@
 @model GharsPlatform.Models.Core.BookingRequest
+@using GharsPlatform.Helpers
 @{
     ViewData["Title"] = "Booking Details";
     ViewData["PageTitle"] = "Booking Details";
+    var isCustom = BookingSource.IsCustom(Model);
 }
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
     <a class="btn btn-sm btn-outline-secondary" href="/Admin/Bookings"><i class="bi bi-arrow-left"></i> Back</a>
@@ -16,14 +18,22 @@
 <div class="row g-3">
     <div class="col-lg-7">
         <div class="card border-0 shadow-sm rounded-4 mb-3"><div class="card-body">
-            <div class="d-flex align-items-center justify-content-between"><div><div class="fw-semibold">@Model.Organization?.NameEn</div><div class="text-muted small">@Model.Activity?.TitleEn</div></div><span class="badge text-bg-@(Model.Status==BookingStatus.Approved||Model.Status==BookingStatus.Confirmed?"success":Model.Status==BookingStatus.Pending||Model.Status==BookingStatus.PartnerProposedNewTime?"warning":"danger")">@Model.Status</span></div>
+            <div class="d-flex align-items-center justify-content-between"><div><div class="fw-semibold">@Model.Organization?.NameEn</div><div class="text-muted small">@BookingSource.Title(Model)</div></div><span class="badge text-bg-@(Model.Status==BookingStatus.Approved||Model.Status==BookingStatus.Confirmed?"success":Model.Status==BookingStatus.Pending||Model.Status==BookingStatus.PartnerProposedNewTime?"warning":"danger")">@Model.Status</span></div>
             <hr />
             <div class="row small g-2">
                 <div class="col-md-6"><strong>Club:</strong> @Model.Organization?.NameEn</div>
-                <div class="col-md-6"><strong>Partner:</strong> @(Model.PartnerOrganization?.NameEn ?? "-")</div>
-                <div class="col-md-6"><strong>Program:</strong> @Model.Activity?.TitleEn</div>
+                <div class="col-md-6"><strong>Implementing entity:</strong> @(Model.PartnerOrganization?.NameEn ?? "-")</div>
+                @* Falls back to the requested program name, so a custom request is never a blank row. *@
+                <div class="col-md-6"><strong>Program:</strong> @BookingSource.Title(Model)</div>
+                <div class="col-md-6">
+                    <strong>Booking source:</strong>
+                    <span class="badge rounded-pill @BookingSource.BadgeClass(Model)"><i class="bi @BookingSource.Icon(Model) me-1" aria-hidden="true"></i>@BookingSource.Label(Model)</span>
+                </div>
+                <div class="col-md-6"><strong>Requested type:</strong> @Model.RequestedActivityType</div>
                 <div class="col-md-6"><strong>Requested Seats:</strong> @Model.RequestedSeats</div>
-                <div class="col-md-6"><strong>Original Time:</strong> @Model.Activity?.StartDateTime.ToString("g") - @Model.Activity?.EndDateTime.ToString("g")</div>
+                <div class="col-md-6"><strong>Requested Time:</strong> @(Model.ProposedStartDateTime.HasValue ? $"{Model.ProposedStartDateTime:g} - {Model.ProposedEndDateTime:g}" : "-")</div>
+                <div class="col-md-6"><strong>Original Program Time:</strong> @(isCustom ? "Not applicable — custom request" : $"{Model.Activity?.StartDateTime:g} - {Model.Activity?.EndDateTime:g}")</div>
+                <div class="col-md-6"><strong>Target group:</strong> @(string.IsNullOrWhiteSpace(Model.TargetAudienceCsv) ? "-" : Model.TargetAudienceCsv)</div>
                 <div class="col-md-6"><strong>Confirmed Time:</strong> @(Model.ConfirmedStartUtc.HasValue ? $"{Model.ConfirmedStartUtc:g} - {Model.ConfirmedEndUtc:g}" : "-")</div>
                 <div class="col-md-6"><strong>Created:</strong> @Model.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</div>
                 <div class="col-md-6"><strong>Decision:</strong> @(Model.DecisionAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "-")</div>

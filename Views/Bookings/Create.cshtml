@@ -22,6 +22,8 @@
     var entities = ViewBag.Entities as List<Organization> ?? [];
     var seasons = ViewBag.Seasons as List<Season> ?? [];
     var selectedClub = orgs.FirstOrDefault(x => x.Id == Model.OrganizationId) ?? orgs.FirstOrDefault();
+    // Which of the two booking paths this form is serving. With no offering behind it, this is a
+    // Custom Program Request: the club names the program itself and no Activity is involved.
     var isDirectRequest = activity is null;
     var seasonTitle = activity?.Season is null ? T("Not assigned", "غير محدد") : (isAr ? activity.Season.TitleAr : activity.Season.TitleEn);
     var audiences = new[]
@@ -33,13 +35,38 @@
         ("Parents", T("Parents", "أولياء الأمور")),
         ("Others", T("Others", "أخرى"))
     };
-    ViewData["Title"] = T("Submit booking request", "إرسال طلب حجز");
+    var pageTitle = isDirectRequest
+        ? T("Request a Custom Program", "طلب برنامج مخصص")
+        : T("Book an Existing Program", "حجز برنامج قائم");
+    ViewData["Title"] = pageTitle;
 }
 
 <div class="booking-request-shell">
     <div class="dashboard-hero mb-4">
-        <h1 class="h3 mb-2">@T("Submit booking request", "إرسال طلب حجز")</h1>
-        <p class="mb-0 opacity-75">@T("Provide the requested activity details so the implementing partner can review, approve, reject, or propose another time.", "أدخل تفاصيل النشاط المطلوب ليتمكن الشريك المنفذ من المراجعة والموافقة أو الرفض أو اقتراح وقت آخر.")</p>
+        <h1 class="h3 mb-2">@pageTitle</h1>
+        <p class="mb-0 opacity-75">
+            @(isDirectRequest
+                ? T("Describe the program your club needs and send it to an implementing entity for review. No published program is involved — the entity may confirm it, reject it, or propose changes.",
+                    "صِف البرنامج الذي يحتاجه ناديك وأرسله إلى إحدى الجهات المنفذة للمراجعة. لا يرتبط الطلب ببرنامج منشور — ويمكن للجهة تأكيده أو رفضه أو اقتراح تعديلات.")
+                : T("Provide the requested session details so the implementing entity can review, confirm, reject, or propose another time.",
+                    "أدخل تفاصيل الجلسة المطلوبة ليتمكن الجهة المنفذة من المراجعة والتأكيد أو الرفض أو اقتراح وقت آخر."))
+        </p>
+    </div>
+
+    @* The badge that follows this request everywhere else in the platform, shown before it is even
+       submitted so the club knows which of the two paths it is on. *@
+    <div class="mb-4">
+        <span class="badge rounded-pill @(isDirectRequest ? "text-bg-info" : "text-bg-light border") fs-6">
+            <i class="bi @(isDirectRequest ? "bi-pencil-square" : "bi-collection") me-1" aria-hidden="true"></i>
+            @T("Booking source", "مصدر الحجز"):
+            @(isDirectRequest ? T("Custom Program Request", "طلب برنامج مخصص") : T("Existing Program", "برنامج قائم"))
+        </span>
+        @if (isDirectRequest)
+        {
+            <a class="btn btn-sm btn-outline-secondary ms-2" href="/Home/Booking">
+                <i class="bi bi-collection me-1" aria-hidden="true"></i>@T("Browse existing programs instead", "تصفح البرامج القائمة بدلاً من ذلك")
+            </a>
+        }
     </div>
 
     <form method="post" action="/bookings/create" class="row g-4">
@@ -73,14 +100,18 @@
                 <div class="row g-3">
                     @* Club is always derived from the authenticated user's organization membership.
                        Single-club users never see a selector; the server ignores any posted club id. *@
+                    @* Each label is bound with asp-for so it carries a matching `for`. Where the value
+                       is read-only there is no control to bind to, so the caption is a plain div —
+                       a dangling `for` would be worse than none. *@
                     <div class="col-md-6 col-xl-4">
-                        <label class="form-label">@T("Club name", "اسم النادي")</label>
                         @if (orgs.Count <= 1)
                         {
+                            <div class="form-label">@T("Club name", "اسم النادي")</div>
                             <div class="booking-readonly-value">@NameOf(selectedClub)</div>
                         }
                         else
                         {
+                            <label asp-for="OrganizationId" class="form-label">@T("Club name", "اسم النادي")</label>
                             <select asp-for="OrganizationId" class="form-select">
                                 <option value="">@T("Select club", "اختر النادي")</option>
                                 @foreach (var org in orgs)
@@ -93,9 +124,9 @@
                     </div>
 
                     <div class="col-md-6 col-xl-4">
-                        <label class="form-label">@T("Sports season", "الموسم الرياضي")</label>
                         @if (isDirectRequest)
                         {
+                            <label asp-for="SeasonId" class="form-label">@T("Sports season", "الموسم الرياضي")</label>
                             <select asp-for="SeasonId" class="form-select">
                                 @foreach (var season in seasons)
                                 {
@@ -106,14 +137,15 @@
                         }
                         else
                         {
+                            <div class="form-label">@T("Sports season", "الموسم الرياضي")</div>
                             <div class="booking-readonly-value">@seasonTitle</div>
                         }
                     </div>
 
                     <div class="col-md-6 col-xl-4">
-                        <label class="form-label">@T("Partner / Implementing Entity", "الشريك / الجهة المنفذة")</label>
                         @if (isDirectRequest)
                         {
+                            <label asp-for="PartnerOrganizationId" class="form-label">@T("Implementing Entity", "الجهة المنفذة")</label>
                             <select asp-for="PartnerOrganizationId" class="form-select">
                                 <option value="">@T("Select implementing entity", "اختر الجهة المنفذة")</option>
                                 @foreach (var entity in entities)
@@ -125,6 +157,7 @@
                         }
                         else
                         {
+                            <div class="form-label">@T("Implementing Entity", "الجهة المنفذة")</div>
                             <div class="booking-readonly-value">@((NameOf(partner) == "" ? T("Not assigned", "غير محدد") : NameOf(partner)))</div>
                         }
                     </div>
@@ -162,32 +195,63 @@
             <div class="metric-card booking-section-card">
                 <div class="booking-section-head">
                     <div>
-                        <h2 class="h5 mb-1">@T("Activity Details", "تفاصيل النشاط")</h2>
-                        <div class="text-muted small">@T("Describe the session your club wants to book under this program.", "حدّد تفاصيل الجلسة التي يرغب النادي في حجزها ضمن هذا البرنامج.")</div>
+                        <h2 class="h5 mb-1">@(isDirectRequest ? T("Requested Program", "البرنامج المطلوب") : T("Session Details", "تفاصيل الجلسة"))</h2>
+                        <div class="text-muted small">
+                            @(isDirectRequest
+                                ? T("Name the program you need and propose when it should run.",
+                                    "حدّدوا اسم البرنامج الذي تحتاجونه واقترحوا موعد تنفيذه.")
+                                : T("The program is fixed by the entity's published offering. Propose when your club would like it delivered.",
+                                    "البرنامج محدد وفق العرض المنشور للجهة المنفذة. اقترحوا الموعد الذي يرغب ناديكم في تنفيذه."))
+                        </div>
                     </div>
                 </div>
 
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label asp-for="RequestedActivityType" class="form-label">@T("Activity type", "نوع النشاط")</label>
-                        @* Training and Workshop are what clubs request from an implementing entity, so
-                           they lead. The remaining types stay selectable — they are valid and are used
-                           by existing bookings, so none was removed. *@
-                        <select asp-for="RequestedActivityType" class="form-select">
-                            <optgroup label="@T("Requested from the implementing entity", "المطلوب من الجهة المنفذة")">
-                                <option value="@ActivityType.TrainingProgram">@T("Training", "تدريب")</option>
-                                <option value="@ActivityType.Workshop">@T("Workshop", "ورشة عمل")</option>
-                            </optgroup>
-                            <optgroup label="@T("Other activity types", "أنواع أنشطة أخرى")">
-                                <option value="@ActivityType.Lecture">@T("Lecture", "محاضرة")</option>
-                                <option value="@ActivityType.Event">@T("Event", "فعالية")</option>
-                                <option value="@ActivityType.Course">@T("Course", "دورة")</option>
-                            </optgroup>
-                        </select>
+                        @if (isDirectRequest)
+                        {
+                            @* Training and Workshop are what clubs request from an implementing entity,
+                               so they lead. The remaining types stay selectable — they are valid and
+                               are used by existing bookings, so none was removed. *@
+                            <select asp-for="RequestedActivityType" class="form-select">
+                                <optgroup label="@T("Requested from the implementing entity", "المطلوب من الجهة المنفذة")">
+                                    <option value="@ActivityType.TrainingProgram">@T("Training", "تدريب")</option>
+                                    <option value="@ActivityType.Workshop">@T("Workshop", "ورشة عمل")</option>
+                                </optgroup>
+                                <optgroup label="@T("Other activity types", "أنواع أنشطة أخرى")">
+                                    <option value="@ActivityType.Lecture">@T("Lecture", "محاضرة")</option>
+                                    <option value="@ActivityType.Event">@T("Event", "فعالية")</option>
+                                    <option value="@ActivityType.Course">@T("Course", "دورة")</option>
+                                </optgroup>
+                            </select>
+                        }
+                        else
+                        {
+                            @* Carried from the offering, and re-derived from it on post. Offering it as
+                               a dropdown would suggest a club can turn a published program into
+                               something else; the custom path exists for exactly that. *@
+                            <div class="booking-readonly-value">@ActivityTypeText(Model.RequestedActivityType)</div>
+                        }
                     </div>
                     <div class="col-md-6">
-                        <label asp-for="Subject" class="form-label">@T("Subject", "الموضوع")</label>
-                        <input asp-for="Subject" class="form-control" />
+                        <label asp-for="Subject" class="form-label">
+                            @(isDirectRequest ? T("Program name", "اسم البرنامج") : T("Program", "البرنامج"))
+                        </label>
+                        @if (isDirectRequest)
+                        {
+                            <input asp-for="Subject" class="form-control" maxlength="250"
+                                   aria-describedby="subjectHelp"
+                                   placeholder="@T("e.g. Nutrition for Young Athletes", "مثال: التغذية للاعبين الناشئين")" />
+                            <div class="form-text" id="subjectHelp">
+                                @T("For example: Nutrition for Young Athletes, Anti-Doping Awareness, Leadership Workshop, Sports Ethics Training.",
+                                   "على سبيل المثال: التغذية للاعبين الناشئين، التوعية بمكافحة المنشطات، ورشة القيادة، تدريب أخلاقيات الرياضة.")
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="booking-readonly-value">@TitleOf(activity)</div>
+                        }
                         <span asp-validation-for="Subject" class="text-danger"></span>
                     </div>
                     <div class="col-md-4">
@@ -282,9 +346,23 @@
                         <textarea asp-for="SpecialRequirements" rows="3" class="form-control"></textarea>
                         <span asp-validation-for="SpecialRequirements" class="text-danger"></span>
                     </div>
+                    @* On the custom path this is where the club explains what it actually wants —
+                       the existing Notes column, not a new field, because that is what it already
+                       means on every other surface. *@
                     <div class="col-12">
-                        <label asp-for="Notes" class="form-label">@T("Additional notes", "ملاحظات إضافية")</label>
-                        <textarea asp-for="Notes" rows="4" class="form-control"></textarea>
+                        <label asp-for="Notes" class="form-label">
+                            @(isDirectRequest ? T("Request details", "تفاصيل الطلب") : T("Additional notes", "ملاحظات إضافية"))
+                        </label>
+                        <textarea asp-for="Notes" rows="4" class="form-control" maxlength="2000"
+                                  aria-describedby="notesHelp"
+                                  placeholder="@(isDirectRequest ? T("Objectives, preferred topics, age group, special focus, requirements…", "الأهداف، المواضيع المفضلة، الفئة العمرية، محاور خاصة، متطلبات…") : "")"></textarea>
+                        @if (isDirectRequest)
+                        {
+                            <div class="form-text" id="notesHelp">
+                                @T("Explain what you need: objectives, expected topic, special focus, preferred content, age group and any requirements.",
+                                   "وضّحوا ما تحتاجونه: الأهداف والموضوع المتوقع والمحاور الخاصة والمحتوى المفضل والفئة العمرية وأي متطلبات.")
+                            </div>
+                        }
                         <span asp-validation-for="Notes" class="text-danger"></span>
                     </div>
                 </div>
@@ -294,7 +372,11 @@
         <div class="col-12">
             <div class="d-flex flex-column flex-md-row gap-2 justify-content-end">
                 <a class="btn btn-outline-secondary" href="/club">@T("Cancel", "إلغاء")</a>
-                <button class="btn btn-primary" type="submit">@T("Submit booking request", "إرسال طلب الحجز")</button>
+                <button class="btn btn-primary" type="submit">
+                    @(isDirectRequest
+                        ? T("Send custom program request", "إرسال طلب البرنامج المخصص")
+                        : T("Submit booking request", "إرسال طلب الحجز"))
+                </button>
             </div>
         </div>
     </form>

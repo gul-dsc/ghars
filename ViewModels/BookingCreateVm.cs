@@ -16,27 +16,51 @@ public class BookingCreateVm : IValidatableObject
         "Others"
     ];
 
-    // Null for direct entity-first requests (no pre-published program is selected).
+    // Null for a Custom Program Request; set when the club is booking an existing published program.
     public int? ActivityId { get; set; }
 
-    // Direct-request fields (required when no activity anchors the request).
+    // Custom-request fields (required when no activity anchors the request).
     public int? PartnerOrganizationId { get; set; }
     public int? SeasonId { get; set; }
 
     public int OrganizationId { get; set; }
     public ActivityType RequestedActivityType { get; set; } = ActivityType.Lecture;
+
+    // The requested program name. Subject is the canonical field on BookingRequest and is what both
+    // paths write to, so there is no second ProgramName/RequestedProgramName to keep in step.
+    //
+    // Every length below mirrors the MaxLength on the matching BookingRequest column. Without them an
+    // over-long value reaches SQL Server and fails as a truncation exception — a 500 where the user
+    // should simply be told the field is too long.
+    [StringLength(250)]
     public string? Subject { get; set; }
+
     public DateOnly? ProposedDate { get; set; }
     public TimeOnly? ProposedStartTime { get; set; }
     public TimeOnly? ProposedEndTime { get; set; }
     public List<string> TargetAudiences { get; set; } = [];
+
+    [StringLength(150)]
     public string? OtherTargetAudience { get; set; }
+
     public int ExpectedParticipants { get; set; } = 1;
+
+    [StringLength(1000)]
     public string? AudienceDetails { get; set; }
+
+    [StringLength(2000)]
     public string? Notes { get; set; }
+
+    [StringLength(150)]
     public string? ContactPersonName { get; set; }
+
+    [StringLength(50)]
     public string? ContactPhone { get; set; }
+
+    [StringLength(150)]
     public string? ContactEmail { get; set; }
+
+    [StringLength(1000)]
     public string? SpecialRequirements { get; set; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -56,8 +80,11 @@ public class BookingCreateVm : IValidatableObject
                 yield return new ValidationResult(T(isAr, "Sports season is required.", "الموسم الرياضي مطلوب."), [nameof(SeasonId)]);
         }
 
+        // For a Custom Program Request this is the program the club is asking for, so it is named as
+        // such. On the existing-program path the value is derived from the offering server-side and
+        // this branch is unreachable.
         if (string.IsNullOrWhiteSpace(Subject))
-            yield return new ValidationResult(T(isAr, "Subject is required.", "الموضوع مطلوب."), [nameof(Subject)]);
+            yield return new ValidationResult(T(isAr, "Program name is required.", "اسم البرنامج مطلوب."), [nameof(Subject)]);
 
         if (!ProposedDate.HasValue)
             yield return new ValidationResult(T(isAr, "Proposed date is required.", "التاريخ المقترح مطلوب."), [nameof(ProposedDate)]);

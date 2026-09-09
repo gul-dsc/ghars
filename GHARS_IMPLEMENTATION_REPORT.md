@@ -3588,11 +3588,26 @@ browser at six widths:
 |---|---|---|---|---|---|---|---|
 | Dashboard hero | 72 | 83 | 91 | 97 | 102 | **104** | 88–112 desktop / 76–96 tablet / 64–80 mobile |
 | Compact strip | 40 | 44 | 48 | 51 | 54 | **55** | 40–56 |
-| Booking entity header | 56 | 68 | 76 | 82 | 87 | **89** | 72–96 desktop / 64–80 tablet / 52–64 mobile |
+| Catalogue card, frame height | 57 | 65 | 70 | 74 | 77 | **78** | 72–96 desktop / 64–80 tablet / 52–64 mobile |
+| Catalogue card, frame width | 86 | 97 | 105 | 110 | 115 | **118** | follows the artwork |
 
 `object-fit: contain` throughout, never `cover`; each logo sits in a neutral framed box with its own
 clear space, so a 155×155 club crest and a 1200×800 government wordmark are both letterboxed rather
 than cropped or stretched. Nothing is mirrored in RTL.
+
+The catalogue frame is deliberately **landscape rather than square**, and that is the difference
+between a logo that reads and one that does not. Sixteen of the seventeen implementing entities have
+a 3:2 wordmark; `contain` fits such an asset to the narrower dimension, so a square frame spends its
+full height on padding and paints the mark at roughly half the space it reserved. Matching the frame
+to the artwork's own proportions lets the same rule fill it. Measured painted mark at 1440:
+
+| | Frame | Painted mark |
+|---|---|---|
+| Square frame (first attempt) | 78 × 78 | 62 × 41 |
+| Landscape frame (shipped) | 118 × 78 | **97 × 64** |
+
+Same `contain`, same asset, no cropping — 57% more linear size purely from not reserving space in
+the wrong dimension.
 
 ### 37.3 The booking catalogue
 
@@ -3602,64 +3617,76 @@ Bootstrap-capped in this application — `ghars-public-theme.css` sets `max-widt
 `.container`, so at a 1440px viewport the content container measures **1440px**, not 1320. The page
 already had the whole desktop width.
 
-What produced ten narrow cards down a mostly empty page is the **data**: the catalogue shows
-published, DSC-approved offerings of a bookable type in the active season, and
+What produced ten narrow cards down a mostly empty page was the **grouping**, driven by the data.
+The catalogue shows published, DSC-approved offerings of a bookable type in the active season, and
 
 > **all ten implementing entities that appear have exactly one such offering each.**
 
-A three-column grid fed one card per group renders one-third-filled rows the whole way down. No grid
-change can fill a row that has one card in it.
+The first attempt gave each entity its own bounded panel — identity strip, then that entity's
+offerings in a grid. On paper that satisfies the brief. On screen it was the reported defect: ten
+panels, each holding a single card in the first of three tracks, which is a column of cards down the
+leading edge with two empty tracks beside every one of them. **Reserving the space per entity is
+what created the space.** No grid tuning fixes a row that only ever has one card in it, and the
+reasoning that the empty tracks "belong to a deliberate section" was a rationalisation — from the
+reader's chair the page still looks half-used.
 
-Two things are worth knowing about why the catalogue is that thin, both of them data and neither
-touched here:
+Two data facts sit behind the one-offering-per-entity shape, both left alone under §42:
 
 * Seven approved implementing entities are absent entirely — their offerings carry
   `ApprovalStatus = NULL`, which is not `Approved`, so they never reach the catalogue.
 * Each entity's second offering is typed `Course`, and the catalogue admits only `Workshop` and
   `TrainingProgram`.
 
-Approving the first group would take the catalogue from 10 cards across 10 entities to 24 across 17,
-at which point the grid fills on its own. That is a master-data decision, not a layout one, and
-§42 is explicit that master data is not changed here.
+Approving those would take the catalogue to 24 cards across 17 entities. That is a master-data
+decision, and the layout must not depend on it: **the page has to fill its width at ten cards, not
+only at twenty-four.**
 
-**What did change.** Each entity is now a bounded section — a framed panel with an identity strip
-(89px logo, name at `clamp(1.05rem, …, 1.35rem)`, "*N* programs available") above its offerings — so
-the space around a single card belongs to a deliberate section rather than to the page margin. No
-internal id, approval status or organization type is shown. The `col-md-6 col-xl-4` wrapper around
-each card is gone; cards are direct children of a CSS grid:
+**What ships.** One grid for the whole catalogue. The controller still groups by implementing
+entity and that order is preserved — an entity's offerings stay adjacent — but every card is a
+direct child of a single grid, so a row is filled from the whole catalogue instead of from one
+entity. The entity travels *with* its offering as a strip inside the card: logo, then name. No
+internal id, approval status or organization type is shown.
+
+That trade is worth stating plainly. Grouping bought a single large logo per entity; the flat grid
+spends a little vertical space repeating the logo on each card. In exchange the mark now appears
+once per programme instead of once per group, at 97 × 64 painted — larger than the 62 × 41 the
+grouped layout actually rendered — and the page uses its full width. Both of §14's complaints, the
+small logos and the wasted width, came apart the same way.
 
 ```css
-grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
+grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
 ```
 
-`auto-fill`, not `auto-fit`, is the load-bearing choice: `auto-fit` collapses the empty tracks and
-would stretch a lone card across the entire panel. `min(100%, 21rem)` is what keeps the floor from
-overflowing a 390px phone. And 21rem is measured, not guessed — 20rem opened a fourth 330px column
-at 1440, 22rem closed the second column on a 768px tablet.
+`auto-fill`, not `auto-fit`: a short trailing row keeps normal-width cards instead of stretching the
+last one across the page. `min(100%, 22rem)` is what keeps the floor from overflowing a 390px phone.
+22rem is measured against the container's own inner width — 21rem opens a fourth ~350px column at
+1440, 23rem closes the second column on a 768px tablet. (The earlier 21rem was measured inside the
+entity panel, whose padding ate 40px; removing the panel moved the boundary.)
 
 Equal card heights per row come from the grid itself, and the Request Booking button is pushed to
 the card's bottom edge by `mt-auto`, so cards in a row align however long their descriptions run.
 
 ### 37.4 Measured geometry
 
-Signed in as a club admin, both languages, identical results in each:
+Signed in as a club admin, both languages, identical results in each. Ten offerings, so the trailing
+space is what is left over beside the *last* row rather than beside every card:
 
-| Viewport | Container | Entity section | Columns | Card | Trailing space |
-|---:|---:|---:|:---:|---:|---:|
-| 1440 | 1440 | 1416 | **3** | 446 | 961 |
-| 1366 | 1366 | 1342 | **3** | 421 | 912 |
-| 1200 | 1200 | 1176 | **3** | 366 | 801 |
-| 1024 | 1024 | 1000 | **2** | 470 | 521 |
-| 768 | 768 | 744 | **2** | 342 | 393 |
-| 390 | 390 | 366 | **1** | 332 | 29 |
+| Viewport | Container | Grid | Columns | Card | Row 1 | Height spread | Trailing space |
+|---:|---:|---:|:---:|---:|:---:|:---:|---:|
+| 1440 | 1440 | 1416 | **3** | 460 | 3 | 0 | **12** |
+| 1366 | 1366 | 1342 | **3** | 435 | 3 | 0 | **12** |
+| 1200 | 1200 | 1176 | **3** | 380 | 3 | 0 | **12** |
+| 1024 | 1024 | 1000 | **2** | 491 | 2 | 0 | **12** |
+| 768 | 768 | 744 | **2** | 363 | 2 | 0 | **12** |
+| 390 | 390 | 366 | **1** | 366 | 1 | 0 | **12** |
 
 3 / 3 / 3 / 2 / 2 / 1 — the intended progression, with no pixel card width and no breakpoint in the
-grid. `document.scrollWidth - clientWidth` is **0** at every width in both languages.
+grid. `document.scrollWidth - clientWidth` is **0** at every width in both languages, and the height
+spread within a row is **0**, so cards in a row end level.
 
-The trailing figure is the honest one and is not a layout defect: it is the two or one unused tracks
-of a three-track grid holding a single card, exactly as §25 specifies ("one normal-width card … the
-rest of the section can remain naturally empty"). It falls to a normal gutter the moment an entity
-has three offerings.
+The trailing figure is the number the original complaint was about, and it is now the container's
+own 12px gutter at every width — against **961px** under the grouped layout at 1440. Ten cards fill
+four rows of three instead of stacking down one column.
 
 Other changes on the page: the filter bar is one horizontal row on a laptop, two on a tablet and
 stacked on a phone — no filter sidebar, which is what would have recreated a narrow catalogue. A
@@ -3675,8 +3702,10 @@ requested and decoded in the browser: all 24 return 200 and decode as real image
 1980×3065), none is empty, and **none resolves to the shared placeholder**. No approved entity falls
 back.
 
-**Queries.** `/Home/Booking` renders ten entity sections and ten cards in **9 database commands**,
-of which the workspace header accounts for exactly **one** `OrganizationAdminLinks` query. No N+1.
+**Queries.** `/Home/Booking` renders ten cards, each with its entity's logo and name, in **9 database
+commands**, of which the workspace header accounts for exactly **one** `OrganizationAdminLinks`
+query. Moving the entity into the card changed neither number: the controller already loads the
+organizations, and the view reads them from a dictionary. No N+1.
 
 **Booking logic unchanged.** `/bookings/create?activityId=2` still preloads the offering — hidden
 `ActivityId=2`, eight read-only fields, the *Existing Program* badge. `/bookings/custom` still has
@@ -3684,7 +3713,7 @@ of which the workspace header accounts for exactly **one** `OrganizationAdminLin
 row was created.
 
 **Anonymous.** The public catalogue serves an anonymous visitor **zero** workspace headers and all
-ten entity sections — no borrowed club identity, and no sign-in required to browse.
+ten programme cards — no borrowed club identity, and no sign-in required to browse.
 
 **Deactivated organizations** stay out: Al Habtoor Polo Club appears neither in the catalogue nor in
 the entity filter.
@@ -3695,14 +3724,19 @@ both languages, all with zero overflow.
 
 **Arabic / RTL.** The logo takes the start side without any direction override — the layout is flex
 with `gap` and logical properties, so RTL needs no rules of its own and no artwork is mirrored.
-Arabic organization names, translated workspace labels and the Arabic season title all render;
-entity headers, cards and buttons align right; no collision and no overflow at any tested width.
+Arabic organization names, translated workspace labels and the Arabic season title all render; the
+entity strip inside each card, the cards and the buttons align right; no collision and no overflow at
+any tested width. Column counts, card widths and logo sizes are identical to English at all six
+widths.
 
 **Accessibility.** Organization logos carry the organization name as `alt`; decorative icons are
-`aria-hidden`. Entity names are real `h3` headings inside the catalogue's `h2`, and programme titles
-`h4` under them. Each Request Booking / Sign in to request link gained a visually hidden programme
-name, so the accessible names are distinct rather than twenty identical "Request Booking" links.
-Filter labels keep their `for` bindings.
+`aria-hidden`. With grouping gone the heading tree lost a level rather than keeping an empty one:
+programme titles are now `h3` directly under the catalogue's `h2`, and the entity strip is an
+attribution line, not a heading — a heading per card would have put ten identical-depth headings in
+the tree that outline nothing. Each Request Booking / Sign in to request link carries a visually
+hidden programme name *and* entity name, so the accessible names are distinct rather than ten
+identical "Request Booking" links, and the entity is not conveyed by the logo alone. Filter labels
+keep their `for` bindings.
 
 **Build** — `dotnet build --no-incremental` → **0 errors, 1 warning**, the retained `CS0108` on
 `Activity.CreatedByUserId`, not suppressed.

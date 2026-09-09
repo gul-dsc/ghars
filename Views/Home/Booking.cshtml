@@ -32,6 +32,15 @@
     var byId = Model.ToDictionary(x => x.Id);
     var attachmentCounts = ViewBag.AttachmentCounts as Dictionary<int, int> ?? new();
 
+    // One flat catalogue rather than one panel per entity. The controller still groups by
+    // implementing entity, and that order is kept — an entity's offerings stay adjacent — but the
+    // cards share a single grid, so a row is filled from the whole catalogue instead of from one
+    // entity that usually has a single bookable programme. The entity travels with its card.
+    var catalogue = offerings
+        .Where(g => byId.ContainsKey(g.Key))
+        .SelectMany(g => g.Value.Select(a => (Entity: byId[g.Key], Offering: a)))
+        .ToList();
+
     string LogoOf(Organization o) => string.IsNullOrWhiteSpace(o.LogoPath)
         ? Url.Content("~/img/partners/default-partner.svg")
         : Url.Content(o.LogoPath);
@@ -203,127 +212,112 @@ else if (isAdmin)
 }
 else
 {
-    @foreach (var group in offerings)
-    {
-        if (!byId.TryGetValue(group.Key, out var entity)) { continue; }
+    @* One grid for the whole catalogue. Cards are direct grid children, so the grid owns the column
+       count, a row is filled from every entity's offerings rather than from one entity's, and cards
+       in a row share their height. *@
+    <div class="booking-program-grid mb-4">
+        @foreach (var (entity, offering) in catalogue)
+        {
+            var audiences = string.IsNullOrWhiteSpace(offering.TargetAudienceCsv)
+                ? new List<string>()
+                : offering.TargetAudienceCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            var minutes = (int)(offering.EndDateTime - offering.StartDateTime).TotalMinutes;
 
-        @* One bounded section per implementing entity: identity strip, then its offerings. The
-           entity's name and logo carry more visual weight than any single programme's metadata,
-           because the entity is what a club is choosing between. Nothing internal is shown here —
-           no id, no approval status, no organization type. *@
-        <section class="booking-entity-section">
-            <div class="booking-entity-head">
-                <div class="booking-entity-logo">
-                    <img src="@LogoOf(entity)" alt="@Name(entity)" loading="lazy" />
+            <article class="card h-100 shadow-sm border-0 rounded-4">
+                @* Whose programme this is, at the top of the card and at a size that can actually be
+                   recognised. Nothing internal is shown — no id, no approval status, no type. *@
+                <div class="booking-card-entity">
+                    <div class="booking-card-entity-logo">
+                        <img src="@LogoOf(entity)" alt="@Name(entity)" loading="lazy" />
+                    </div>
+                    <div class="booking-card-entity-name">@Name(entity)</div>
                 </div>
-                <div class="booking-entity-identity">
-                    <h3 class="booking-entity-name">@Name(entity)</h3>
-                    <div class="booking-entity-count">
-                        @(group.Value.Count == 1
-                            ? T("1 program available", "برنامج واحد متاح")
-                            : T($"{group.Value.Count} programs available", $"{group.Value.Count} برامج متاحة"))
+
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                        <h3 class="h6 mb-0">@Title(offering)</h3>
+                        <span class="badge text-bg-primary flex-shrink-0">@TypeText(offering.Type)</span>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(Desc(offering)))
+                    {
+                        <p class="text-muted small mb-3">@(Desc(offering)!.Length > 180 ? Desc(offering)![..180] + "…" : Desc(offering))</p>
+                    }
+
+                    <ul class="list-unstyled small text-muted mb-3">
+                        @if (audiences.Count > 0)
+                        {
+                            <li><i class="bi bi-people me-1" aria-hidden="true"></i>@string.Join("، ", audiences.Select(AudienceText))</li>
+                        }
+                        @if (offering.Capacity > 0)
+                        {
+                            <li><i class="bi bi-person-badge me-1" aria-hidden="true"></i>@T($"Up to {offering.Capacity} participants", $"حتى {offering.Capacity} مشارك")</li>
+                        }
+                        @if (minutes > 0)
+                        {
+                            <li><i class="bi bi-clock me-1" aria-hidden="true"></i>@T($"{minutes} minutes", $"{minutes} دقيقة")</li>
+                        }
+                        @if (offering.Season is not null)
+                        {
+                            <li><i class="bi bi-calendar3 me-1" aria-hidden="true"></i>@(ar ? offering.Season.TitleAr : offering.Season.TitleEn)</li>
+                        }
+                        @if (offering.AvailableFromUtc is not null || offering.AvailableUntilUtc is not null)
+                        {
+                            @* Shown only when the partner set a window. An offering with no
+                               window is simply available, and saying so adds nothing. *@
+                            <li>
+                                <i class="bi bi-hourglass-split me-1" aria-hidden="true"></i>
+                                @if (offering.AvailableFromUtc is not null && offering.AvailableUntilUtc is not null)
+                                {
+                                    @T("Available", "متاح")<text> </text>@offering.AvailableFromUtc.Value.ToString("yyyy-MM-dd")<text> → </text>@offering.AvailableUntilUtc.Value.ToString("yyyy-MM-dd")
+                                }
+                                else if (offering.AvailableUntilUtc is not null)
+                                {
+                                    @T("Available until", "متاح حتى")<text> </text>@offering.AvailableUntilUtc.Value.ToString("yyyy-MM-dd")
+                                }
+                                else
+                                {
+                                    @T("Available from", "متاح من")<text> </text>@offering.AvailableFromUtc!.Value.ToString("yyyy-MM-dd")
+                                }
+                            </li>
+                        }
+                        @* One line, not a list of links: the catalogue card says that supporting
+                           material exists, the booking screen is where it is read. Counts come
+                           from one grouped query for the whole page, not one per card, and the
+                           files themselves stay behind the same authorization as before. *@
+                        @if (attachmentCounts.TryGetValue(offering.Id, out var attachmentCount) && attachmentCount > 0)
+                        {
+                            <li>
+                                <i class="bi bi-paperclip me-1" aria-hidden="true"></i>
+                                @T($"Supporting documents ({attachmentCount})", $"مستندات داعمة ({attachmentCount})")
+                            </li>
+                        }
+                    </ul>
+
+                    <div class="mt-auto">
+                        @if (isClub)
+                        {
+                            <a class="btn btn-ghars w-100" href="/bookings/create?activityId=@offering.Id">
+                                <i class="bi bi-calendar-plus me-1"></i>@T("Request Booking", "طلب حجز")
+                                <span class="visually-hidden">— @Title(offering) — @Name(entity)</span>
+                            </a>
+                        }
+                        else if (!isAuthenticated)
+                        {
+                            @* Anonymous browsing is allowed; requesting is not. The intended
+                               destination is preserved so sign-in continues into this offering. *@
+                            <a class="btn btn-outline-success w-100"
+                               asp-controller="Account" asp-action="Login"
+                               asp-route-returnUrl="@($"/bookings/create?activityId={offering.Id}")">
+                                <i class="bi bi-box-arrow-in-right me-1"></i>@T("Sign in to request", "سجّل الدخول للطلب")
+                                <span class="visually-hidden">— @Title(offering) — @Name(entity)</span>
+                            </a>
+                        }
                     </div>
                 </div>
-            </div>
-
-            <div class="booking-program-grid">
-                @foreach (var offering in group.Value)
-                {
-                    var audiences = string.IsNullOrWhiteSpace(offering.TargetAudienceCsv)
-                        ? new List<string>()
-                        : offering.TargetAudienceCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-                    var minutes = (int)(offering.EndDateTime - offering.StartDateTime).TotalMinutes;
-
-                    @* A direct grid child: the col wrapper is gone, so the grid owns the column
-                       count and every card in a row shares its height. *@
-                    <article class="card h-100 shadow-sm border-0 rounded-4">
-                        <div class="card-body d-flex flex-column">
-                            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
-                                <h4 class="h6 mb-0">@Title(offering)</h4>
-                                <span class="badge text-bg-primary flex-shrink-0">@TypeText(offering.Type)</span>
-                            </div>
-
-                            @if (!string.IsNullOrWhiteSpace(Desc(offering)))
-                            {
-                                <p class="text-muted small mb-3">@(Desc(offering)!.Length > 180 ? Desc(offering)![..180] + "…" : Desc(offering))</p>
-                            }
-
-                            <ul class="list-unstyled small text-muted mb-3">
-                                @if (audiences.Count > 0)
-                                {
-                                    <li><i class="bi bi-people me-1" aria-hidden="true"></i>@string.Join("، ", audiences.Select(AudienceText))</li>
-                                }
-                                @if (offering.Capacity > 0)
-                                {
-                                    <li><i class="bi bi-person-badge me-1" aria-hidden="true"></i>@T($"Up to {offering.Capacity} participants", $"حتى {offering.Capacity} مشارك")</li>
-                                }
-                                @if (minutes > 0)
-                                {
-                                    <li><i class="bi bi-clock me-1" aria-hidden="true"></i>@T($"{minutes} minutes", $"{minutes} دقيقة")</li>
-                                }
-                                @if (offering.Season is not null)
-                                {
-                                    <li><i class="bi bi-calendar3 me-1" aria-hidden="true"></i>@(ar ? offering.Season.TitleAr : offering.Season.TitleEn)</li>
-                                }
-                                @if (offering.AvailableFromUtc is not null || offering.AvailableUntilUtc is not null)
-                                {
-                                    @* Shown only when the partner set a window. An offering with no
-                                       window is simply available, and saying so adds nothing. *@
-                                    <li>
-                                        <i class="bi bi-hourglass-split me-1" aria-hidden="true"></i>
-                                        @if (offering.AvailableFromUtc is not null && offering.AvailableUntilUtc is not null)
-                                        {
-                                            @T("Available", "متاح")<text> </text>@offering.AvailableFromUtc.Value.ToString("yyyy-MM-dd")<text> → </text>@offering.AvailableUntilUtc.Value.ToString("yyyy-MM-dd")
-                                        }
-                                        else if (offering.AvailableUntilUtc is not null)
-                                        {
-                                            @T("Available until", "متاح حتى")<text> </text>@offering.AvailableUntilUtc.Value.ToString("yyyy-MM-dd")
-                                        }
-                                        else
-                                        {
-                                            @T("Available from", "متاح من")<text> </text>@offering.AvailableFromUtc!.Value.ToString("yyyy-MM-dd")
-                                        }
-                                    </li>
-                                }
-                                @* One line, not a list of links: the catalogue card says that supporting
-                                   material exists, the booking screen is where it is read. Counts come
-                                   from one grouped query for the whole page, not one per card, and the
-                                   files themselves stay behind the same authorization as before. *@
-                                @if (attachmentCounts.TryGetValue(offering.Id, out var attachmentCount) && attachmentCount > 0)
-                                {
-                                    <li>
-                                        <i class="bi bi-paperclip me-1" aria-hidden="true"></i>
-                                        @T($"Supporting documents ({attachmentCount})", $"مستندات داعمة ({attachmentCount})")
-                                    </li>
-                                }
-                            </ul>
-
-                            <div class="mt-auto">
-                                @if (isClub)
-                                {
-                                    <a class="btn btn-ghars w-100" href="/bookings/create?activityId=@offering.Id">
-                                        <i class="bi bi-calendar-plus me-1"></i>@T("Request Booking", "طلب حجز")
-                                        <span class="visually-hidden">— @Title(offering)</span>
-                                    </a>
-                                }
-                                else if (!isAuthenticated)
-                                {
-                                    @* Anonymous browsing is allowed; requesting is not. The intended
-                                       destination is preserved so sign-in continues into this offering. *@
-                                    <a class="btn btn-outline-success w-100"
-                                       asp-controller="Account" asp-action="Login"
-                                       asp-route-returnUrl="@($"/bookings/create?activityId={offering.Id}")">
-                                        <i class="bi bi-box-arrow-in-right me-1"></i>@T("Sign in to request", "سجّل الدخول للطلب")
-                                        <span class="visually-hidden">— @Title(offering)</span>
-                                    </a>
-                                }
-                            </div>
-                        </div>
-                    </article>
-                }
-            </div>
-        </section>
-    }
+            </article>
+        }
+    </div>
 
     @* The same second path offered again at the point a club is most likely to conclude the
        catalogue has nothing for it — having scrolled the whole list. *@

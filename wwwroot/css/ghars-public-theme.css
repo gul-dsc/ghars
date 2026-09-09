@@ -364,43 +364,44 @@ footer,
 }
 
 /* ===========================================================================
-   Booking catalogue: one bounded section per implementing entity.
+   Booking catalogue: one grid for the whole catalogue, entity identity per card.
 
-   The header strip carries the entity's identity at a size that can actually be
-   recognised, and the offerings sit in a grid below it. Framing the group as a
-   panel is what makes an entity with a single offering read as a section with
-   room in it rather than as a card stranded in the page margin.
+   Grouping the catalogue into one panel per implementing entity looked right on
+   paper and was wrong on screen: almost every entity publishes a single bookable
+   offering, so each panel held one card and the page became a column of cards
+   down the leading edge with dead space beside all of them. One flat grid fills
+   its rows from the whole catalogue instead, and the entity travels with its
+   offering as a strip inside the card - which also puts the logo on screen once
+   per programme rather than once per group.
    =========================================================================== */
-.booking-entity-section { background: #fff; border: 1px solid #e4ebe8; border-radius: 20px; box-shadow: 0 12px 30px rgba(53,53,53,.05); padding: 20px; margin-bottom: 20px; }
+.booking-card-entity { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid #eef3f0; background: #fbfdfc; border-radius: 1rem 1rem 0 0; }
 
-.booking-entity-head { display: flex; align-items: center; gap: 18px; padding-bottom: 16px; margin-bottom: 18px; border-bottom: 1px solid #eef3f0; }
+/* Landscape box, not square. Almost every implementing entity's mark is a 3:2 wordmark, and a
+   square frame letterboxes those to about half the height it reserves for them - which is what
+   made the logos read as small. Matching the frame to the artwork lets contain fill it. Height
+   still carries the size band; width follows the aspect ratio. */
+.booking-card-entity-logo { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: clamp(5.25rem, 4.65rem + 3vw, 7.5rem); height: clamp(3.5rem, 3.1rem + 2vw, 5rem); background: #fff; border: 1px solid #eaf2ee; border-radius: 14px; padding: 6px; overflow: hidden; }
 
-.booking-entity-logo { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: clamp(3.5rem, 2.725rem + 3.17vw, 5.75rem); height: clamp(3.5rem, 2.725rem + 3.17vw, 5.75rem); background: #f6faf8; border: 1px solid #eaf2ee; border-radius: 16px; padding: 10px; overflow: hidden; }
-
-    .booking-entity-logo img { width: 100%; height: 100%; object-fit: contain; }
+    /* contain, never cover: government wordmarks and round club crests differ wildly
+       in aspect ratio and both must letterbox rather than crop. */
+    .booking-card-entity-logo img { width: 100%; height: 100%; object-fit: contain; }
 
 /* min-width:0 so a long entity name wraps inside the strip instead of widening it. */
-.booking-entity-identity { min-width: 0; }
+.booking-card-entity-name { min-width: 0; font-size: .95rem; font-weight: 700; color: #17352a; line-height: 1.35; overflow-wrap: anywhere; }
 
-.booking-entity-name { font-size: clamp(1.05rem, .95rem + .5vw, 1.35rem); font-weight: 800; color: #17352a; line-height: 1.3; margin: 0 0 .25rem 0; overflow-wrap: anywhere; }
-
-.booking-entity-count { color: #5f6b66; font-size: .88rem; }
-
-/* auto-FILL, not auto-fit: an entity with one offering keeps a normal card in the
-   first track instead of one card stretched across the whole page. The floor is a
-   readable card width rather than a layout width, and min(100%, ...) is what stops
-   that floor from overflowing a 390px phone. Column counts follow from the space:
-   3 at 1440/1366/1200, 2 at 1024/768, 1 at 390 — no breakpoints, no pixel widths.
-   21rem is measured, not guessed: 20rem opened a fourth 330px column at 1440, and
-   22rem closed the second column on a 768px tablet. 21rem is the value that holds
-   3 / 3 / 3 / 2 / 2 / 1 across the six tested widths. */
-.booking-program-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr)); }
+/* auto-FILL, not auto-fit: a trailing row that is short keeps normal-width cards
+   instead of stretching the last one across the page. The floor is a readable card
+   width rather than a layout width, and min(100%, ...) is what stops that floor
+   from overflowing a 390px phone. Column counts follow from the space: 3 at
+   1440/1366/1200, 2 at 1024/768, 1 at 390 - no breakpoints, no pixel widths.
+   22rem is measured against the container's own inner width (viewport - 24px of
+   gutter): 21rem opens a fourth ~350px column at 1440, and 23rem closes the second
+   column on a 768px tablet. */
+.booking-program-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
 
     /* Equal height per row comes from the grid; the card only has to fill its cell. */
     .booking-program-grid > .card { height: 100%; }
 
 @media (max-width: 575.98px) {
-    .booking-entity-section { padding: 16px; }
-
-    .booking-entity-head { gap: 14px; }
+    .booking-card-entity { padding: 12px 14px; gap: 10px; }
 }

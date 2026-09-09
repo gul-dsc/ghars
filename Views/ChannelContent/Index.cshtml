@@ -1,11 +1,11 @@
 @model List<GharsPlatform.Models.Core.GalleryItem>
 @using GharsPlatform.Helpers
 @using GharsPlatform.Models.Core
+@using GharsPlatform.ViewModels
 @using System.Globalization
 @{
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string e, string a) => ar ? a : e;
-    var org = ViewBag.Organization as Organization;
     var counts = ViewBag.StateCounts as Dictionary<ChannelApprovalStatus, int> ?? new();
     var total = ViewBag.TotalItems as int? ?? 0;
     var selectedStatus = ViewBag.Status as ChannelApprovalStatus?;
@@ -15,10 +15,17 @@
     int C(ChannelApprovalStatus s) => counts.TryGetValue(s, out var n) ? n : 0;
 }
 
+@await Html.PartialAsync("_OrganizationWorkspaceHeader", new WorkspaceHeaderVm
+{
+    Variant = WorkspaceHeaderVariant.Compact,
+    PageTitleEn = "Ghars Channel",
+    PageTitleAr = "قناة غرس"
+})
+
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
     <div>
+        @* The entity's name moved into the context strip above rather than being printed twice. *@
         <h1 class="h3 mb-1">@ViewData["Title"]</h1>
-        <div class="text-muted"><i class="bi bi-building me-1" aria-hidden="true"></i>@(ar ? org?.NameAr : org?.NameEn)</div>
     </div>
     <a class="btn btn-success" asp-action="Create">
         <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>@T("Add content", "إضافة محتوى")

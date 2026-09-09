@@ -1,5 +1,6 @@
 @model GharsPlatform.ViewModels.BookingCreateVm
 @using GharsPlatform.Models.Core
+@using GharsPlatform.ViewModels
 @using System.Globalization
 @{
     var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
@@ -42,6 +43,12 @@
 }
 
 <div class="booking-request-shell">
+    @await Html.PartialAsync("_OrganizationWorkspaceHeader", new WorkspaceHeaderVm
+    {
+        Variant = WorkspaceHeaderVariant.Compact,
+        PageTitleEn = "Booking",
+        PageTitleAr = "الحجز"
+    })
     <div class="dashboard-hero mb-4">
         <h1 class="h3 mb-2">@pageTitle</h1>
         <p class="mb-0 opacity-75">

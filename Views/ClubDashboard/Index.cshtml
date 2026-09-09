@@ -1,5 +1,6 @@
 @using GharsPlatform.Models.Core
 @using GharsPlatform.Helpers
+@using GharsPlatform.ViewModels
 @using System.Globalization
 @{
     var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
@@ -23,18 +24,28 @@
     var rejected = bookings.Count(x=>x.Status==BookingStatus.Rejected||x.Status==BookingStatus.ClubRejectedProposedTimes);
     var upcoming = bookings.Count(x => (x.Status == BookingStatus.Confirmed || x.Status == BookingStatus.Approved) && (x.ConfirmedStartUtc ?? x.Activity?.StartDateTime ?? DateTime.MinValue) >= DateTime.UtcNow);
 }
-<div class="dashboard-hero d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
-    <div>
-        <h1 class="h3 mb-1">@(O(club)==""?T("Club Dashboard","لوحة النادي"):O(club))</h1>
+@* The club's own identity opens its own dashboard: this is the one screen where the organization
+   name is the page heading rather than a line of context. The two booking paths sit in the same
+   panel, so a club never has to go looking for the second one. *@
+@await Html.PartialAsync("_OrganizationWorkspaceHeader", new WorkspaceHeaderVm
+{
+    Variant = WorkspaceHeaderVariant.Hero,
+    SubtitleEn = "Track partner responses, confirmed programs, and bookings requiring your response.",
+    SubtitleAr = "متابعة ردود الشركاء والبرامج المؤكدة والحجوزات التي تتطلب ردكم.",
+    Actions = @<text>
+        <a class="btn btn-ghars fw-semibold" href="/Home/Booking"><i class="bi bi-collection me-1" aria-hidden="true"></i>@T("Browse Programs", "تصفح البرامج")</a>
+        <a class="btn btn-outline-success fw-semibold" href="/bookings/custom"><i class="bi bi-pencil-square me-1" aria-hidden="true"></i>@T("Request Custom Program", "طلب برنامج مخصص")</a>
+    </text>
+})
+@* Fallback for an account with no club link: the header renders nothing, and a dashboard with no
+   heading at all would be worse than a generic one. *@
+@if (club is null)
+{
+    <div class="dashboard-hero">
+        <h1 class="h3 mb-1">@T("Club Dashboard", "لوحة النادي")</h1>
         <div>@T("Track partner responses, confirmed programs, and bookings requiring your response.", "متابعة ردود الشركاء والبرامج المؤكدة والحجوزات التي تتطلب ردكم.")</div>
     </div>
-    @* The same two paths the Booking page offers, so a club never has to go looking for the second
-       one. Browse leads to the catalogue; the custom route is its own address. *@
-    <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-light fw-bold" href="/Home/Booking"><i class="bi bi-collection me-1" aria-hidden="true"></i>@T("Browse Programs", "تصفح البرامج")</a>
-        <a class="btn btn-light fw-bold" href="/bookings/custom"><i class="bi bi-pencil-square me-1" aria-hidden="true"></i>@T("Request Custom Program", "طلب برنامج مخصص")</a>
-    </div>
-</div>
+}
 @if(awaiting>0){<div class="required-action-banner"><i class="bi bi-bell me-2"></i>@T("You have partner proposed time options waiting for your decision.", "لديكم أوقات مقترحة من الشريك بانتظار قراركم.")</div>}
 
 @{

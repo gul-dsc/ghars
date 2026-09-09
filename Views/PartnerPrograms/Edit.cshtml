@@ -1,6 +1,7 @@
 @model GharsPlatform.ViewModels.PartnerProgramVm
 @using GharsPlatform.Models.Core
 @using GharsPlatform.Helpers
+@using GharsPlatform.ViewModels
 @using System.Globalization
 @{
  var ar=CultureInfo.CurrentUICulture.TwoLetterISOLanguageName=="ar"; string T(string e,string a)=>ar?a:e;
@@ -8,6 +9,12 @@
  var approval=activity?.ApprovalStatus;
  ViewData["Title"]=T("Edit Program","تعديل البرنامج");
 }
+@await Html.PartialAsync("_OrganizationWorkspaceHeader", new WorkspaceHeaderVm
+{
+    Variant = WorkspaceHeaderVariant.Compact,
+    PageTitleEn = "Edit Program",
+    PageTitleAr = "تعديل البرنامج"
+})
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
     <div>
         <h1 class="mb-1">@T("Edit Program","تعديل البرنامج")</h1>

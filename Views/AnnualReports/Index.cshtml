@@ -1,22 +1,28 @@
 @model List<GharsPlatform.Models.Core.Season>
 @using GharsPlatform.Helpers
 @using GharsPlatform.Models.Core
+@using GharsPlatform.ViewModels
 @using System.Globalization
 @{
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string e, string a) => ar ? a : e;
-    var club = ViewBag.Club as Organization;
     var reports = ViewBag.Reports as Dictionary<int, GharsAnnualReport> ?? new();
     ViewData["Title"] = AnnualReportWorkflow.ReportTitle;
 }
 
+@* The club is identified, never chosen: the context strip resolves it from the signed-in user's
+   organization, which is also what replaced the plain name line that used to sit under the title. *@
+@await Html.PartialAsync("_OrganizationWorkspaceHeader", new WorkspaceHeaderVm
+{
+    Variant = WorkspaceHeaderVariant.Compact,
+    PageTitleEn = "Annual Report",
+    PageTitleAr = "التقرير السنوي",
+    ShowSeason = false
+})
+
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
     <div>
         <h1 class="h3 mb-1">@AnnualReportWorkflow.ReportTitle</h1>
-        @* The club is identified, never chosen: it comes from the signed-in user's organization. *@
-        <div class="text-muted">
-            <i class="bi bi-building me-1" aria-hidden="true"></i>@(ar ? club?.NameAr : club?.NameEn)
-        </div>
     </div>
 </div>
 

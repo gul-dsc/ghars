@@ -1,5 +1,6 @@
 @using GharsPlatform.Models.Core
 @using GharsPlatform.Helpers
+@using GharsPlatform.ViewModels
 @using System.Globalization
 @* Booking Source labels come from the shared BookingSource helper, so this inbox, booking details
    and the club's own dashboard cannot describe the same request differently. *@
@@ -36,15 +37,23 @@
     var customCount = bookings.Count - existingCount;
     var selectedSource = ViewBag.Source as BookingSourceFilter?;
 }
-<div class="dashboard-hero d-flex flex-wrap justify-content-between align-items-center gap-3">
-    <div>
-        <h1 class="h3 mb-1">@(O(partner)==""?T("Partner Dashboard","لوحة الشريك"):O(partner))</h1>
+@* The entity's own identity opens its own dashboard. The page below it is unchanged: this remains
+   the request inbox, and My Programs remains the offering catalogue — the shortcut is why the two
+   stay separate without either being hard to find. *@
+@await Html.PartialAsync("_OrganizationWorkspaceHeader", new WorkspaceHeaderVm
+{
+    Variant = WorkspaceHeaderVariant.Hero,
+    SubtitleEn = "Review club requests, manage pending actions, and monitor programs.",
+    SubtitleAr = "مراجعة طلبات الأندية وإدارة الإجراءات ومتابعة البرامج.",
+    Actions = @<a class="btn btn-ghars fw-semibold" href="/partner/programs"><i class="bi bi-collection me-1" aria-hidden="true"></i>@T("Manage My Programs", "إدارة برامجي")</a>
+})
+@if (partner is null)
+{
+    <div class="dashboard-hero">
+        <h1 class="h3 mb-1">@T("Partner Dashboard", "لوحة الشريك")</h1>
         <div>@T("Review club requests, manage pending actions, and monitor programs.", "مراجعة طلبات الأندية وإدارة الإجراءات ومتابعة البرامج.")</div>
     </div>
-    @* Shortcut into the separate content-management surface. The two are kept apart on purpose:
-       this page is the request inbox, My Programs is the offering catalogue. *@
-    <a class="btn btn-light" href="/partner/programs"><i class="bi bi-collection me-1"></i>@T("Manage My Programs","إدارة برامجي")</a>
-</div>
+}
 <form class="ghars-filter-card row g-2 align-items-end" method="get">
     <div class="col-md-2"><label class="form-label" for="pd-from">@T("From","من")</label><input class="form-control" id="pd-from" type="date" name="from" value="@ViewBag.From" /></div>
     <div class="col-md-2"><label class="form-label" for="pd-to">@T("To","إلى")</label><input class="form-control" id="pd-to" type="date" name="to" value="@ViewBag.To" /></div>

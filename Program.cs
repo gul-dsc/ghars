@@ -53,6 +53,11 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.ExpireTimeSpan = TimeSpan.FromHours(8);
 });
 
+// Whose workspace the current request belongs to, for the organization identity header. Scoped and
+// self-caching, so the dozen screens that show it cost one query per request between them.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<WorkspaceContext>();
+
 // SignalR
 builder.Services.AddSignalR();
 

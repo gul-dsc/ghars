@@ -1,0 +1,107 @@
+@model GharsPlatform.ViewModels.WorkspaceHeaderVm
+@using GharsPlatform.Helpers
+@using GharsPlatform.ViewModels
+@using System.Globalization
+@inject WorkspaceContext Workspace
+
+@*
+    The organization whose workspace this is: logo, name, workspace type, season.
+
+    Ghars stays the platform brand — it is the logo in the site header and the kicker on the hero
+    variant. This panel is the second level: whose desk inside Ghars this screen belongs to. That is
+    the whole intent. It is not a white-label treatment: no palette changes per organization, and the
+    logo is never used as a background.
+
+    The organization is NOT a parameter. It comes from WorkspaceContext, which reads the
+    authenticated principal and nothing else, so no view and no query string can choose whose
+    identity a page shows. Anonymous visitors and administrators have no workspace and get no header
+    rather than a borrowed one.
+*@
+
+@{
+    var workspace = await Workspace.CurrentAsync();
+}
+
+@if (workspace is not null)
+{
+    var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string en, string ar) => isAr ? ar : en;
+
+    var org = workspace.Organization;
+    var name = isAr
+        ? (string.IsNullOrWhiteSpace(org.NameAr) ? org.NameEn : org.NameAr)
+        : (string.IsNullOrWhiteSpace(org.NameEn) ? org.NameAr : org.NameEn);
+
+    // The reconciled master-data logo. A genuine organization is expected to have one; the shared
+    // placeholder exists so a missing file degrades to a neutral mark rather than a broken image.
+    var logo = string.IsNullOrWhiteSpace(org.LogoPath)
+        ? Url.Content("~/img/partners/default-partner.svg")
+        : Url.Content(org.LogoPath);
+
+    var workspaceLabel = workspace.Kind == WorkspaceKind.Club
+        ? T("Club Workspace", "مساحة عمل النادي")
+        : T("Ghars Partner Workspace", "مساحة عمل الشريك في غرس");
+
+    var pageTitle = isAr ? Model.PageTitleAr : Model.PageTitleEn;
+    var subtitle = isAr ? Model.SubtitleAr : Model.SubtitleEn;
+    var seasonTitle = Model.ShowSeason && workspace.Season is not null
+        ? (isAr ? workspace.Season.TitleAr : workspace.Season.TitleEn)
+        : null;
+
+    if (Model.Variant == WorkspaceHeaderVariant.Hero)
+    {
+        <section class="org-workspace org-workspace-hero">
+            <div class="org-workspace-logo org-workspace-logo-hero">
+                <img src="@logo" alt="@name" />
+            </div>
+            <div class="org-workspace-identity">
+                <div class="org-workspace-kicker">@T("Ghars Program", "برنامج غرس")</div>
+                <h1 class="org-workspace-name">@name</h1>
+                <div class="org-workspace-meta">
+                    <span class="org-workspace-role">@workspaceLabel</span>
+                    @if (seasonTitle is not null)
+                    {
+                        <span class="org-workspace-season">
+                            <i class="bi bi-calendar3" aria-hidden="true"></i>@seasonTitle
+                        </span>
+                    }
+                </div>
+                @if (!string.IsNullOrWhiteSpace(subtitle))
+                {
+                    <p class="org-workspace-subtitle">@subtitle</p>
+                }
+            </div>
+            @if (Model.Actions is not null)
+            {
+                <div class="org-workspace-actions">@Model.Actions(null)</div>
+            }
+        </section>
+    }
+    else
+    {
+        @* Compact: one line of orientation above a working screen. Deliberately not a heading — the
+           page's own <h1> follows it, and inserting a second one here would break the outline. *@
+        <div class="org-workspace org-workspace-compact">
+            <div class="org-workspace-logo org-workspace-logo-compact">
+                <img src="@logo" alt="@name" />
+            </div>
+            <div class="org-workspace-identity">
+                <div class="org-workspace-name-compact">@name</div>
+                <div class="org-workspace-trail">
+                    <span class="org-workspace-role">@workspaceLabel</span>
+                    @if (!string.IsNullOrWhiteSpace(pageTitle))
+                    {
+                        <span class="org-workspace-sep" aria-hidden="true">/</span>
+                        <span class="org-workspace-page">@pageTitle</span>
+                    }
+                    @if (seasonTitle is not null)
+                    {
+                        <span class="org-workspace-season">
+                            <i class="bi bi-calendar3" aria-hidden="true"></i>@seasonTitle
+                        </span>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+}

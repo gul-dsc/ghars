@@ -3539,3 +3539,172 @@ Both scratch databases were dropped; `GharsPlatformDb` is the only Ghars databas
 `Activity.CreatedByUserId`, not suppressed.
 
 **Migration** — none created, and none needed. Nothing in this section touches the schema.
+
+---
+
+## 37. Organization Workspace Identity and Booking Catalogue UX (2026-09-09)
+
+Presentation only. No booking rule, authorization check, attachment permission, eligibility query,
+survey calculation or master-data row was touched. A club admin signing in should feel they are
+working inside *their club's* Ghars workspace, and an implementing entity inside *theirs* — with
+Ghars still the platform, not a white-label shell that changes colour per organization.
+
+### 37.1 One header, resolved once, on the server
+
+`Views/Shared/_OrganizationWorkspaceHeader.cshtml` is the single piece of identity markup, in two
+variants: a **hero** panel that opens a dashboard, and a **compact** strip that orients a subordinate
+screen without spending the top third of the viewport on saying so again.
+
+**The organization is not a parameter.** `Helpers/WorkspaceContext.cs` is a scoped service that
+resolves it from `ClaimTypes.NameIdentifier` on the authenticated principal and nothing else. The
+partial calls that service directly, so no view — and no query string — can choose whose identity a
+page displays; `?organizationId=31` has nothing to bind to. Had each of a dozen views resolved the
+organization itself, the first one to accept an id from the request would have been a spoofing hole
+in the one element whose entire job is to say who you are.
+
+It is presentation and nothing more. Every controller keeps its own `[Authorize]` attributes and its
+own organization scoping. An account with no matching link renders **no header** rather than a wrong
+one, and the two dashboards keep a plain fallback heading for that case.
+
+| Where | Variant | Shows |
+|---|---|---|
+| Club Dashboard, Partner Dashboard | Hero | Ghars Program kicker, logo, organization name as the page `h1`, workspace label, season, the page's own actions |
+| Agenda, Reports & Statistics, Annual Report, Booking, Booking Request, My Programs, Program Create / Edit / Details, Ghars Channel content | Compact | Small logo, name, `Club Workspace / Agenda`-style trail, season |
+
+The compact variant deliberately emits **no heading element** — the page's own `h1` follows it.
+Verified across 38 page loads (19 routes × two languages): exactly one `h1` on every screen.
+
+Four screens printed the organization name in their own subheading; those lines were removed rather
+than left to say the same thing twice. `SEED_CREDENTIALS`-style staleness is the same failure mode:
+two places asserting one fact eventually disagree.
+
+### 37.2 Logo sizing
+
+Every logo area is a `clamp()` ramp, not a breakpoint — one continuous curve from a 390px phone to a
+1440px desktop, which is why the workspace CSS contains no media query for sizing. Measured in the
+browser at six widths:
+
+| | 390 | 768 | 1024 | 1200 | 1366 | 1440 | Agreed band |
+|---|---|---|---|---|---|---|---|
+| Dashboard hero | 72 | 83 | 91 | 97 | 102 | **104** | 88–112 desktop / 76–96 tablet / 64–80 mobile |
+| Compact strip | 40 | 44 | 48 | 51 | 54 | **55** | 40–56 |
+| Booking entity header | 56 | 68 | 76 | 82 | 87 | **89** | 72–96 desktop / 64–80 tablet / 52–64 mobile |
+
+`object-fit: contain` throughout, never `cover`; each logo sits in a neutral framed box with its own
+clear space, so a 155×155 club crest and a 1200×800 government wordmark are both letterboxed rather
+than cropped or stretched. Nothing is mirrored in RTL.
+
+### 37.3 The booking catalogue
+
+**The reported symptom was real; the assumed cause was not.** There is no `col-lg-8` without a
+sibling, no stray nested row, no width on the catalogue body. `.container` is not even
+Bootstrap-capped in this application — `ghars-public-theme.css` sets `max-width: 100%` on
+`.container`, so at a 1440px viewport the content container measures **1440px**, not 1320. The page
+already had the whole desktop width.
+
+What produced ten narrow cards down a mostly empty page is the **data**: the catalogue shows
+published, DSC-approved offerings of a bookable type in the active season, and
+
+> **all ten implementing entities that appear have exactly one such offering each.**
+
+A three-column grid fed one card per group renders one-third-filled rows the whole way down. No grid
+change can fill a row that has one card in it.
+
+Two things are worth knowing about why the catalogue is that thin, both of them data and neither
+touched here:
+
+* Seven approved implementing entities are absent entirely — their offerings carry
+  `ApprovalStatus = NULL`, which is not `Approved`, so they never reach the catalogue.
+* Each entity's second offering is typed `Course`, and the catalogue admits only `Workshop` and
+  `TrainingProgram`.
+
+Approving the first group would take the catalogue from 10 cards across 10 entities to 24 across 17,
+at which point the grid fills on its own. That is a master-data decision, not a layout one, and
+§42 is explicit that master data is not changed here.
+
+**What did change.** Each entity is now a bounded section — a framed panel with an identity strip
+(89px logo, name at `clamp(1.05rem, …, 1.35rem)`, "*N* programs available") above its offerings — so
+the space around a single card belongs to a deliberate section rather than to the page margin. No
+internal id, approval status or organization type is shown. The `col-md-6 col-xl-4` wrapper around
+each card is gone; cards are direct children of a CSS grid:
+
+```css
+grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
+```
+
+`auto-fill`, not `auto-fit`, is the load-bearing choice: `auto-fit` collapses the empty tracks and
+would stretch a lone card across the entire panel. `min(100%, 21rem)` is what keeps the floor from
+overflowing a 390px phone. And 21rem is measured, not guessed — 20rem opened a fourth 330px column
+at 1440, 22rem closed the second column on a 768px tablet.
+
+Equal card heights per row come from the grid itself, and the Request Booking button is pushed to
+the card's bottom edge by `mt-auto`, so cards in a row align however long their descriptions run.
+
+### 37.4 Measured geometry
+
+Signed in as a club admin, both languages, identical results in each:
+
+| Viewport | Container | Entity section | Columns | Card | Trailing space |
+|---:|---:|---:|:---:|---:|---:|
+| 1440 | 1440 | 1416 | **3** | 446 | 961 |
+| 1366 | 1366 | 1342 | **3** | 421 | 912 |
+| 1200 | 1200 | 1176 | **3** | 366 | 801 |
+| 1024 | 1024 | 1000 | **2** | 470 | 521 |
+| 768 | 768 | 744 | **2** | 342 | 393 |
+| 390 | 390 | 366 | **1** | 332 | 29 |
+
+3 / 3 / 3 / 2 / 2 / 1 — the intended progression, with no pixel card width and no breakpoint in the
+grid. `document.scrollWidth - clientWidth` is **0** at every width in both languages.
+
+The trailing figure is the honest one and is not a layout defect: it is the two or one unused tracks
+of a three-track grid holding a single card, exactly as §25 specifies ("one normal-width card … the
+rest of the section can remain naturally empty"). It falls to a normal gutter the moment an entity
+has three offerings.
+
+Other changes on the page: the filter bar is one horizontal row on a laptop, two on a tablet and
+stacked on a phone — no filter sidebar, which is what would have recreated a narrow catalogue. A
+"Supporting documents (*N*)" line appears on a card that has attachments, in place of a list of links
+that would dominate the card; the full list stays on the booking screen, behind the same
+`/protected-files` authorization as before. The count comes from **one grouped query for the whole
+page**.
+
+### 37.5 Verification
+
+**Logos — 7/7 clubs, 17/17 implementing entities.** Every approved organization's `LogoPath` was
+requested and decoded in the browser: all 24 return 200 and decode as real images (155×155 to
+1980×3065), none is empty, and **none resolves to the shared placeholder**. No approved entity falls
+back.
+
+**Queries.** `/Home/Booking` renders ten entity sections and ten cards in **9 database commands**,
+of which the workspace header accounts for exactly **one** `OrganizationAdminLinks` query. No N+1.
+
+**Booking logic unchanged.** `/bookings/create?activityId=2` still preloads the offering — hidden
+`ActivityId=2`, eight read-only fields, the *Existing Program* badge. `/bookings/custom` still has
+**zero** `ActivityId` inputs and the *Custom Program Request* badge. Nothing was submitted; no test
+row was created.
+
+**Anonymous.** The public catalogue serves an anonymous visitor **zero** workspace headers and all
+ten entity sections — no borrowed club identity, and no sign-in required to browse.
+
+**Deactivated organizations** stay out: Al Habtoor Polo Club appears neither in the catalogue nor in
+the entity filter.
+
+**Regression — 52 checks, 0 failures.** Ten club routes and nine partner routes, each in English and
+Arabic: all HTTP 200, zero horizontal overflow, exactly one `h1`. Plus five club screens at 390px in
+both languages, all with zero overflow.
+
+**Arabic / RTL.** The logo takes the start side without any direction override — the layout is flex
+with `gap` and logical properties, so RTL needs no rules of its own and no artwork is mirrored.
+Arabic organization names, translated workspace labels and the Arabic season title all render;
+entity headers, cards and buttons align right; no collision and no overflow at any tested width.
+
+**Accessibility.** Organization logos carry the organization name as `alt`; decorative icons are
+`aria-hidden`. Entity names are real `h3` headings inside the catalogue's `h2`, and programme titles
+`h4` under them. Each Request Booking / Sign in to request link gained a visually hidden programme
+name, so the accessible names are distinct rather than twenty identical "Request Booking" links.
+Filter labels keep their `for` bindings.
+
+**Build** — `dotnet build --no-incremental` → **0 errors, 1 warning**, the retained `CS0108` on
+`Activity.CreatedByUserId`, not suppressed.
+
+**Migration** — none created, and none needed. Nothing here touches the schema.

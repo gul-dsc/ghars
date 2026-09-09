@@ -1,5 +1,6 @@
 @model List<GharsPlatform.Models.Core.AgendaEntry>
 @using GharsPlatform.Models.Core
+@using GharsPlatform.ViewModels
 @using System.Globalization
 @{
  var ar=CultureInfo.CurrentUICulture.TwoLetterISOLanguageName=="ar"; string T(string e,string a)=>ar?a:e;
@@ -14,6 +15,12 @@
  var drafts=Model.Count(x=>x.Status==AgendaEntryStatus.Draft);
  ViewData["Title"]=T("Agenda","الأجندة");
 }
+@await Html.PartialAsync("_OrganizationWorkspaceHeader", new WorkspaceHeaderVm
+{
+    Variant = WorkspaceHeaderVariant.Compact,
+    PageTitleEn = "Agenda",
+    PageTitleAr = "الأجندة"
+})
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
     <div>
         <h1 class="mb-1">@T("Club Agenda","أجندة النادي")</h1>

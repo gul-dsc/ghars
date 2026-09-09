@@ -1,5 +1,6 @@
 @model List<GharsPlatform.Models.Core.KpiSubmission>
 @using GharsPlatform.Models.Core
+@using GharsPlatform.ViewModels
 @using System.Globalization
 @{
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
@@ -29,6 +30,12 @@
     var actionable = Model.Count(x => IsEditable(x.Status));
     ViewData["Title"] = T("Reports & Statistics", "التقارير والإحصاءات");
 }
+@await Html.PartialAsync("_OrganizationWorkspaceHeader", new WorkspaceHeaderVm
+{
+    Variant = WorkspaceHeaderVariant.Compact,
+    PageTitleEn = "Reports & Statistics",
+    PageTitleAr = "التقارير والإحصاءات"
+})
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
     <div>
         <h1 class="mb-1">@ViewData["Title"]</h1>

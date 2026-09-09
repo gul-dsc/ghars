@@ -127,6 +127,16 @@ public class HomeController : Controller
 
         var list = await offerings.OrderBy(x => x.TitleEn).ToListAsync();
 
+        // How many supporting documents each listed offering has. One grouped query for the whole
+        // catalogue rather than a count per card — the page renders dozens of them. This is a count
+        // only: the files stay behind /protected-files, which re-checks the reader on every request.
+        var listedIds = list.Select(x => x.Id).ToList();
+        ViewBag.AttachmentCounts = await _db.ActivityAttachments
+            .Where(x => listedIds.Contains(x.ActivityId))
+            .GroupBy(x => x.ActivityId)
+            .Select(g => new { ActivityId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.ActivityId, x => x.Count);
+
         ViewBag.Offerings = list
             .GroupBy(x => x.PartnerOrganizationId!.Value)
             .OrderBy(g => entities.First(e => e.Id == g.Key).NameEn)

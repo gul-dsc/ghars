@@ -1,6 +1,7 @@
 @model GharsPlatform.Models.Core.Activity
 @using GharsPlatform.Models.Core
 @using GharsPlatform.Helpers
+@using GharsPlatform.ViewModels
 @using System.Globalization
 @{
  var ar=CultureInfo.CurrentUICulture.TwoLetterISOLanguageName=="ar"; string T(string e,string a)=>ar?a:e;
@@ -15,7 +16,6 @@
  var bookingCount=(int)(ViewBag.BookingCount ?? 0);
  var history=ViewBag.History as List<OfferingHistoryEntry> ?? new();
  var title=ar && !string.IsNullOrWhiteSpace(Model.TitleAr) ? Model.TitleAr : Model.TitleEn;
- var org=Model.PartnerOrganization;
  var audiences=string.IsNullOrWhiteSpace(Model.TargetAudienceCsv)
      ? new List<string>()
      : Model.TargetAudienceCsv.Split(',',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).ToList();
@@ -37,13 +37,18 @@
  }
 }
 
+@await Html.PartialAsync("_OrganizationWorkspaceHeader", new WorkspaceHeaderVm
+{
+    Variant = WorkspaceHeaderVariant.Compact,
+    PageTitleEn = "My Programs",
+    PageTitleAr = "برامجي"
+})
+
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
     <div>
         <h1 class="h3 mb-1">@title</h1>
-        <div class="text-muted">
-            @TypeText(Model.Type)
-            @if(org is not null){<text> · @(ar && !string.IsNullOrWhiteSpace(org.NameAr) ? org.NameAr : org.NameEn)</text>}
-        </div>
+        @* The owning entity moved to the context strip above; the programme's own type stays here. *@
+        <div class="text-muted">@TypeText(Model.Type)</div>
         <span class="badge @OfferingWorkflow.BadgeClass(Model.ApprovalStatus) mt-2"><i class="bi @OfferingWorkflow.Icon(Model.ApprovalStatus) me-1" aria-hidden="true"></i>@OfferingWorkflow.Label(Model.ApprovalStatus)</span>
     </div>
     <a class="btn btn-outline-secondary" href="/partner/programs"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>@T("Back to My Programs","العودة إلى برامجي")</a>

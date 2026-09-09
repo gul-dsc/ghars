@@ -1,6 +1,7 @@
 @model GharsPlatform.Models.Core.BookingRequest
 @using GharsPlatform.Models.Core
 @using GharsPlatform.Helpers
+@using GharsPlatform.ViewModels
 @using System.Globalization
 @{
     var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
@@ -72,6 +73,17 @@
         .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         .ToList();
 }
+
+@* Which side of this request the reader is on. The booking's own club and implementing entity are
+   listed further down as data; this strip says whose workspace the reader is looking from, which is
+   what tells a partner at a glance that "Club" below is the other party and not them. *@
+@await Html.PartialAsync("_OrganizationWorkspaceHeader", new WorkspaceHeaderVm
+{
+    Variant = WorkspaceHeaderVariant.Compact,
+    PageTitleEn = "Booking Request",
+    PageTitleAr = "طلب الحجز",
+    ShowSeason = false
+})
 
 @if (isClubSide && Model.Status == BookingStatus.PartnerProposedNewTime && activeOptions.Any())
 {

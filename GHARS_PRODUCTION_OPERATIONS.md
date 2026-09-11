@@ -345,9 +345,27 @@ WHERE NOT EXISTS (SELECT 1 FROM __EFMigrationsHistory h WHERE h.MigrationId = v.
 
 The statement is safe to re-run and is a no-op on a database created after this date.
 
-**Databases created from scratch need none of this** — `dotnet ef database update` applies all nine
-migrations in order. This was verified by building an empty database from the repository and
-diffing it against the working development database: 49 tables, 549 columns, zero differences.
+**Databases created from scratch need none of this** — `dotnet ef database update` applies the whole
+chain in order.
+
+Expected shape of a database built this way, re-verified 2026-09-11 against the production
+instance and the working development database:
+
+| | From scratch | Development database |
+|---|---|---|
+| `__EFMigrationsHistory` rows | **15** | **16** |
+| Tables (`sys.tables`) | **52** | 52 |
+| Columns | **629** | 629 |
+
+The history counts differ by one and that is correct, not drift: the development database is a
+pre-existing one and still carries the phantom row `20260505103249_new one ` described above. The
+schema itself is identical — a fresh database matching on tables and columns is the check that
+matters.
+
+> The earlier figures here (nine migrations, 49 tables, 549 columns) were measured at
+> `20260906140000_RestoreOrganizationAdminLinkAuditColumns`. Six migrations have landed since;
+> update this table whenever the chain grows, or the next person verifying a new database will
+> think a correct one is wrong.
 
 Check which state a database is in with:
 

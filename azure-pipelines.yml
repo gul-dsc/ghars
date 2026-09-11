@@ -1,0 +1,182 @@
+# =============================================================================
+# Ghars Platform - build and deploy to IIS through a self-hosted agent.
+#
+# The agent runs ON the web server, so "deploy" is a local file copy. There is no
+# WinRM, no Web Deploy endpoint and no inbound firewall rule; the only network
+# requirement is outbound HTTPS from the server to dev.azure.com and github.com.
+#
+# Build and deploy are separate stages on purpose. The build stage produces one
+# artifact and touches nothing; the deploy stage is gated behind an Environment
+# ("Ghars-Production") so a human approval can sit in front of it.
+#
+# Everything under "server settings" below must match the server. Nothing secret
+# belongs in this file - the connection string and the bootstrap administrator
+# live in the app pool's environment variables on the server itself.
+# See GHARS_AZURE_PIPELINE_SETUP.md for the full setup, and
+# GHARS_PRODUCTION_OPERATIONS.md for what the deploy script is protecting.
+# =============================================================================
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    exclude:
+      - '**/*.md'
+      - docs/**
+
+pr: none
+
+variables:
+  buildConfiguration: Release
+  # The dotnet-ef version is pinned in .config/dotnet-tools.json - keep it in step with the
+  # EF Core package version in GharsPlatform.csproj.
+
+  # ---- server settings ------------------------------------------------------
+  sitePath: 'C:\inetpub\ghars'
+  appPool: 'GharsPlatform'
+  appPoolIdentity: 'IIS AppPool\GharsPlatform'
+  # D:, not the system drive - rollback snapshots accumulate, and filling C: on this server would
+  # take the other three sites down with Ghars.
+  releaseRoot: 'D:\GharsReleases'
+
+  # ---- database steps: off until the production database exists ---------------
+  # Blank on purpose. Deploy-Ghars.ps1 skips the pre-deploy backup when sqlServer/database/
+  # backupRoot are empty, and skips applying the migration script when migrationScript is empty -
+  # warning in the log both times rather than passing over them quietly. The build still produces
+  # and ships ghars-migrations.sql in the artifact, so the schema stays reviewable; it just is not
+  # executed, and startup applies migrations itself on first request.
+  #
+  # To turn them on later, install sqlcmd on this server and set all four:
+  #   sqlServer:       the remote instance, e.g. 'SQLPROD01' or 'SQLPROD01\INST1'
+  #   database:        'GharsPlatformDb'
+  #   backupRoot:      a path SQL Server itself can write to - BACKUP DATABASE ... TO DISK is
+  #                    executed by the database engine, so the path is resolved on the SQL host,
+  #                    NOT on this web server. Use a local path on the SQL machine or a UNC share
+  #                    the SQL service account has write access to. D:\GharsBackups on this box
+  #                    would silently mean D:\GharsBackups over there.
+  #   migrationScript: '$(Pipeline.Workspace)\ghars-drop\migrations\ghars-migrations.sql'
+  #
+  # Deploy-Ghars.ps1 connects with sqlcmd -E (integrated auth), so the agent's service account
+  # needs a login on the remote instance with db_backupoperator, or those steps stay off and the
+  # DBA keeps taking the backups.
+  sqlServer: ''
+  database: ''
+  backupRoot: ''
+  migrationScript: ''
+  # The public host, not loopback. The site has an SNI binding (*:443:ghars.dubaisc.ae), so the
+  # ASP.NET Core Module sets ANCM_HTTPS_PORT and UseHttpsRedirection becomes active: an http
+  # request to localhost:89 answers 307 to https://localhost/, which matches none of the three
+  # host-header bindings on 443. The protected-path probes in particular must run over HTTPS -
+  # UseHttpsRedirection sits *before* the static-content denial middleware in Program.cs, so over
+  # HTTP they would return 307 and never reach the 404 they are checking for.
+  healthUrl: 'https://ghars.dubaisc.ae/'
+
+stages:
+  - stage: Build
+    displayName: Build and package
+    jobs:
+      - job: Package
+        displayName: Publish and stage artifact
+        pool:
+          name: Ghars-SelfHosted      # the agent pool, not a Microsoft-hosted vmImage
+        workspace:
+          clean: outputs
+        steps:
+          - checkout: self
+            clean: true
+            fetchDepth: 1
+
+          - task: UseDotNet@2
+            displayName: Pin the .NET 8 SDK
+            inputs:
+              packageType: sdk
+              version: 8.0.x
+
+          - script: dotnet restore GharsPlatform.sln
+            displayName: Restore
+
+          # --no-incremental so a stale obj/ from a previous run cannot mask a real error.
+          # One CS0108 warning in Models/Core/Activity.cs is known and deliberate - do not
+          # add -warnaserror here, it would fail every build.
+          - script: dotnet build GharsPlatform.sln -c $(buildConfiguration) --no-restore --no-incremental
+            displayName: Build
+
+          - script: >
+              dotnet publish GharsPlatform.csproj
+              -c $(buildConfiguration)
+              --no-build
+              -o "$(Build.ArtifactStagingDirectory)/site"
+            displayName: Publish
+
+          # dotnet-ef comes from .config/dotnet-tools.json, pinned to the EF Core version in the
+          # csproj. A local manifest rather than a global tool on purpose: "dotnet tool update
+          # --global --version 8.0.8" refuses to downgrade an agent that already carries a newer
+          # dotnet-ef, and then silently generates the script with whatever version was there.
+          - script: dotnet tool restore
+            displayName: Restore pinned local tools
+
+          # The application migrates itself on startup, so this script is not what makes the
+          # schema change - it is what lets the change be reviewed beforehand and applied while
+          # the site is offline, so a failure stops the deployment instead of the application.
+          # If design-time context creation ever breaks this step, deleting it is safe: startup
+          # will still migrate. It just stops being reviewable.
+          - script: >
+              dotnet dotnet-ef migrations script
+              --idempotent
+              --no-build
+              --configuration $(buildConfiguration)
+              --project GharsPlatform.csproj
+              --context AppDbContext
+              --output "$(Build.ArtifactStagingDirectory)\migrations\ghars-migrations.sql"
+            displayName: Generate idempotent migration script
+
+          - task: CopyFiles@2
+            displayName: Stage the deployment script
+            inputs:
+              SourceFolder: deploy
+              Contents: '**/*.ps1'
+              TargetFolder: '$(Build.ArtifactStagingDirectory)/deploy'
+
+          - publish: '$(Build.ArtifactStagingDirectory)'
+            artifact: ghars-drop
+            displayName: Publish artifact
+
+  - stage: Deploy
+    displayName: Deploy to production
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - deployment: DeployIIS
+        displayName: Deploy to IIS
+        pool:
+          name: Ghars-SelfHosted
+        # Create this Environment in Azure DevOps and put an approval check on it.
+        # Without the approval, every push to main reaches production unattended.
+        environment: Ghars-Production
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: ghars-drop
+
+                # pwsh: false -> Windows PowerShell 5.1, where the WebAdministration module
+                # (Stop-WebAppPool, IIS:\ drive) is available without a compatibility shim.
+                - task: PowerShell@2
+                  displayName: 'Backup, offline, migrate, mirror, online, smoke test'
+                  inputs:
+                    filePath: '$(Pipeline.Workspace)/ghars-drop/deploy/Deploy-Ghars.ps1'
+                    pwsh: false
+                    errorActionPreference: stop
+                    arguments: >
+                      -Source "$(Pipeline.Workspace)\ghars-drop\site"
+                      -SitePath "$(sitePath)"
+                      -AppPool "$(appPool)"
+                      -AppPoolIdentity "$(appPoolIdentity)"
+                      -SqlServer "$(sqlServer)"
+                      -Database "$(database)"
+                      -BackupRoot "$(backupRoot)"
+                      -MigrationScript "$(migrationScript)"
+                      -HealthCheckUrl "$(healthUrl)"
+                      -ReleaseHistoryRoot "$(releaseRoot)"

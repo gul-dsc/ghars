@@ -31,6 +31,11 @@
     var total = (int)(ViewBag.TotalOfferings ?? 0);
     var byId = Model.ToDictionary(x => x.Id);
     var attachmentCounts = ViewBag.AttachmentCounts as Dictionary<int, int> ?? new();
+    // Which entities publish availability, resolved once for the whole page. A card does a set
+    // lookup; nothing here queries per card. An entity that keeps no calendar gets no link at all
+    // rather than a disabled one — the calendar is optional, and an inert control on every card
+    // would read as something being broken.
+    var withAvailability = ViewBag.EntitiesWithAvailability as HashSet<int> ?? new HashSet<int>();
 
     // One flat catalogue rather than one panel per entity. The controller still groups by
     // implementing entity, and that order is kept — an entity's offerings stay adjacent — but the
@@ -295,6 +300,17 @@ else
                     </ul>
 
                     <div class="mt-auto">
+                        @* Shown only for entities that actually publish times. The accessible name
+                           carries the programme and the entity, so a page of these links does not
+                           read as a dozen identical "View Availability"s. *@
+                        @if (withAvailability.Contains(entity.Id))
+                        {
+                            <a class="btn btn-outline-secondary btn-sm w-100 mb-2"
+                               href="/booking/partner/@entity.Id/calendar?activityId=@offering.Id">
+                                <i class="bi bi-calendar2-check me-1" aria-hidden="true"></i>@T("View Availability", "عرض الأوقات المتاحة")
+                                <span class="visually-hidden">— @Title(offering) — @Name(entity)</span>
+                            </a>
+                        }
                         @if (isClub)
                         {
                             <a class="btn btn-ghars w-100" href="/bookings/create?activityId=@offering.Id">

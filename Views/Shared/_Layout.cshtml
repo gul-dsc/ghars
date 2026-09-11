@@ -129,6 +129,12 @@
                                            the offerings that attract them. *@
                                         <li><a class="dropdown-item" asp-area="" asp-controller="PartnerDashboard" asp-action="Index"><i class="bi bi-speedometer2 me-2" aria-hidden="true"></i>@(isRtl ? "لوحة الشريك" : "Partner Dashboard")</a></li>
                                         <li><a class="dropdown-item" asp-area="" asp-controller="PartnerPrograms" asp-action="Index"><i class="bi bi-journal-text me-2" aria-hidden="true"></i>@(isRtl ? "برامجي" : "My Programs")</a></li>
+                                        @* Availability is operational content belonging to this
+                                           entity, so it sits here beside the dashboard and the
+                                           programmes rather than at the top level. Club Admins do
+                                           not get it: a club reaches an entity's availability
+                                           through Booking, which is where it makes a decision. *@
+                                        <li><a class="dropdown-item" asp-area="" asp-controller="PartnerCalendar" asp-action="Index"><i class="bi bi-calendar3 me-2" aria-hidden="true"></i>@(isRtl ? "تقويمي" : "My Calendar")</a></li>
                                         @* Channel content is separate from My Programs on purpose: a program is a
                                            bookable offering, channel content is published material. *@
                                         <li><a class="dropdown-item" asp-area="" asp-controller="ChannelContent" asp-action="Index"><i class="bi bi-camera-video me-2" aria-hidden="true"></i>@(isRtl ? "محتواي في القناة" : "My Channel Content")</a></li>

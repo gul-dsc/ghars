@@ -1,0 +1,551 @@
+@model List<GharsPlatform.Models.Core.PartnerAvailabilitySlot>
+@using GharsPlatform.Models.Core
+@using GharsPlatform.Helpers
+@using GharsPlatform.ViewModels
+@using System.Globalization
+@{
+    var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string en, string ar) => isAr ? ar : en;
+
+    ViewData["Title"] = T("My Calendar", "تقويمي");
+
+    var org = ViewBag.Organization as Organization;
+    var season = ViewBag.Season as Season;
+    var activities = ViewBag.LinkableActivities as List<Activity> ?? [];
+    var monthStart = (DateOnly)ViewBag.MonthStart;
+    var gridStart = (DateOnly)ViewBag.GridStart;
+    var today = (DateOnly)ViewBag.Today;
+    var holders = ViewBag.Holders as Dictionary<int, (string Name, int BookingId)> ?? new();
+    var hasAnySlots = (bool)(ViewBag.HasAnySlots ?? false);
+    var preferredView = (string)(ViewBag.View ?? "auto");
+
+    var byDate = Model.GroupBy(x => x.Date).ToDictionary(g => g.Key, g => g.ToList());
+    var prev = monthStart.AddMonths(-1);
+    var next = monthStart.AddMonths(1);
+
+    // The reader's own language for month and weekday names. Arabic needs no special handling here:
+    // the culture supplies the names and the layout is logical-property flex/grid, so RTL inverts
+    // without a single direction override. Numerals and times are never mirrored.
+    var culture = CultureInfo.CurrentUICulture;
+    var monthLabel = monthStart.ToDateTime(TimeOnly.MinValue).ToString("MMMM yyyy", culture);
+
+    string TimeText(TimeOnly t) => t.ToString("HH\\:mm", CultureInfo.InvariantCulture);
+    string DayLabel(DateOnly d) => d.ToDateTime(TimeOnly.MinValue).ToString("dddd d MMMM", culture);
+    string ActivityTitle(Activity? a) => a is null ? "" : (isAr ? (a.TitleAr ?? a.TitleEn) : (a.TitleEn ?? a.TitleAr));
+
+    // The default date offered by the Add form: tomorrow, inside the season if there is one.
+    var defaultDate = today.AddDays(1);
+    if (season is not null && defaultDate < season.StartDate) defaultDate = season.StartDate;
+
+    var upcoming = (int)(ViewBag.CountUpcoming ?? 0);
+    var pendingCount = (int)(ViewBag.CountPending ?? 0);
+    var bookedCount = (int)(ViewBag.CountBooked ?? 0);
+}
+
+@* The entity's own identity, resolved server-side from the authenticated principal — this screen is
+   part of the Ghars Partner Workspace, not a detached admin tool. *@
+@await Html.PartialAsync("_OrganizationWorkspaceHeader", new WorkspaceHeaderVm
+{
+    Variant = WorkspaceHeaderVariant.Compact,
+    PageTitleEn = "My Calendar",
+    PageTitleAr = "تقويمي"
+})
+
+<div class="dashboard-hero mb-4">
+    <h1 class="h3 mb-2">@T("My Calendar", "تقويمي")</h1>
+    <p class="mb-0 opacity-75">
+        @T("Publish the times you are willing to receive booking requests for. This is optional — clubs can always send you a request with their own preferred date and time.",
+           "انشروا الأوقات التي ترغبون في استقبال طلبات الحجز خلالها. هذا اختياري — بإمكان الأندية دائماً إرسال طلب بالموعد الذي يناسبها.")
+    </p>
+</div>
+
+@if (season is null)
+{
+    <div class="alert alert-warning" role="alert">
+        @T("There is no active sports season, so availability cannot be published yet.",
+           "لا يوجد موسم رياضي نشط، لذا لا يمكن نشر الإتاحة حالياً.")
+    </div>
+}
+
+@* Three operational counts. They feed nothing: availability is not a Ghars statistic and appears in
+   no KPI, report or booking total. *@
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-4">
+        <div class="metric-card h-100">
+            <div class="text-muted small">@T("Upcoming available", "فترات متاحة قادمة")</div>
+            <div class="h3 mb-0">@upcoming</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-4">
+        <div class="metric-card h-100">
+            <div class="text-muted small">@T("Pending club requests", "طلبات أندية قيد المراجعة")</div>
+            <div class="h3 mb-0">@pendingCount</div>
+        </div>
+    </div>
+    <div class="col-12 col-lg-4">
+        <div class="metric-card h-100">
+            <div class="text-muted small">@T("Booked this season", "محجوزة هذا الموسم")</div>
+            <div class="h3 mb-0">@bookedCount</div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+    <div class="btn-group" role="group" aria-label="@T("Change month", "تغيير الشهر")">
+        <a class="btn btn-outline-secondary btn-sm" asp-action="Index" asp-route-year="@prev.Year" asp-route-month="@prev.Month" asp-route-view="@preferredView">
+            <i class="bi bi-chevron-@(isAr ? "right" : "left")" aria-hidden="true"></i>
+            <span class="visually-hidden">@T("Previous month", "الشهر السابق")</span>
+        </a>
+        <span class="btn btn-light btn-sm disabled fw-semibold">@monthLabel</span>
+        <a class="btn btn-outline-secondary btn-sm" asp-action="Index" asp-route-year="@next.Year" asp-route-month="@next.Month" asp-route-view="@preferredView">
+            <i class="bi bi-chevron-@(isAr ? "left" : "right")" aria-hidden="true"></i>
+            <span class="visually-hidden">@T("Next month", "الشهر التالي")</span>
+        </a>
+    </div>
+
+    <div class="d-flex gap-2">
+        @* Both views are always reachable; neither is a fallback for the other. The month grid is
+           hidden below 576px by CSS, which is why the list is what a phone sees by default. *@
+        <div class="btn-group btn-group-sm ghars-calendar-viewtoggle" role="group" aria-label="@T("Calendar view", "طريقة العرض")">
+            <a class="btn btn-outline-secondary @(preferredView == "month" ? "active" : null)"
+               asp-action="Index" asp-route-year="@monthStart.Year" asp-route-month="@monthStart.Month" asp-route-view="month">
+                <i class="bi bi-calendar3 me-1" aria-hidden="true"></i>@T("Month", "شهر")
+            </a>
+            <a class="btn btn-outline-secondary @(preferredView == "list" ? "active" : null)"
+               asp-action="Index" asp-route-year="@monthStart.Year" asp-route-month="@monthStart.Month" asp-route-view="list">
+                <i class="bi bi-list-ul me-1" aria-hidden="true"></i>@T("List", "قائمة")
+            </a>
+        </div>
+        @if (season is not null)
+        {
+            <button class="btn btn-ghars btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#addAvailabilityModal">
+                <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>@T("Add Availability", "إضافة إتاحة")
+            </button>
+        }
+    </div>
+</div>
+
+@if (!hasAnySlots)
+{
+    @* Absence is a fact, not a fault. Nothing here is styled as a warning, and the second sentence
+       is the one that matters: the entity loses nothing by never using this screen. *@
+    <div class="empty-state mb-4">
+        <i class="bi bi-calendar3 fs-1 text-muted d-block mb-3" aria-hidden="true"></i>
+        <div class="fw-semibold mb-2">@T("You have not published any availability yet.", "لم تنشروا أي إتاحة بعد.")</div>
+        <p class="text-muted mb-3">
+            @T("Adding calendar availability is optional. Clubs can still send booking requests using their preferred date and time.",
+               "إضافة الإتاحة في التقويم اختيارية. وبإمكان الأندية إرسال طلبات الحجز بالموعد الذي يناسبها.")
+        </p>
+        @if (season is not null)
+        {
+            <button class="btn btn-ghars" type="button" data-bs-toggle="modal" data-bs-target="#addAvailabilityModal">
+                <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>@T("Add Availability", "إضافة إتاحة")
+            </button>
+        }
+    </div>
+}
+else
+{
+    @* ── Month grid ─────────────────────────────────────────────────────────────────────────────
+       A real table with real header cells, so a screen reader can say which weekday a date is in.
+       Every day that carries slots is a button with an accessible name that states the date and how
+       many times are on it; days with none are plain text, because a button that does nothing is
+       worse than no button. *@
+    <div class="ghars-calendar-month @(preferredView == "list" ? "d-none" : null)" id="calendarMonth">
+        <table class="table ghars-calendar-table mb-0">
+            <caption class="visually-hidden">@T($"Availability for {monthLabel}", $"الإتاحة لشهر {monthLabel}")</caption>
+            <thead>
+                <tr>
+                    @for (var i = 0; i < 7; i++)
+                    {
+                        var day = gridStart.AddDays(i).DayOfWeek;
+                        <th scope="col" class="text-center">
+                            <span aria-hidden="true">@culture.DateTimeFormat.GetShortestDayName(day)</span>
+                            <span class="visually-hidden">@culture.DateTimeFormat.GetDayName(day)</span>
+                        </th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @for (var week = 0; week < 6; week++)
+                {
+                    <tr>
+                        @for (var d = 0; d < 7; d++)
+                        {
+                            var date = gridStart.AddDays(week * 7 + d);
+                            var inMonth = date.Month == monthStart.Month && date.Year == monthStart.Year;
+                            var daySlots = byDate.TryGetValue(date, out var list) ? list : null;
+                            var isToday = date == today;
+                            <td class="ghars-calendar-cell @(inMonth ? null : "is-outside") @(isToday ? "is-today" : null)">
+                                @if (daySlots is { Count: > 0 })
+                                {
+                                    <button type="button" class="ghars-calendar-day has-slots"
+                                            data-day-target="day-@date.ToString("yyyy-MM-dd")"
+                                            aria-describedby="day-@date.ToString("yyyy-MM-dd")">
+                                        <span class="ghars-calendar-daynum">@date.Day</span>
+                                        <span class="visually-hidden">@DayLabel(date) — </span>
+                                        <span class="ghars-calendar-daycount">
+                                            @T($"{daySlots.Count} slot(s)", $"{daySlots.Count} فترة")
+                                        </span>
+                                    </button>
+                                    <span class="ghars-calendar-dots" aria-hidden="true">
+                                        @foreach (var s in daySlots.Take(4))
+                                        {
+                                            <span class="ghars-calendar-dot status-@s.Status.ToString().ToLowerInvariant()"></span>
+                                        }
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="ghars-calendar-daynum text-muted">@date.Day</span>
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @* ── Day list ───────────────────────────────────────────────────────────────────────────────
+       Not a fallback: this is where every slot's controls live, in both views. The month grid
+       scrolls to the matching block rather than duplicating the actions inside a cell. *@
+    <div class="mt-4" id="calendarList">
+        <h2 class="h5 mb-3">@T("Availability in this month", "الإتاحة خلال هذا الشهر")</h2>
+
+        @if (byDate.Count == 0)
+        {
+            <div class="ghars-filter-empty">
+                @T("No availability published for this month.", "لا توجد إتاحة منشورة لهذا الشهر.")
+            </div>
+        }
+
+        @foreach (var day in byDate.OrderBy(x => x.Key))
+        {
+            <section class="metric-card mb-3" id="day-@day.Key.ToString("yyyy-MM-dd")">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <h3 class="h6 mb-0">
+                        @DayLabel(day.Key)
+                        @if (day.Key < today)
+                        {
+                            <span class="badge text-bg-light border ms-2">@T("Past", "منقضٍ")</span>
+                        }
+                    </h3>
+                    <span class="text-muted small">@T($"{day.Value.Count} time slot(s)", $"{day.Value.Count} فترة زمنية")</span>
+                </div>
+
+                <div class="ghars-slot-list">
+                    @foreach (var slot in day.Value)
+                    {
+                        var d = PartnerAvailabilityWorkflow.Describe(slot.Status);
+                        var isPast = !GharsTime.IsFuture(slot.Date, slot.StartTime);
+                        var canEdit = slot.Status is PartnerAvailabilityStatus.Available or PartnerAvailabilityStatus.Blocked && !isPast;
+                        <div class="ghars-slot-row">
+                            <div class="ghars-slot-time">
+                                <i class="bi bi-clock me-1" aria-hidden="true"></i>
+                                <span dir="ltr">@TimeText(slot.StartTime) – @TimeText(slot.EndTime)</span>
+                            </div>
+
+                            <div class="ghars-slot-meta">
+                                @* Status carries an icon AND a word, never colour alone. *@
+                                <span class="badge @d.BadgeClass">
+                                    <i class="bi @d.Icon me-1" aria-hidden="true"></i>@(isAr ? d.Ar : d.En)
+                                </span>
+
+                                @if (slot.Status == PartnerAvailabilityStatus.Pending
+                                     && slot.HeldByBookingRequestId is int bid
+                                     && holders.TryGetValue(bid, out var holder))
+                                {
+                                    <a class="small" href="/bookings/details/@holder.BookingId">
+                                        <i class="bi bi-building me-1" aria-hidden="true"></i>@holder.Name
+                                    </a>
+                                }
+
+                                @if (slot.Activity is not null)
+                                {
+                                    <span class="badge text-bg-light border">
+                                        <i class="bi bi-journal-text me-1" aria-hidden="true"></i>@ActivityTitle(slot.Activity)
+                                    </span>
+                                }
+
+                                @{
+                                    var note = isAr ? (slot.NotesAr ?? slot.NotesEn) : (slot.NotesEn ?? slot.NotesAr);
+                                    var place = isAr ? (slot.LocationAr ?? slot.LocationEn) : (slot.LocationEn ?? slot.LocationAr);
+                                }
+                                @if (!string.IsNullOrWhiteSpace(place))
+                                {
+                                    <span class="text-muted small"><i class="bi bi-geo-alt me-1" aria-hidden="true"></i>@place</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(note))
+                                {
+                                    <span class="text-muted small">@note</span>
+                                }
+                            </div>
+
+                            <div class="ghars-slot-actions">
+                                @if (canEdit)
+                                {
+                                    <button class="btn btn-sm btn-outline-secondary js-edit-slot" type="button"
+                                            data-bs-toggle="modal" data-bs-target="#editAvailabilityModal"
+                                            data-id="@slot.Id"
+                                            data-date="@slot.Date.ToString("yyyy-MM-dd")"
+                                            data-start="@TimeText(slot.StartTime)"
+                                            data-end="@TimeText(slot.EndTime)"
+                                            data-activity="@(slot.ActivityId?.ToString() ?? "")"
+                                            data-notesen="@slot.NotesEn"
+                                            data-notesar="@slot.NotesAr"
+                                            data-locationen="@slot.LocationEn"
+                                            data-locationar="@slot.LocationAr">
+                                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                                        <span class="visually-hidden">@T("Edit", "تعديل") @TimeText(slot.StartTime)</span>
+                                    </button>
+
+                                    <form method="post" action="@(slot.Status == PartnerAvailabilityStatus.Blocked ? "/partner/calendar/unblock" : "/partner/calendar/block")" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@slot.Id" />
+                                        <button class="btn btn-sm btn-outline-secondary" type="submit">
+                                            <i class="bi @(slot.Status == PartnerAvailabilityStatus.Blocked ? "bi-arrow-counterclockwise" : "bi-slash-circle")" aria-hidden="true"></i>
+                                            <span class="visually-hidden">
+                                                @(slot.Status == PartnerAvailabilityStatus.Blocked
+                                                    ? T("Make available again", "إعادة الإتاحة")
+                                                    : T("Mark unavailable", "تعليم كغير متاح")) @TimeText(slot.StartTime)
+                                            </span>
+                                        </button>
+                                    </form>
+
+                                    <form method="post" action="/partner/calendar/remove" class="d-inline"
+                                          onsubmit="return confirm('@T("Remove this time slot?", "هل تريد حذف هذه الفترة الزمنية؟")');">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@slot.Id" />
+                                        <button class="btn btn-sm btn-outline-danger" type="submit">
+                                            <i class="bi bi-trash" aria-hidden="true"></i>
+                                            <span class="visually-hidden">@T("Remove", "حذف") @TimeText(slot.StartTime)</span>
+                                        </button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    @* Pending and booked slots are read-only here on purpose: a club's
+                                       live request points at them, and the way to change one is the
+                                       booking workflow, where the club gets to accept or refuse. *@
+                                    <span class="text-muted small">
+                                        @(slot.Status == PartnerAvailabilityStatus.Pending
+                                            ? T("Respond through the booking request", "يرجى الرد عبر طلب الحجز")
+                                            : T("Read only", "للقراءة فقط"))
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+    </div>
+}
+
+@* ── Add availability: one date, many times, one submit ───────────────────────────────────────── *@
+<div class="modal fade" id="addAvailabilityModal" tabindex="-1" aria-labelledby="addAvailabilityLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <form method="post" action="/partner/calendar/add" class="modal-content">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="addAvailabilityLabel">@T("Add Availability", "إضافة إتاحة")</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="@T("Close", "إغلاق")"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="add-date">@T("Date", "التاريخ")</label>
+                        <input class="form-control" id="add-date" name="Date" type="date" required
+                               value="@defaultDate.ToString("yyyy-MM-dd")"
+                               min="@today.AddDays(0).ToString("yyyy-MM-dd")"
+                               max="@(season?.EndDate.ToString("yyyy-MM-dd"))" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="add-activity">@T("For a specific program (optional)", "لبرنامج محدد (اختياري)")</label>
+                        <select class="form-select" id="add-activity" name="ActivityId" aria-describedby="add-activity-help">
+                            <option value="">@T("Any program", "أي برنامج")</option>
+                            @foreach (var a in activities)
+                            {
+                                <option value="@a.Id">@ActivityTitle(a)</option>
+                            }
+                        </select>
+                        <div class="form-text" id="add-activity-help">
+                            @T("Leave as “Any program” so clubs can also use these times for a custom program request.",
+                               "اتركوا الخيار «أي برنامج» ليتمكن الأندية من استخدام هذه الأوقات لطلب برنامج مخصص أيضاً.")
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label">@T("Time slots", "الفترات الزمنية")</label>
+                        <div id="timeRows">
+                            @for (var i = 0; i < 3; i++)
+                            {
+                                <div class="ghars-timerow">
+                                    <div>
+                                        <label class="form-label small" for="start-@i">@T("Start time", "وقت البدء")</label>
+                                        <input class="form-control" id="start-@i" type="time" name="Times[@i].StartTime" />
+                                    </div>
+                                    <div class="ghars-timerow-arrow" aria-hidden="true">→</div>
+                                    <div>
+                                        <label class="form-label small" for="end-@i">@T("End time", "وقت الانتهاء")</label>
+                                        <input class="form-control" id="end-@i" type="time" name="Times[@i].EndTime" />
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <button class="btn btn-sm btn-outline-secondary mt-2" type="button" id="addTimeRow">
+                            <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>@T("Add another time", "إضافة وقت آخر")
+                        </button>
+                        <div class="form-text">
+                            @T("Add as many times as you like for this date. Times must not overlap; back-to-back times such as 09:00–10:00 and 10:00–11:00 are fine.",
+                               "أضيفوا ما تشاؤون من الأوقات لهذا التاريخ. يجب ألا تتداخل الأوقات، أما الأوقات المتتالية مثل 09:00–10:00 و10:00–11:00 فمسموح بها.")
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label" for="add-locen">@T("Location (English, optional)", "الموقع (بالإنجليزية، اختياري)")</label>
+                        <input class="form-control" id="add-locen" name="LocationEn" maxlength="300" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="add-locar">@T("Location (Arabic, optional)", "الموقع (بالعربية، اختياري)")</label>
+                        <input class="form-control" id="add-locar" name="LocationAr" maxlength="300" dir="rtl" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="add-noteen">@T("Note to clubs (English, optional)", "ملاحظة للأندية (بالإنجليزية، اختياري)")</label>
+                        <textarea class="form-control" id="add-noteen" name="NotesEn" rows="2" maxlength="500"
+                                  placeholder="@T("e.g. Workshops at our premises only.", "مثال: ورش العمل في مقرنا فقط.")"></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="add-notear">@T("Note to clubs (Arabic, optional)", "ملاحظة للأندية (بالعربية، اختياري)")</label>
+                        <textarea class="form-control" id="add-notear" name="NotesAr" rows="2" maxlength="500" dir="rtl"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">@T("Cancel", "إلغاء")</button>
+                <button type="submit" class="btn btn-ghars">@T("Save Availability", "حفظ الإتاحة")</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@* ── Edit one slot ─────────────────────────────────────────────────────────────────────────────── *@
+<div class="modal fade" id="editAvailabilityModal" tabindex="-1" aria-labelledby="editAvailabilityLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <form method="post" action="/partner/calendar/edit" class="modal-content">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="Id" id="edit-id" />
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="editAvailabilityLabel">@T("Edit time slot", "تعديل الفترة الزمنية")</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="@T("Close", "إغلاق")"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label" for="edit-date">@T("Date", "التاريخ")</label>
+                        <input class="form-control" id="edit-date" name="Date" type="date" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="edit-start">@T("Start time", "وقت البدء")</label>
+                        <input class="form-control" id="edit-start" name="StartTime" type="time" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="edit-end">@T("End time", "وقت الانتهاء")</label>
+                        <input class="form-control" id="edit-end" name="EndTime" type="time" required />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="edit-activity">@T("For a specific program (optional)", "لبرنامج محدد (اختياري)")</label>
+                        <select class="form-select" id="edit-activity" name="ActivityId">
+                            <option value="">@T("Any program", "أي برنامج")</option>
+                            @foreach (var a in activities)
+                            {
+                                <option value="@a.Id">@ActivityTitle(a)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="edit-locen">@T("Location (English, optional)", "الموقع (بالإنجليزية، اختياري)")</label>
+                        <input class="form-control" id="edit-locen" name="LocationEn" maxlength="300" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="edit-locar">@T("Location (Arabic, optional)", "الموقع (بالعربية، اختياري)")</label>
+                        <input class="form-control" id="edit-locar" name="LocationAr" maxlength="300" dir="rtl" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="edit-noteen">@T("Note to clubs (English, optional)", "ملاحظة للأندية (بالإنجليزية، اختياري)")</label>
+                        <textarea class="form-control" id="edit-noteen" name="NotesEn" rows="2" maxlength="500"></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="edit-notear">@T("Note to clubs (Arabic, optional)", "ملاحظة للأندية (بالعربية، اختياري)")</label>
+                        <textarea class="form-control" id="edit-notear" name="NotesAr" rows="2" maxlength="500" dir="rtl"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">@T("Cancel", "إلغاء")</button>
+                <button type="submit" class="btn btn-ghars">@T("Save changes", "حفظ التعديلات")</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts{
+<script>
+(function () {
+    // "Add another time" — clones the last row and renumbers it. The collection index has to be
+    // contiguous from zero for ASP.NET Core model binding to see every row.
+    var rows = document.getElementById('timeRows');
+    var addBtn = document.getElementById('addTimeRow');
+    if (rows && addBtn) {
+        addBtn.addEventListener('click', function () {
+            var i = rows.children.length;
+            var row = rows.children[i - 1].cloneNode(true);
+            row.querySelectorAll('input').forEach(function (input) {
+                var isStart = input.name.indexOf('StartTime') !== -1;
+                input.name = 'Times[' + i + '].' + (isStart ? 'StartTime' : 'EndTime');
+                input.id = (isStart ? 'start-' : 'end-') + i;
+                input.value = '';
+            });
+            row.querySelectorAll('label').forEach(function (label) {
+                label.setAttribute('for', (label.getAttribute('for').indexOf('start-') === 0 ? 'start-' : 'end-') + i);
+            });
+            rows.appendChild(row);
+            // Focus moves to the field the reader just asked for, so a keyboard user is not left
+            // where the button used to be.
+            var first = row.querySelector('input');
+            if (first) first.focus();
+        });
+    }
+
+    // Month grid -> day block. The grid is a summary; the controls live in the list, once.
+    document.querySelectorAll('[data-day-target]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var target = document.getElementById(btn.getAttribute('data-day-target'));
+            if (!target) return;
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            target.setAttribute('tabindex', '-1');
+            target.focus({ preventScroll: true });
+        });
+    });
+
+    // Edit modal: fill from the row's data attributes.
+    var editModal = document.getElementById('editAvailabilityModal');
+    document.querySelectorAll('.js-edit-slot').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (!editModal) return;
+            var set = function (id, value) { var el = editModal.querySelector('#' + id); if (el) el.value = value || ''; };
+            set('edit-id', btn.dataset.id);
+            set('edit-date', btn.dataset.date);
+            set('edit-start', btn.dataset.start);
+            set('edit-end', btn.dataset.end);
+            set('edit-activity', btn.dataset.activity);
+            set('edit-noteen', btn.dataset.notesen);
+            set('edit-notear', btn.dataset.notesar);
+            set('edit-locen', btn.dataset.locationen);
+            set('edit-locar', btn.dataset.locationar);
+        });
+    });
+})();
+</script>
+}

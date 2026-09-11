@@ -132,6 +132,10 @@
                     <div class="fw-semibold fs-5">@ProgramTitle()</div>
                 </div>
                 <div class="col-md-6"><div class="text-muted small">@T("Booking source", "مصدر الحجز")</div><div class="fw-semibold"><i class="bi @BookingSource.Icon(Model) me-1" aria-hidden="true"></i>@BookingSource.Label(Model)</div></div>
+                @* Schedule Source is a SEPARATE axis from Booking Source: either kind of
+                   request can arrive from the entity's calendar or from a time the club
+                   typed. Shown side by side so the two are never read as one. *@
+                <div class="col-md-6"><div class="text-muted small">@T("Schedule source", "مصدر الموعد")</div><div class="fw-semibold"><i class="bi @ScheduleSource.Icon(Model) me-1" aria-hidden="true"></i>@ScheduleSource.Label(Model)</div></div>
                 <div class="col-md-6"><div class="text-muted small">@T("Implementing entity", "الجهة المنفذة")</div><div class="fw-semibold">@(OrgName(Model.PartnerOrganization) == "" ? T("Not assigned", "غير محدد") : OrgName(Model.PartnerOrganization))</div></div>
                 <div class="col-md-6"><div class="text-muted small">@T("Program type", "نوع البرنامج")</div><div class="fw-semibold">@(Model.Activity is null ? ActivityTypeText(Model.RequestedActivityType) : ActivityTypeText(Model.Activity.Type))</div></div>
                 <div class="col-md-6"><div class="text-muted small">@T("Original program date/time", "تاريخ / وقت البرنامج الأصلي")</div><div class="fw-semibold">@(Model.Activity is null ? T("Not applicable — custom request", "لا ينطبق — طلب مخصص") : $"{Model.Activity.StartDateTime:g} - {Model.Activity.EndDateTime:g}")</div></div>

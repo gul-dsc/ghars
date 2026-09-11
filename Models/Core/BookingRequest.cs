@@ -34,6 +34,31 @@ public class BookingRequest : AuditableEntity
     public DateTime? ProposedStartDateTime { get; set; }
     public DateTime? ProposedEndDateTime { get; set; }
 
+    /// <summary>
+    /// The implementing entity's published availability slot this request was made against, or
+    /// <c>null</c> when the club proposed its own date and time.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is <b>Schedule Source</b>, and it is a different axis from Booking Source: an Existing
+    /// Program and a Custom Program request can each arrive either from the partner's calendar or
+    /// from a date the club typed. All four combinations are valid, and no third booking type was
+    /// created for any of them.
+    /// </para>
+    /// <para>
+    /// <c>null</c> for every booking that predates the calendar, and nothing is back-filled — in
+    /// particular a historical booking is never matched to a slot because its date and time happen
+    /// to coincide. Provenance is recorded at the moment of the choice or it is not claimed at all.
+    /// </para>
+    /// <para>
+    /// The reference survives the slot being released and re-claimed by another club: it records
+    /// what this club selected when it asked. The slot's own
+    /// <see cref="PartnerAvailabilitySlot.HeldByBookingRequestId"/> is the live holder.
+    /// </para>
+    /// </remarks>
+    public int? PartnerAvailabilitySlotId { get; set; }
+    public PartnerAvailabilitySlot? PartnerAvailabilitySlot { get; set; }
+
     [MaxLength(250)]
     public string? TargetAudienceCsv { get; set; }
 

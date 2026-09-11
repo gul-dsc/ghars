@@ -1,0 +1,167 @@
+@model List<GharsPlatform.Models.Core.PartnerAvailabilitySlot>
+@using GharsPlatform.Models.Core
+@using GharsPlatform.Helpers
+@using System.Globalization
+@{
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+    var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string en, string ar) => isAr ? ar : en;
+    ViewData["Title"] = T("Partner Calendars", "تقويم الجهات المنفذة");
+
+    var partners = ViewBag.Partners as List<Organization> ?? [];
+    var seasons = ViewBag.Seasons as List<Season> ?? [];
+    var holders = ViewBag.Holders as Dictionary<int, string> ?? new();
+    var counts = ViewBag.StateCounts as Dictionary<PartnerAvailabilityStatus, int> ?? new();
+    var selectedPartner = ViewBag.PartnerId as int?;
+    var selectedSeason = ViewBag.SeasonId as int?;
+    var selectedStatus = ViewBag.Status as PartnerAvailabilityStatus?;
+    var from = (DateOnly)ViewBag.From;
+    var to = (DateOnly)ViewBag.To;
+
+    string Name(Organization? o) => o is null ? "—" : (isAr && !string.IsNullOrWhiteSpace(o.NameAr) ? o.NameAr : o.NameEn);
+    string TimeText(TimeOnly t) => t.ToString("HH\\:mm", CultureInfo.InvariantCulture);
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <div>
+        <h1 class="h4 mb-1">@T("Partner Calendars", "تقويم الجهات المنفذة")</h1>
+        <p class="text-muted mb-0 small">
+            @T("Availability published by implementing entities. Read-only — entities maintain their own calendars, and these slots are not counted as bookings, agenda entries or KPI data.",
+               "الأوقات التي تنشرها الجهات المنفذة. للاطلاع فقط — كل جهة تدير تقويمها بنفسها، ولا تُحتسب هذه الفترات كحجوزات أو أجندة أو بيانات مؤشرات أداء.")
+        </p>
+    </div>
+</div>
+
+<div class="row g-2 mb-3">
+    @foreach (var status in new[] { PartnerAvailabilityStatus.Available, PartnerAvailabilityStatus.Pending, PartnerAvailabilityStatus.Booked, PartnerAvailabilityStatus.Blocked, PartnerAvailabilityStatus.Cancelled })
+    {
+        var d = PartnerAvailabilityWorkflow.Describe(status);
+        <div class="col-6 col-lg">
+            <div class="metric-card h-100">
+                <div class="text-muted small">
+                    <i class="bi @d.Icon me-1" aria-hidden="true"></i>@(isAr ? d.Ar : d.En)
+                </div>
+                <div class="h4 mb-0">@(counts.TryGetValue(status, out var c) ? c : 0)</div>
+            </div>
+        </div>
+    }
+</div>
+
+<form method="get" class="row g-2 align-items-end mb-3">
+    <div class="col-12 col-md-3">
+        <label class="form-label" for="f-partner">@T("Implementing entity", "الجهة المنفذة")</label>
+        <select class="form-select" id="f-partner" name="partnerId">
+            <option value="">@T("All entities", "جميع الجهات")</option>
+            @foreach (var p in partners)
+            {
+                <option value="@p.Id" selected="@(selectedPartner == p.Id)">@Name(p)</option>
+            }
+        </select>
+    </div>
+    <div class="col-6 col-md-2">
+        <label class="form-label" for="f-season">@T("Season", "الموسم")</label>
+        <select class="form-select" id="f-season" name="seasonId">
+            <option value="">@T("All seasons", "جميع المواسم")</option>
+            @foreach (var s in seasons)
+            {
+                <option value="@s.Id" selected="@(selectedSeason == s.Id)">@(isAr ? s.TitleAr : s.TitleEn)</option>
+            }
+        </select>
+    </div>
+    <div class="col-6 col-md-2">
+        <label class="form-label" for="f-status">@T("Status", "الحالة")</label>
+        <select class="form-select" id="f-status" name="status">
+            <option value="">@T("All", "الكل")</option>
+            @foreach (var status in Enum.GetValues<PartnerAvailabilityStatus>())
+            {
+                var d = PartnerAvailabilityWorkflow.Describe(status);
+                <option value="@status" selected="@(selectedStatus == status)">@(isAr ? d.Ar : d.En)</option>
+            }
+        </select>
+    </div>
+    <div class="col-6 col-md-2">
+        <label class="form-label" for="f-from">@T("From", "من")</label>
+        <input class="form-control" id="f-from" name="from" type="date" value="@from.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="col-6 col-md-2">
+        <label class="form-label" for="f-to">@T("To", "إلى")</label>
+        <input class="form-control" id="f-to" name="to" type="date" value="@to.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="col-12 col-md-1 d-grid">
+        <button class="btn btn-primary">@T("Filter", "تصفية")</button>
+    </div>
+</form>
+
+@if (Model.Count == 0)
+{
+    <div class="empty-state">
+        @T("No availability matches these filters.", "لا توجد إتاحة مطابقة لهذه الفلاتر.")
+    </div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <caption class="visually-hidden">@T("Partner availability slots", "فترات إتاحة الجهات المنفذة")</caption>
+            <thead>
+                <tr>
+                    <th scope="col">@T("Date", "التاريخ")</th>
+                    <th scope="col">@T("Time", "الوقت")</th>
+                    <th scope="col">@T("Implementing entity", "الجهة المنفذة")</th>
+                    <th scope="col">@T("Season", "الموسم")</th>
+                    <th scope="col">@T("Program", "البرنامج")</th>
+                    <th scope="col">@T("Status", "الحالة")</th>
+                    <th scope="col">@T("Requesting club", "النادي الطالب")</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var slot in Model)
+                {
+                    var d = PartnerAvailabilityWorkflow.Describe(slot.Status);
+                    <tr>
+                        <td>@slot.Date.ToString("yyyy-MM-dd")</td>
+                        <td dir="ltr">@TimeText(slot.StartTime) – @TimeText(slot.EndTime)</td>
+                        <td>@Name(slot.PartnerOrganization)</td>
+                        <td>@(slot.Season is null ? "—" : (isAr ? slot.Season.TitleAr : slot.Season.TitleEn))</td>
+                        <td>
+                            @if (slot.Activity is null)
+                            {
+                                <span class="text-muted">@T("Any program", "أي برنامج")</span>
+                            }
+                            else
+                            {
+                                @(isAr ? (slot.Activity.TitleAr ?? slot.Activity.TitleEn) : (slot.Activity.TitleEn ?? slot.Activity.TitleAr))
+                            }
+                        </td>
+                        <td>
+                            @* Icon and word together — never colour alone. *@
+                            <span class="badge @d.BadgeClass">
+                                <i class="bi @d.Icon me-1" aria-hidden="true"></i>@(isAr ? d.Ar : d.En)
+                            </span>
+                        </td>
+                        <td>
+                            @if (slot.HeldByBookingRequestId is int bid && holders.TryGetValue(bid, out var club))
+                            {
+                                <a href="/Admin/Bookings/Details/@bid">@club</a>
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (Model.Count == 1000)
+    {
+        @* Truncation is stated rather than hidden. A capped list that looks complete is worse than
+           a shorter one that says it is capped. *@
+        <div class="alert alert-info small">
+            @T("Showing the first 1,000 slots in this range. Narrow the date range or filter by entity to see the rest.",
+               "يتم عرض أول 1000 فترة ضمن هذا النطاق. يرجى تضييق النطاق الزمني أو التصفية حسب الجهة لعرض الباقي.")
+        </div>
+    }
+}

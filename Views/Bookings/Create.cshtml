@@ -1,5 +1,6 @@
 @model GharsPlatform.ViewModels.BookingCreateVm
 @using GharsPlatform.Models.Core
+@using GharsPlatform.Helpers
 @using GharsPlatform.ViewModels
 @using System.Globalization
 @{
@@ -22,6 +23,10 @@
     var partner = ViewBag.PartnerOrganization as Organization;
     var entities = ViewBag.Entities as List<Organization> ?? [];
     var seasons = ViewBag.Seasons as List<Season> ?? [];
+    // The entity's published availability, if it keeps any. Empty is the normal case and is NOT an
+    // error state: the calendar is optional, and this whole section simply does not render.
+    var availability = ViewBag.AvailabilitySlots as List<PartnerAvailabilitySlot> ?? [];
+    var availabilityByDate = availability.GroupBy(x => x.Date).OrderBy(x => x.Key).ToList();
     var selectedClub = orgs.FirstOrDefault(x => x.Id == Model.OrganizationId) ?? orgs.FirstOrDefault();
     // Which of the two booking paths this form is serving. With no offering behind it, this is a
     // Custom Program Request: the club names the program itself and no Activity is involved.
@@ -261,6 +266,71 @@
                         }
                         <span asp-validation-for="Subject" class="text-danger"></span>
                     </div>
+                    @* ── Partner Available Times ─────────────────────────────────────────────
+                       An aid, never a gate. It renders only when the entity has published times,
+                       the manual fields below stay usable throughout, and "Suggest another date and
+                       time" puts the club back on them in one click. A partner with no calendar
+                       sees none of this and the form is exactly what it always was.
+
+                       On the existing-program path the slots are server-rendered, because the
+                       entity is already known. On the custom path the club has not chosen an entity
+                       yet, so this container is filled from /bookings/partner-availability once it
+                       does — one request, for one entity. *@
+                    <div class="col-12" id="availabilityPanel" @(availabilityByDate.Count > 0 ? null : "hidden")>
+                        <div class="ghars-availability">
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                                <div>
+                                    <span class="fw-semibold"><i class="bi bi-calendar2-check me-1" aria-hidden="true"></i>@T("Partner Available Times", "الأوقات المتاحة لدى الجهة المنفذة")</span>
+                                    <div class="text-muted small">@T("These times have been marked as available by the implementing entity. Choosing one is optional.",
+                                                                    "هذه الأوقات حددتها الجهة المنفذة كأوقات متاحة، واختيار أحدها اختياري.")</div>
+                                </div>
+                                <button class="btn btn-sm btn-outline-secondary @(Model.PartnerAvailabilitySlotId.HasValue ? null : "d-none")"
+                                        type="button" id="clearSlot">
+                                    @T("Suggest another date and time", "اقتراح تاريخ ووقت آخر")
+                                </button>
+                            </div>
+
+                            @* Filled server-side here; replaced wholesale by the script on the
+                               custom path. Radio inputs rather than clickable divs, so the group is
+                               keyboard-navigable and a screen reader reads each option's date, time
+                               and state without any ARIA of our own. *@
+                            <div id="availabilityOptions" role="group" aria-label="@T("Available times", "الأوقات المتاحة")">
+                                @foreach (var day in availabilityByDate)
+                                {
+                                    <div class="ghars-availability-day">
+                                        <div class="ghars-availability-date">@day.Key.ToDateTime(TimeOnly.MinValue).ToString("dddd d MMMM", CultureInfo.CurrentUICulture)</div>
+                                        <div class="ghars-availability-times">
+                                            @foreach (var slot in day.OrderBy(x => x.StartTime))
+                                            {
+                                                var slotNote = isAr ? (slot.NotesAr ?? slot.NotesEn) : (slot.NotesEn ?? slot.NotesAr);
+                                                <label class="ghars-availability-slot">
+                                                    <input type="radio" name="PartnerAvailabilitySlotId" value="@slot.Id"
+                                                           data-date="@slot.Date.ToString("yyyy-MM-dd")"
+                                                           data-start="@slot.StartTime.ToString(@"HH\:mm", CultureInfo.InvariantCulture)"
+                                                           data-end="@slot.EndTime.ToString(@"HH\:mm", CultureInfo.InvariantCulture)"
+                                                           @(Model.PartnerAvailabilitySlotId == slot.Id ? "checked" : null) />
+                                                    <span dir="ltr">@slot.StartTime.ToString(@"HH\:mm", CultureInfo.InvariantCulture) – @slot.EndTime.ToString(@"HH\:mm", CultureInfo.InvariantCulture)</span>
+                                                    @if (!string.IsNullOrWhiteSpace(slotNote))
+                                                    {
+                                                        <span class="ghars-availability-note">@slotNote</span>
+                                                    }
+                                                </label>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            @* The empty state, worded as a fact. Shown on the custom path once an
+                               entity with no calendar is chosen. *@
+                            <div class="text-muted small d-none" id="availabilityEmpty">
+                                @T("This partner has not published availability. You can still suggest your preferred date and time.",
+                                   "لم تنشر هذه الجهة أي أوقات متاحة. بإمكانكم اقتراح التاريخ والوقت المناسبين لكم.")
+                            </div>
+                            <span asp-validation-for="PartnerAvailabilitySlotId" class="text-danger d-block"></span>
+                        </div>
+                    </div>
+
                     <div class="col-md-4">
                         <label asp-for="ProposedDate" class="form-label">@T("Proposed date", "التاريخ المقترح")</label>
                         <input asp-for="ProposedDate" type="date" class="form-control" value="@(Model.ProposedDate?.ToString("yyyy-MM-dd"))" />
@@ -391,6 +461,150 @@
 
 @section Scripts{
     <partial name="_ValidationScriptsPartial" />
+    <script>
+    // ── Partner availability picker ──────────────────────────────────────────────────────────────
+    //
+    // Everything here is convenience. The server re-reads the chosen slot and overwrites the date
+    // and both times from it, so nothing below is what makes the booking correct — it is what makes
+    // the form honest about which time is going to be sent.
+    (function () {
+        const panel   = document.getElementById('availabilityPanel');
+        const options = document.getElementById('availabilityOptions');
+        const empty   = document.getElementById('availabilityEmpty');
+        const clear   = document.getElementById('clearSlot');
+        const dateEl  = document.getElementById('ProposedDate');
+        const startEl = document.getElementById('ProposedStartTime');
+        const endEl   = document.getElementById('ProposedEndTime');
+        const partnerEl = document.getElementById('PartnerOrganizationId');
+        if (!panel) return;
+
+        function selected() {
+            return options ? options.querySelector('input[name="PartnerAvailabilitySlotId"]:checked') : null;
+        }
+
+        // Derived fields are shown as derived. They stay in the DOM and keep posting: the server
+        // ignores them whenever a slot is selected, so this is a courtesy, not a control.
+        function lock(on) {
+            [dateEl, startEl, endEl].forEach(function (el) {
+                if (!el) return;
+                el.readOnly = on;
+                el.setAttribute('aria-readonly', on ? 'true' : 'false');
+                el.classList.toggle('is-slot-derived', on);
+            });
+            if (clear) clear.classList.toggle('d-none', !on);
+        }
+
+        function applySelection() {
+            const chosen = selected();
+            if (!chosen) { lock(false); return; }
+            if (dateEl)  dateEl.value  = chosen.dataset.date  || '';
+            if (startEl) startEl.value = chosen.dataset.start || '';
+            if (endEl)   endEl.value   = chosen.dataset.end   || '';
+            lock(true);
+        }
+
+        panel.addEventListener('change', function (e) {
+            if (e.target && e.target.name === 'PartnerAvailabilitySlotId') applySelection();
+        });
+
+        if (clear) {
+            clear.addEventListener('click', function () {
+                const chosen = selected();
+                if (chosen) chosen.checked = false;
+                lock(false);
+                if (dateEl) dateEl.focus();
+            });
+        }
+
+        function renderSlots(slots) {
+            if (!options) return;
+            options.innerHTML = '';
+            if (!slots.length) {
+                panel.hidden = false;
+                if (empty) empty.classList.remove('d-none');
+                lock(false);
+                return;
+            }
+            if (empty) empty.classList.add('d-none');
+
+            const byDate = new Map();
+            slots.forEach(function (s) {
+                if (!byDate.has(s.date)) byDate.set(s.date, []);
+                byDate.get(s.date).push(s);
+            });
+
+            byDate.forEach(function (list, date) {
+                const day = document.createElement('div');
+                day.className = 'ghars-availability-day';
+
+                const heading = document.createElement('div');
+                heading.className = 'ghars-availability-date';
+                // The reader's own locale, taken from the page's lang attribute.
+                heading.textContent = new Date(date + 'T00:00:00').toLocaleDateString(
+                    document.documentElement.lang || undefined,
+                    { weekday: 'long', day: 'numeric', month: 'long' });
+                day.appendChild(heading);
+
+                const times = document.createElement('div');
+                times.className = 'ghars-availability-times';
+                list.forEach(function (s) {
+                    const label = document.createElement('label');
+                    label.className = 'ghars-availability-slot';
+
+                    const input = document.createElement('input');
+                    input.type = 'radio';
+                    input.name = 'PartnerAvailabilitySlotId';
+                    input.value = s.id;
+                    input.dataset.date = s.date;
+                    input.dataset.start = s.startTime;
+                    input.dataset.end = s.endTime;
+                    label.appendChild(input);
+
+                    const text = document.createElement('span');
+                    text.setAttribute('dir', 'ltr');
+                    text.textContent = s.startTime + ' – ' + s.endTime;
+                    label.appendChild(text);
+
+                    // textContent throughout, never innerHTML: the note is the entity's own text and
+                    // is treated as text.
+                    if (s.note) {
+                        const note = document.createElement('span');
+                        note.className = 'ghars-availability-note';
+                        note.textContent = s.note;
+                        label.appendChild(note);
+                    }
+                    times.appendChild(label);
+                });
+                day.appendChild(times);
+                options.appendChild(day);
+            });
+
+            panel.hidden = false;
+        }
+
+        // Custom Program Request: the entity is chosen on this form, so its times are fetched once
+        // it is — one request for one entity, rather than pre-loading every entity's calendar.
+        if (partnerEl) {
+            partnerEl.addEventListener('change', function () {
+                const id = parseInt(partnerEl.value, 10);
+                lock(false);
+                if (!id) { panel.hidden = true; if (options) options.innerHTML = ''; return; }
+
+                fetch('/bookings/partner-availability?partnerId=' + id, { credentials: 'same-origin' })
+                    .then(function (r) { return r.ok ? r.json() : []; })
+                    .then(renderSlots)
+                    // A failed lookup must never block the booking: the manual fields are still
+                    // there, and they are the path that existed before this feature.
+                    .catch(function () { panel.hidden = true; });
+            });
+
+            // An entity carried in from the catalogue: load its times without waiting for a change.
+            if (partnerEl.value) partnerEl.dispatchEvent(new Event('change'));
+        }
+
+        applySelection();
+    })();
+    </script>
     <script>
     (function () {
         const otherCheckbox = document.querySelector('input[name="TargetAudiences"][value="Others"]');

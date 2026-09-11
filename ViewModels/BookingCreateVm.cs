@@ -38,6 +38,24 @@ public class BookingCreateVm : IValidatableObject
     public DateOnly? ProposedDate { get; set; }
     public TimeOnly? ProposedStartTime { get; set; }
     public TimeOnly? ProposedEndTime { get; set; }
+
+    /// <summary>
+    /// The implementing entity's published availability slot the club chose, or <c>null</c> when it
+    /// is proposing its own date and time.
+    /// </summary>
+    /// <remarks>
+    /// Optional on every path, always. The partner calendar is an aid, not a gate: even where an
+    /// entity has published availability the manual fields stay usable, which is what keeps a
+    /// partner with no calendar — and a club that wants a different time — working exactly as
+    /// before.
+    ///
+    /// When it is set, the three fields above are <b>not</b> trusted. The server re-reads the slot,
+    /// re-checks every condition, and overwrites the date and times from it, so a post that pairs a
+    /// real slot id with a different time is stored as the slot, never as the post. The validation
+    /// below skips them for the same reason: they are derived, so requiring them of the browser
+    /// would be asking for a value that is about to be thrown away.
+    /// </remarks>
+    public int? PartnerAvailabilitySlotId { get; set; }
     public List<string> TargetAudiences { get; set; } = [];
 
     [StringLength(150)]
@@ -86,16 +104,20 @@ public class BookingCreateVm : IValidatableObject
         if (string.IsNullOrWhiteSpace(Subject))
             yield return new ValidationResult(T(isAr, "Program name is required.", "اسم البرنامج مطلوب."), [nameof(Subject)]);
 
-        if (!ProposedDate.HasValue)
+        // A selected availability slot supplies the date and both times server-side, so they are not
+        // required of the form. Everything below this point still applies.
+        var scheduleFromSlot = PartnerAvailabilitySlotId is > 0;
+
+        if (!scheduleFromSlot && !ProposedDate.HasValue)
             yield return new ValidationResult(T(isAr, "Proposed date is required.", "التاريخ المقترح مطلوب."), [nameof(ProposedDate)]);
 
-        if (!ProposedStartTime.HasValue)
+        if (!scheduleFromSlot && !ProposedStartTime.HasValue)
             yield return new ValidationResult(T(isAr, "Proposed start time is required.", "وقت البدء المقترح مطلوب."), [nameof(ProposedStartTime)]);
 
-        if (!ProposedEndTime.HasValue)
+        if (!scheduleFromSlot && !ProposedEndTime.HasValue)
             yield return new ValidationResult(T(isAr, "Proposed end time is required.", "وقت الانتهاء المقترح مطلوب."), [nameof(ProposedEndTime)]);
 
-        if (ProposedDate.HasValue && ProposedStartTime.HasValue && ProposedEndTime.HasValue)
+        if (!scheduleFromSlot && ProposedDate.HasValue && ProposedStartTime.HasValue && ProposedEndTime.HasValue)
         {
             var start = ProposedDate.Value.ToDateTime(ProposedStartTime.Value);
             var end = ProposedDate.Value.ToDateTime(ProposedEndTime.Value);

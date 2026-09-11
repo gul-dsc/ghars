@@ -491,6 +491,22 @@ The deploy stage then pauses until someone approves, and records who released wh
 Worth revisiting if the trigger ever widens beyond `main`, or once the platform carries live club
 data — an unattended deployment also applies schema migrations on startup.
 
+### 8.1 Migrations carried by recent releases
+
+Each release that changes the schema is listed here with what it does, so the state a production
+database should be in after a deployment can be checked against a name rather than inferred.
+Migrations apply automatically on startup; the pipeline additionally publishes an idempotent script
+in the artifact (`migrations/ghars-migrations.sql`) so the change can be read before it is applied.
+
+| Migration | What it adds | Data impact |
+|---|---|---|
+| `20260911151258_AddPartnerAvailabilityCalendar` | Table `PartnerAvailabilitySlots` (17 columns, 4 indexes, 3 foreign keys) and the nullable column `BookingRequests.PartnerAvailabilitySlotId` with its foreign key | **Additive only.** No existing column is altered or dropped. Every existing booking keeps `PartnerAvailabilitySlotId = NULL` and nothing is back-filled. Expected shape afterwards: 16 migrations / 53 tables / 647 columns on a database built from scratch — see operations §6.3. |
+
+> `UX_PartnerAvailabilitySlots_ActiveUnique` is a **filtered** index. Anything that runs the
+> migration script by hand needs `QUOTED_IDENTIFIER ON` — `sqlcmd -I`. The script the pipeline
+> publishes already contains many such statements; this adds to that set rather than introducing
+> the requirement.
+
 ---
 
 ## Part 9 — First run

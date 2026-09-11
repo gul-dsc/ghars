@@ -348,24 +348,33 @@ The statement is safe to re-run and is a no-op on a database created after this 
 **Databases created from scratch need none of this** — `dotnet ef database update` applies the whole
 chain in order.
 
-Expected shape of a database built this way, re-verified 2026-09-11 against the production
-instance and the working development database:
+Expected shape of a database built this way, re-verified 2026-09-11 after
+`20260911151258_AddPartnerAvailabilityCalendar`, against both a scratch database built from the
+whole chain and the working development database:
 
 | | From scratch | Development database |
 |---|---|---|
-| `__EFMigrationsHistory` rows | **15** | **16** |
-| Tables (`sys.tables`) | **52** | 52 |
-| Columns | **629** | 629 |
+| `__EFMigrationsHistory` rows | **16** | **17** |
+| Tables (`sys.tables`) | **53** | 53 |
+| Columns | **647** | 647 |
 
 The history counts differ by one and that is correct, not drift: the development database is a
 pre-existing one and still carries the phantom row `20260505103249_new one ` described above. The
 schema itself is identical — a fresh database matching on tables and columns is the check that
 matters.
 
-> The earlier figures here (nine migrations, 49 tables, 549 columns) were measured at
-> `20260906140000_RestoreOrganizationAdminLinkAuditColumns`. Six migrations have landed since;
-> update this table whenever the chain grows, or the next person verifying a new database will
-> think a correct one is wrong.
+> Keep this table current whenever the chain grows, or the next person verifying a new database
+> will think a correct one is wrong. Its history:
+>
+> | Measured at | Migrations (scratch) | Tables | Columns |
+> |---|---|---|---|
+> | `20260906140000_RestoreOrganizationAdminLinkAuditColumns` | 9 | 49 | 549 |
+> | `20260908170721_AddNativeOfficialSatisfactionSurvey` | 15 | 52 | 629 |
+> | `20260911151258_AddPartnerAvailabilityCalendar` | 16 | 53 | 647 |
+>
+> The last step is the partner availability calendar: one new table
+> (`PartnerAvailabilitySlots`, 17 columns) and one new nullable column
+> (`BookingRequests.PartnerAvailabilitySlotId`).
 
 Check which state a database is in with:
 

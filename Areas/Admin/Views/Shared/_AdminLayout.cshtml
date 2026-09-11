@@ -95,6 +95,13 @@
                 <i class="bi bi-journal-check"></i> <span>@(isRtl ? "الحجوزات" : "Bookings")</span>
             </a>
 
+            @* Read-only oversight of what implementing entities have published. Next to Bookings
+               because that is the workflow it informs — but it is not a second booking inbox, and
+               nothing on it is counted as a booking. *@
+            <a class="nav-link @ActiveIf("PartnerAvailability")" asp-area="Admin" asp-controller="PartnerAvailability" asp-action="Index">
+                <i class="bi bi-calendar3"></i> <span>@(isRtl ? "تقويم الجهات المنفذة" : "Partner Calendars")</span>
+            </a>
+
             <a class="nav-link @ActiveIf("Attendance")" asp-area="Admin" asp-controller="Attendance" asp-action="Sessions">
                 <i class="bi bi-qr-code-scan"></i> <span>@(isRtl ? "الحضور" : "Attendance")</span>
             </a>

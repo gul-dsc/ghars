@@ -3742,3 +3742,212 @@ keep their `for` bindings.
 `Activity.CreatedByUserId`, not suppressed.
 
 **Migration** — none created, and none needed. Nothing here touches the schema.
+
+---
+
+## 38. Optional Partner Availability Calendar (2026-09-11)
+
+An implementing entity may now publish future times it is willing to receive booking requests for,
+and a club may select one when it creates a request. The feature is **optional at every point**: an
+entity that never opens the screen, and a club that ignores it, behave exactly as they did before.
+
+Design record: **[GHARS_PARTNER_AVAILABILITY_CALENDAR.md](GHARS_PARTNER_AVAILABILITY_CALENDAR.md)**,
+written before any code.
+
+### 38.1 Model — a new entity, not `CalendarEvent`
+
+`CalendarEvent` was assessed as the brief required, and rejected. It carries **no organization of
+any kind**, its title is `[Required]` in both languages, its visibility is one bool where this needs
+a five-state lifecycle, `Season.CalendarEvents` would change meaning for every existing consumer,
+and widening `CalendarEventType` would silently change what existing comparisons include. A calendar
+event is something that *is happening*; an availability slot is something that *might be asked for*.
+
+`Models/Core/PartnerAvailabilitySlot.cs` is a new `AuditableEntity`. **`CalendarEvent` is untouched
+— not one line changed.**
+
+Flat: one row per time slot. "20 September, three slots" is three rows, which makes multiple slots
+per date the default shape rather than a feature.
+
+### 38.2 Timezone — a gap this feature had to close
+
+**This codebase had no timezone handling at all**: zero references to `TimeZoneInfo`, `Asia/Dubai`
+or any offset. Scheduling values are collected as a date plus two times and stored unconverted, so
+every scheduling column holds a **Dubai wall-clock** value — including
+`BookingRequest.ConfirmedStartUtc`, whose name says otherwise. That is pre-existing and consistent
+across all 34 development bookings; reinterpreting it would move every historical booking by four
+hours, so it was **not changed**.
+
+Slots follow the same convention deliberately and store `DateOnly` + `TimeOnly` — types that cannot
+carry an offset, so the column has no ambiguity in it to get wrong. A slot selection therefore
+produces `ProposedStartDateTime` through the very same expression the manual path uses, and a
+calendar booking is stored **identically** to a hand-typed one.
+
+`Helpers/GharsTime.cs` supplies the one comparison that genuinely needs a zone — "is this still in
+the future" — resolving `Asia/Dubai`, then `Arabian Standard Time`, then a fixed UTC+04:00.
+Verified on this machine: both ids resolve, `BaseUtcOffset = 04:00`,
+`SupportsDaylightSavingTime = False`.
+
+### 38.3 Lifecycle and concurrency
+
+Five states — Available → Pending → Booked, with Blocked and Cancelled — and every transition lives
+in `Helpers/PartnerAvailabilityWorkflow.cs`. No controller assigns `Status` itself.
+
+Every transition is a single conditional `UPDATE … WHERE Id = @id AND Status = @expected` through
+`ExecuteUpdateAsync`. SQL Server holds an exclusive row lock for the statement, so of two concurrent
+claims exactly one observes `Available`; the other affects **0 rows**. The claim runs inside a
+transaction that inserts the booking first and **rolls it back** if the claim loses, so a losing
+club's booking never reaches the database.
+
+A `rowversion` token was considered and rejected: `ExecuteUpdateAsync` ignores concurrency tokens,
+so the two mechanisms would not compose, and `[Timestamp]` would raise
+`DbUpdateConcurrencyException` on unrelated write paths. A compare-and-swap on the contended value
+is strictly stronger.
+
+### 38.4 Booking linkage
+
+`BookingRequest.PartnerAvailabilitySlotId`, nullable, `NoAction`. **Schedule Source** is derived
+from it and never stored (`Helpers/BookingSource.cs` → `ScheduleSource`), and is a *separate axis*
+from Booking Source:
+
+| | Existing Program | Custom Program |
+|---|---|---|
+| **Partner Calendar** | general or programme-specific slot | general slot only |
+| **Club Proposed** | unchanged | unchanged |
+
+All four are valid; **no third booking type was created**. The slot also carries
+`HeldByBookingRequestId` as a plain column with no foreign key — the current holder, which is
+different information from "every booking that ever referenced this slot", and unconstrained
+precisely to avoid a circular FK.
+
+### 38.5 Verification — 184 checks, 0 failures
+
+Run against an isolated scratch database built from the whole migration chain, per the repository's
+fixture-safety rules. The scratch database was dropped afterwards; the development database
+received only the migration and carries **no test residue**.
+
+| Suite | Checks | Result |
+|---|---|---|
+| Setup and partner publishing | 10 | pass |
+| Validation rules | 11 | pass |
+| The four booking combinations | 19 | pass |
+| **Concurrency (§77)** | 6 | pass |
+| Lifecycle — reject / confirm / propose / edit / remove | 35 | pass |
+| Security and statistics | 35 | pass |
+| Arabic, RTL, mobile, accessibility | 60 | pass |
+| Performance and regression | 8 | pass |
+| **Total** | **184** | **0 failures** |
+
+**Concurrency.** Two different club users submitted for the same slot simultaneously, over **12
+rounds**. Every round: exactly one HTTP 302 and one HTTP 200, exactly one `BookingRequest`
+referencing the slot, the slot `Pending` and held by that booking, and the loser told *"This time
+slot is no longer available. Please choose another time."* From **24 simultaneous attempts, 12
+bookings** — no double-booking, no orphaned reference, no slot left Pending without a holder.
+
+**Lifecycle.** Reject → slot returns to Available and another club claims it. Confirm → slot Booked,
+`ConfirmedStartUtc/EndUtc` identical to the slot's times, draft agenda created through the existing
+helper, and a forged claim on it refused. Partner proposes another time → the original slot is
+released, the booking keeps its reference for provenance, the club accepts through the existing
+`BookingProposedTimeOption` flow, and **no availability slot is fabricated** (count before = count
+after).
+
+**Security.** Partner A editing, blocking or removing partner B's slot → **404** each time, B's slot
+unchanged. A forged `PartnerOrganizationId` in the post is ignored — the row is written to the
+authenticated entity. Clubs cannot claim a blocked, past, pending, booked or non-existent slot,
+cannot use partner A's slot while selecting partner B, and cannot use a programme-specific slot for
+another programme or for a custom request; **none of the forged attempts created a booking or moved
+a slot**. Posted date and time are discarded and re-derived from the slot. Anonymous visitors may
+browse published availability (matching the public catalogue's existing policy) but cannot reach
+the JSON endpoint, the management screens, or submit anything.
+
+**Statistics (§58).** Twenty availability slots created; bookings, agenda entries, activities, KPI
+submissions, annual reports and total participants all **identical before and after**
+(`32|10|35|14|0|785` → `32|10|35|14|0|785`).
+
+**Performance (§66).** Availability was multiplied from 2 publishing entities to 17 and the query
+count was measured from the EF command log:
+
+| Page | 2 entities | 17 entities |
+|---|---|---|
+| Public booking catalogue | 6 | **6** |
+| Entity availability page | 4 | **4** |
+| Booking form | 9 | **9** |
+| Partner month view | 13 | **13** (with 18 more slots in the month) |
+
+No N+1 anywhere. The catalogue resolves "which entities publish availability" in one grouped query
+and each card does a set lookup.
+
+**Arabic / RTL / mobile / accessibility.** Zero horizontal overflow at 1440px and 390px in both
+languages on the partner calendar, the club availability page and the booking form; exactly one
+`h1` per page; the month grid is a real `<table>` with `scope="col"` headers and a caption; days
+with availability are focusable buttons naming the date and slot count; every status badge carries
+an icon **and** a word; every dialog field has a bound label; time ranges keep `dir="ltr"` so
+`09:00 – 10:00` is never mirrored. Below 576px the month grid steps aside and the list — which is
+where every control lives in both views — carries on.
+
+**Regression (§90).** 22 routes across anonymous, club, partner and DSC roles — home, booking
+catalogue, about, contact, library, channel, club dashboard, agenda, KPI, annual report, both
+booking forms, partner dashboard, partner programs, partner calendar, and seven admin screens —
+all HTTP 200.
+
+### 38.6 Migration
+
+`20260911151258_AddPartnerAvailabilityCalendar` — additive only: one table, one nullable column,
+four indexes, four `NO_ACTION` foreign keys. No existing column altered or dropped, no historical
+migration edited.
+
+Applied from zero on a scratch database (16 migrations / 53 tables / 647 columns) and additively to
+the populated development database (17 / 53 / 647 — the extra history row is the long-standing
+phantom `20260505103249_new one `). **All 34 existing bookings have `PartnerAvailabilitySlotId =
+NULL`; nothing was back-filled, and in particular no booking was matched to a slot because its date
+and time happened to coincide.**
+
+Deploys through the existing Azure pipeline unchanged. No machine-local dependency, scheduled task,
+Node build step or external calendar service was added.
+
+### 38.7 Files
+
+| File | Change |
+|---|---|
+| `Models/Core/PartnerAvailabilitySlot.cs` | new |
+| `Models/Core/Enums.cs` | `PartnerAvailabilityStatus` appended |
+| `Models/Core/BookingRequest.cs` | nullable `PartnerAvailabilitySlotId` + navigation |
+| `Helpers/GharsTime.cs` | new — the Asia/Dubai business calendar |
+| `Helpers/PartnerAvailabilityWorkflow.cs` | new — queries, transitions, validation, labels |
+| `Helpers/BookingSource.cs` | `ScheduleSource` appended |
+| `Data/AppDbContext.cs` | DbSet, three FKs, four indexes, booking FK |
+| `ViewModels/PartnerAvailabilityVm.cs` | new |
+| `ViewModels/BookingCreateVm.cs` | slot id; date/time not required when a slot is chosen |
+| `Controllers/Public/PartnerCalendarController.cs` | new |
+| `Controllers/Admin/PartnerAvailabilityController.cs` | new — read-only oversight |
+| `Controllers/Public/BookingsController.cs` | slot pre-selection, server-side re-derivation, atomic claim, JSON endpoint, public calendar |
+| `Controllers/Public/PartnerDashboardController.cs` | slot booked on confirm, released on reject and on proposing another time |
+| `Controllers/Admin/BookingsController.cs` | the same two transitions for the DSC decisions |
+| `Controllers/Public/HomeController.cs` | one grouped query for entities that publish availability |
+| `Views/PartnerCalendar/Index.cshtml` | new |
+| `Views/Bookings/PartnerCalendar.cshtml` | new |
+| `Areas/Admin/Views/PartnerAvailability/Index.cshtml` | new |
+| `Views/Bookings/Create.cshtml` | availability picker |
+| `Views/Bookings/Details.cshtml`, `Views/PartnerDashboard/Index.cshtml` | Schedule Source |
+| `Views/Home/Booking.cshtml` | View Availability |
+| `Views/Shared/_Layout.cshtml`, `Areas/Admin/Views/Shared/_AdminLayout.cshtml` | navigation |
+| `wwwroot/css/ghars-public-theme.css` | calendar, slot rows, picker, 390px rules |
+
+### 38.8 Deliberately not built
+
+Recurrence (§23, optional — materialising rows needs an "edit the series" answer that is a feature
+in itself), multi-capacity slots (§11 — default confirmed: one confirmed booking per slot),
+mandatory slot selection once an entity publishes (§27 — needs explicit business confirmation),
+DSC editing entity availability (§49 — read-only is the reversible half), and any external calendar
+integration (§65 — out of scope by instruction).
+
+### 38.9 Build
+
+`dotnet build --no-incremental` → **0 errors, 1 warning** — the retained `CS0108` on
+`Activity.CreatedByUserId`, not suppressed.
+
+One model-validation warning is emitted at design time: `Organization` has a global query filter and
+is the required end of the relationship with `PartnerAvailabilitySlot`. This is the **existing**
+pattern — `PartnerProfile` and `RewardRedemption` already produce the identical warning — and it is
+harmless here because every club-facing query filters entities through
+`Organizations.ApprovedPartnerIds()`, which applies the soft-delete filter itself, so a
+soft-deleted entity's slots are excluded rather than orphaned.

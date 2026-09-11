@@ -405,3 +405,111 @@ footer,
 @media (max-width: 575.98px) {
     .booking-card-entity { padding: 12px 14px; gap: 10px; }
 }
+
+/* ── Partner availability calendar ──────────────────────────────────────────────────────────────
+   Used by the partner's own calendar, the club-facing availability page and the availability
+   picker on the booking form.
+
+   Every rule below is written with logical properties (inline-start/end, margin-inline) or is
+   direction-neutral, so RTL needs no overrides of its own: the month grid reverses because the
+   table does, and times keep dir="ltr" in the markup so a 09:00 – 10:00 range is never mirrored
+   into 10:00 – 09:00. */
+
+.ghars-calendar-table { table-layout: fixed; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+
+    .ghars-calendar-table thead th { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); padding: 10px 4px; border-bottom: 1px solid var(--border); }
+
+/* A calendar cell is a fixed-height box so the six-week grid does not jump between months. */
+.ghars-calendar-cell { height: 84px; vertical-align: top; padding: 6px; border: 1px solid var(--border); }
+
+    .ghars-calendar-cell.is-outside { background: #fafbfc; }
+
+    .ghars-calendar-cell.is-today { box-shadow: inset 0 0 0 2px var(--primary); }
+
+.ghars-calendar-daynum { display: block; font-weight: 700; font-size: .95rem; line-height: 1.2; }
+
+/* The day button. A button only where there is something to open: a control that does nothing is
+   worse than no control, for a pointer and for a keyboard alike. */
+.ghars-calendar-day { display: block; width: 100%; text-align: start; background: transparent; border: 0; border-radius: 8px; padding: 2px 4px; cursor: pointer; color: inherit; }
+
+    .ghars-calendar-day:hover { background: rgba(45,155,108,.08); }
+
+    .ghars-calendar-day:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+.ghars-calendar-daycount { display: block; font-size: .72rem; color: var(--primary); font-weight: 600; }
+
+.ghars-calendar-dots { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 4px; }
+
+/* Decorative only, and marked aria-hidden in the markup. The status each dot stands for is always
+   written out in words in the day list below; nothing here is the sole carrier of meaning. */
+.ghars-calendar-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+
+    .ghars-calendar-dot.status-available { background: #198754; }
+    .ghars-calendar-dot.status-pending { background: #ffc107; }
+    .ghars-calendar-dot.status-booked { background: #0d6efd; }
+    .ghars-calendar-dot.status-blocked { background: #6c757d; }
+
+/* ── Slot rows ── */
+.ghars-slot-list { display: flex; flex-direction: column; gap: 10px; }
+
+.ghars-slot-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+
+.ghars-slot-time { font-weight: 700; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+
+/* min-width:0 so long notes wrap inside the row rather than widening it past the card. */
+.ghars-slot-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1 1 12rem; min-width: 0; }
+
+.ghars-slot-actions { display: flex; align-items: center; gap: 6px; margin-inline-start: auto; flex: 0 0 auto; }
+
+/* ── Add-availability time rows ── */
+.ghars-timerow { display: flex; align-items: end; gap: 10px; margin-bottom: 10px; }
+
+    .ghars-timerow > div { flex: 1 1 0; min-width: 0; }
+
+.ghars-timerow-arrow { flex: 0 0 auto !important; padding-bottom: .55rem; color: var(--muted); }
+
+/* ── Availability picker on the booking form ── */
+.ghars-availability { border: 1px solid var(--border); border-radius: 14px; padding: 14px; background: #f9fbfa; }
+
+.ghars-availability-day + .ghars-availability-day { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+
+.ghars-availability-date { font-weight: 700; font-size: .9rem; margin-bottom: 6px; }
+
+.ghars-availability-times { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* The whole chip is the label, so the hit target is the chip and not just the dot. The radio stays
+   in the DOM and keeps its focus ring — it is not display:none — which is what makes the group
+   keyboard-navigable and readable to a screen reader without any ARIA of our own. */
+.ghars-availability-slot { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; background: #fff; cursor: pointer; font-variant-numeric: tabular-nums; }
+
+    .ghars-availability-slot:hover { border-color: var(--primary); }
+
+    .ghars-availability-slot:has(input:checked) { border-color: var(--primary); background: rgba(45,155,108,.10); font-weight: 600; }
+
+    .ghars-availability-slot:has(input:focus-visible) { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.ghars-availability-note { font-size: .78rem; color: var(--muted); font-weight: 400; }
+
+/* A field whose value comes from the selected slot rather than from typing. The server re-derives
+   it either way, so this is a signal, not a control. */
+.is-slot-derived { background-color: #eef4f1 !important; }
+
+@media (max-width: 575.98px) {
+    /* Seven columns in 390px gives ~50px cells: legible as numbers, useless as targets. The list
+       view carries the same information with tappable rows, so the grid steps aside and the toggle
+       that switches back to it goes with it. Nothing is lost — the list is not a reduced view, it
+       is where every control lives in both modes. */
+    .ghars-calendar-month { display: none; }
+
+    .ghars-calendar-viewtoggle { display: none; }
+
+    .ghars-slot-row { flex-direction: column; align-items: stretch; }
+
+    .ghars-slot-actions { margin-inline-start: 0; justify-content: flex-end; }
+
+    .ghars-timerow { flex-wrap: wrap; }
+
+    .ghars-timerow-arrow { display: none; }
+
+    .ghars-availability-slot { flex: 1 1 100%; justify-content: flex-start; border-radius: 12px; }
+}

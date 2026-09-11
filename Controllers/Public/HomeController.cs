@@ -143,6 +143,13 @@ public class HomeController : Controller
             .ToDictionary(g => g.Key, g => g.ToList());
         ViewBag.Seasons = await _db.Seasons.Where(x => x.IsActive).OrderByDescending(x => x.StartDate).ToListAsync();
         ViewBag.FilterEntities = entities.Where(x => entityIdsWithOfferings.Contains(x.Id)).ToList();
+
+        // Which entities publish availability a club could pick from. ONE grouped query for the
+        // whole catalogue, not one per card — the cards read a set. Entities that keep no calendar
+        // are simply absent from it, and their cards show no availability link rather than a
+        // disabled one: the calendar is optional and an empty control would read as a fault.
+        ViewBag.EntitiesWithAvailability = await PartnerAvailabilityWorkflow
+            .PartnersWithAvailabilityAsync(_db, entityIds);
         ViewBag.EntityId = entityId;
         ViewBag.Type = type;
         ViewBag.SeasonId = seasonId;

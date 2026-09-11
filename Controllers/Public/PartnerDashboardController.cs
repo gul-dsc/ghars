@@ -148,6 +148,16 @@ public class PartnerDashboardController : Controller
             ByUserId = userId
         });
         await _db.SaveChangesAsync();
+        // AFTER the save, like every other slot transition: the entity is offering a different
+        // time, so it is no longer holding the one the club picked from its calendar — the slot
+        // goes back to Available and another club may take it. Releasing before the save would
+        // free the slot even if the proposal itself failed to persist.
+        //
+        // BookingRequest.PartnerAvailabilitySlotId is deliberately NOT cleared: it records what this
+        // club selected when it asked, which stays true whatever happens next. And no slot is
+        // fabricated for the proposed times — those live in the existing BookingProposedTimeOption
+        // workflow, which is unchanged.
+        await PartnerAvailabilityWorkflow.ReleaseForBookingAsync(_db, booking, userId);
 
         await CreateAndDispatchNotificationAsync("Partner Proposed New Time", "اقترح الشريك أوقاتاً جديدة",
             $"New time options were proposed for booking {booking.ReferenceNumber}. Your response is required.",
@@ -202,6 +212,10 @@ public class PartnerDashboardController : Controller
         if (booking.PartnerOrganizationId is null && partnerOrgIds.Count > 0) booking.PartnerOrganizationId = partnerOrgIds[0];
         _db.BookingAuditTrails.Add(new BookingAuditTrail { BookingRequestId = booking.Id, Action = "PartnerApproved", OldValuesJson = JsonSerializer.Serialize(old), NewValuesJson = JsonSerializer.Serialize(new { booking.Status, booking.LecturerName, booking.LecturerContact, booking.PartnerResponseNotes }), AtUtc = DateTime.UtcNow, ByUserId = userId });
         await _db.SaveChangesAsync();
+        // The confirmed times above already ARE the slot's times: a calendar booking's
+        // ProposedStartDateTime was written from the slot and nothing since has changed it, so
+        // confirmation needs no special case. All that is left is to retire the slot.
+        await PartnerAvailabilityWorkflow.MarkBookedForBookingAsync(_db, booking, userId);
         await BookingAgendaHelper.EnsureDraftAgendaEntryAsync(_db, booking, userId);
         await CreateAndDispatchNotificationAsync("Booking Confirmed", "تم تأكيد الحجز",
             $"Your booking request {booking.ReferenceNumber} was confirmed. Lecturer: {booking.LecturerName}{(string.IsNullOrWhiteSpace(booking.LecturerContact) ? "" : $" ({booking.LecturerContact})")}.",
@@ -228,6 +242,10 @@ public class PartnerDashboardController : Controller
         if (booking.PartnerOrganizationId is null && partnerOrgIds.Count > 0) booking.PartnerOrganizationId = partnerOrgIds[0];
         _db.BookingAuditTrails.Add(new BookingAuditTrail { BookingRequestId = booking.Id, Action = "PartnerRejected", OldValuesJson = JsonSerializer.Serialize(old), NewValuesJson = JsonSerializer.Serialize(new { booking.Status, booking.Notes }), AtUtc = DateTime.UtcNow, ByUserId = userId });
         await _db.SaveChangesAsync();
+        // Rejecting frees the time again. Guarded on the slot still being Pending, so a slot the
+        // entity has since blocked or cancelled is not silently re-opened, and a booked one is
+        // never released by an unrelated decision.
+        await PartnerAvailabilityWorkflow.ReleaseForBookingAsync(_db, booking, userId);
         await CreateAndDispatchNotificationAsync("Booking Rejected", "تم رفض الحجز", $"Your booking request {booking.ReferenceNumber} was rejected.", $"تم رفض طلب الحجز {booking.ReferenceNumber}.", NotificationType.Danger, NotificationTargetType.Organization, booking.OrganizationId, Url.Action("Details", "Bookings", new { area = "", id = booking.Id }));
         return RedirectToAction("Details", "Bookings", new { area = "", id });
     }

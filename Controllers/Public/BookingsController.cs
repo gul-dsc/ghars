@@ -41,8 +41,8 @@ public class BookingsController : Controller
     // partner inbox. Only the entry point and the fields on show differ.
     [Authorize(Roles = RoleNames.ClubAdmin)]
     [HttpGet("/bookings/create")]
-    public Task<IActionResult> Create(int? activityId, int? partnerId, ActivityType? type = null)
-        => BuildCreateViewAsync(activityId, partnerId, type);
+    public Task<IActionResult> Create(int? activityId, int? partnerId, ActivityType? type = null, int? slotId = null)
+        => BuildCreateViewAsync(activityId, partnerId, type, slotId);
 
     /// <summary>
     /// The Custom Program Request entry point. It deliberately takes no activityId: this route can
@@ -51,10 +51,17 @@ public class BookingsController : Controller
     /// </summary>
     [Authorize(Roles = RoleNames.ClubAdmin)]
     [HttpGet("/bookings/custom")]
-    public Task<IActionResult> Custom(int? partnerId, ActivityType? type = null)
-        => BuildCreateViewAsync(null, partnerId, type);
+    public Task<IActionResult> Custom(int? partnerId, ActivityType? type = null, int? slotId = null)
+        => BuildCreateViewAsync(null, partnerId, type, slotId);
 
-    private async Task<IActionResult> BuildCreateViewAsync(int? activityId, int? partnerId, ActivityType? type)
+    /// <param name="slotId">
+    /// A slot the club already chose, on the entity's availability page or before signing in. It is
+    /// a <em>pre-selection</em> only: it is re-validated here against the same query that decides
+    /// what may be offered, and re-validated again from scratch on post. An id that no longer
+    /// qualifies is dropped silently and the form opens on the manual date and time fields, which
+    /// is the right outcome — the club can still ask.
+    /// </param>
+    private async Task<IActionResult> BuildCreateViewAsync(int? activityId, int? partnerId, ActivityType? type, int? slotId = null)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         var orgs = await UserClubsAsync(userId);
@@ -66,23 +73,31 @@ public class BookingsController : Controller
             if (activity is null) return NotFound();
         }
 
-        await PopulateCreateViewDataAsync(activity, orgs);
+        await PopulateCreateViewDataAsync(activity, orgs,
+            partnerOrganizationId: activity is not null ? await ResolvePartnerOrganizationIdAsync(activity) : partnerId,
+            activityId: activity?.Id);
 
         // Named explicitly: /bookings/custom enters through the Custom action, and view resolution
         // would otherwise look for a Custom.cshtml that does not exist. Both paths use this form.
         if (activity is not null)
         {
+            var activityPartnerId = await ResolvePartnerOrganizationIdAsync(activity);
+            var preselected = await ResolvePreselectedSlotAsync(slotId, activityPartnerId, activity.Id);
+
             return View("Create", new BookingCreateVm
             {
                 ActivityId = activity.Id,
                 OrganizationId = orgs.FirstOrDefault()?.Id ?? 0,
-                PartnerOrganizationId = await ResolvePartnerOrganizationIdAsync(activity),
+                PartnerOrganizationId = activityPartnerId,
                 SeasonId = activity.SeasonId,
                 RequestedActivityType = NormalizeRequestedActivityType(activity.Type),
                 Subject = activity.TitleEn,
-                ProposedDate = DateOnly.FromDateTime(activity.StartDateTime),
-                ProposedStartTime = TimeOnly.FromDateTime(activity.StartDateTime),
-                ProposedEndTime = TimeOnly.FromDateTime(activity.EndDateTime),
+                PartnerAvailabilitySlotId = preselected?.Id,
+                // From the slot when one was chosen; otherwise the offering's indicative session
+                // times, exactly as before.
+                ProposedDate = preselected?.Date ?? DateOnly.FromDateTime(activity.StartDateTime),
+                ProposedStartTime = preselected?.StartTime ?? TimeOnly.FromDateTime(activity.StartDateTime),
+                ProposedEndTime = preselected?.EndTime ?? TimeOnly.FromDateTime(activity.EndDateTime),
                 // Carried over from the offering because both sides use the same audience
                 // vocabulary. The club can change it — this is a starting point, and the posted
                 // value is what is validated and stored.
@@ -103,14 +118,38 @@ public class BookingsController : Controller
             ? type.Value
             : ActivityType.TrainingProgram;
 
+        var customSlot = await ResolvePreselectedSlotAsync(slotId, partnerId, activityId: null);
+
         return View("Create", new BookingCreateVm
         {
             OrganizationId = orgs.FirstOrDefault()?.Id ?? 0,
             PartnerOrganizationId = partnerId,
-            SeasonId = activeSeason?.Id,
+            // The slot's own season wins when one was chosen, so the form opens consistent with what
+            // the server will accept.
+            SeasonId = customSlot?.SeasonId ?? activeSeason?.Id,
             RequestedActivityType = requestedType,
+            PartnerAvailabilitySlotId = customSlot?.Id,
+            ProposedDate = customSlot?.Date,
+            ProposedStartTime = customSlot?.StartTime,
+            ProposedEndTime = customSlot?.EndTime,
             ExpectedParticipants = 1
         });
+    }
+
+    /// <summary>
+    /// Re-reads a pre-selected slot through the one query that decides what a club may be offered,
+    /// so a hand-typed <c>slotId</c> cannot put another entity's — or an already-taken — time onto
+    /// the form. Returns <c>null</c> for anything that does not qualify, and the form then simply
+    /// opens without a selection.
+    /// </summary>
+    private async Task<PartnerAvailabilitySlot?> ResolvePreselectedSlotAsync(int? slotId, int? partnerOrganizationId, int? activityId)
+    {
+        if (slotId is not > 0 || partnerOrganizationId is not > 0) return null;
+
+        return await PartnerAvailabilityWorkflow
+            .SelectableFor(_db, partnerOrganizationId.Value, activityId)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == slotId.Value);
     }
 
     [Authorize(Roles = RoleNames.ClubAdmin)]
@@ -189,12 +228,63 @@ public class BookingsController : Controller
                 seasonId = season.Id;
         }
 
+        // ── Schedule Source: the club selected one of the entity's published availability slots ──
+        //
+        // Nothing about the posted schedule is trusted. The slot is re-read through exactly the
+        // query that decided what to show — so it must still be Available, still in the future in
+        // Dubai time, still in an active season, still owned by an approved entity, and still
+        // applicable to this request — and the date and both times are then overwritten FROM the
+        // slot. A post pairing a real slot id with a different time is therefore stored as the
+        // slot, never as the post.
+        //
+        // This is only a pre-check. The slot is not claimed here; it is claimed atomically below,
+        // because between this read and the insert another club can take it.
+        PartnerAvailabilitySlot? slot = null;
+        if (vm.PartnerAvailabilitySlotId is > 0)
+        {
+            var slotGoneEn = "This time slot is no longer available. Please choose another time.";
+            var slotGoneAr = "لم تعد هذه الفترة الزمنية متاحة. يرجى اختيار وقت آخر.";
+
+            slot = partnerOrgId.HasValue
+                ? await PartnerAvailabilityWorkflow.SelectableFor(_db, partnerOrgId.Value, activity?.Id)
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == vm.PartnerAvailabilitySlotId.Value)
+                : null;
+
+            // Covers every way the selection can be wrong at once, and answers them all the same
+            // way: a slot that has since been claimed, blocked, cancelled or passed; one belonging
+            // to a different entity than the club selected; one offered only for another programme;
+            // and one that never existed. Distinguishing them would tell a club things about
+            // another club's requests.
+            if (slot is null || slot.SeasonId != seasonId)
+            {
+                slot = null;
+                // Cleared so the re-rendered form comes back usable: the manual date and time
+                // fields unlock, the message explains why, and the club can ask for another time
+                // without starting again.
+                vm.PartnerAvailabilitySlotId = null;
+                ModelState.AddModelError(nameof(vm.PartnerAvailabilitySlotId), isAr ? slotGoneAr : slotGoneEn);
+            }
+            else
+            {
+                vm.ProposedDate = slot.Date;
+                vm.ProposedStartTime = slot.StartTime;
+                vm.ProposedEndTime = slot.EndTime;
+                ModelState.Remove(nameof(vm.ProposedDate));
+                ModelState.Remove(nameof(vm.ProposedStartTime));
+                ModelState.Remove(nameof(vm.ProposedEndTime));
+            }
+        }
+
         if (!ModelState.IsValid)
         {
-            await PopulateCreateViewDataAsync(activity, orgs);
+            await PopulateCreateViewDataAsync(activity, orgs, partnerOrgId, activity?.Id);
             return View(vm);
         }
 
+        // Identical on both schedule sources: a slot's Dubai wall-clock date and times are combined
+        // exactly as a club's typed values are, so a calendar booking and a hand-typed booking are
+        // stored the same way and every consumer downstream is unaffected by which one it was.
         var proposedStart = vm.ProposedDate!.Value.ToDateTime(vm.ProposedStartTime!.Value);
         var proposedEnd = vm.ProposedDate.Value.ToDateTime(vm.ProposedEndTime!.Value);
 
@@ -218,12 +308,43 @@ public class BookingsController : Controller
             ContactEmail = vm.ContactEmail?.Trim(),
             SpecialRequirements = vm.SpecialRequirements?.Trim(),
             Notes = vm.Notes,
+            PartnerAvailabilitySlotId = slot?.Id,
             Status = BookingStatus.Pending,
             CreatedAtUtc = DateTime.UtcNow,
             CreatedByUserId = userId
         };
+        // A transaction ONLY when a slot is involved. Without one, this is byte-for-byte the write
+        // path that existed before the calendar, so a manual booking is unaffected by this feature
+        // even in how it is committed.
+        await using var tx = slot is null ? null : await _db.Database.BeginTransactionAsync();
+
         _db.BookingRequests.Add(booking);
         await _db.SaveChangesAsync();
+
+        if (slot is not null)
+        {
+            // The race, resolved. This is a single UPDATE guarded on the slot still being Available;
+            // SQL Server serialises two concurrent attempts on the row, so exactly one affects a row
+            // and the other affects none. The booking is inserted first so the claim can record which
+            // request holds the slot, and the rollback is what makes that ordering safe: the loser's
+            // booking never reaches the database at all.
+            //
+            // Two clubs clicking the same slot in the same second therefore produce exactly one
+            // booking request and exactly one held slot.
+            if (!await PartnerAvailabilityWorkflow.TryClaimAsync(_db, slot.Id, booking.Id, userId))
+            {
+                await tx!.RollbackAsync();
+                _db.Entry(booking).State = EntityState.Detached;
+
+                vm.PartnerAvailabilitySlotId = null;
+                ModelState.AddModelError(nameof(vm.PartnerAvailabilitySlotId), isAr
+                    ? "لم تعد هذه الفترة الزمنية متاحة. يرجى اختيار وقت آخر."
+                    : "This time slot is no longer available. Please choose another time.");
+                await PopulateCreateViewDataAsync(activity, orgs, partnerOrgId, activity?.Id);
+                return View(vm);
+            }
+        }
+
         // The request exactly as the club wrote it. Recorded at submission because a partner may
         // later propose a different program name or time, and accepting that overwrites the live
         // row — without this snapshot the original ask would only survive as the "old" half of a
@@ -246,12 +367,18 @@ public class BookingsController : Controller
                 booking.AudienceDetails,
                 booking.Notes,
                 booking.SpecialRequirements,
-                booking.PartnerOrganizationId
+                booking.PartnerOrganizationId,
+                // Schedule Source, recorded at submission so provenance survives every later change
+                // of time. Null means the club proposed the time itself.
+                ScheduleSource = booking.PartnerAvailabilitySlotId.HasValue ? "PartnerCalendar" : "ClubProposed",
+                booking.PartnerAvailabilitySlotId
             }),
             AtUtc = DateTime.UtcNow,
             ByUserId = userId
         });
         await _db.SaveChangesAsync();
+
+        if (tx is not null) await tx.CommitAsync();
 
         var subjectEn = booking.Subject ?? activity?.TitleEn ?? "Ghars activity";
         var subjectAr = booking.Subject ?? activity?.TitleAr ?? subjectEn;
@@ -303,6 +430,7 @@ public class BookingsController : Controller
             .Include(x => x.Season)
             .Include(x => x.Organization)
             .Include(x => x.PartnerOrganization)
+            .Include(x => x.PartnerAvailabilitySlot)
             .Include(x => x.ProposedTimeOptions.OrderBy(o => o.ProposedStartUtc))
             .Include(x => x.AuditTrail.OrderByDescending(t => t.AtUtc))
             .FirstOrDefaultAsync(x => x.Id == id && (orgIds.Contains(x.OrganizationId) || (x.PartnerOrganizationId.HasValue && orgIds.Contains(x.PartnerOrganizationId.Value))));
@@ -409,6 +537,12 @@ public class BookingsController : Controller
             ByUserId = userId
         });
         await _db.SaveChangesAsync();
+        // Defensive and idempotent, and AFTER the save: the slot must never be freed by a request
+        // whose own state change did not survive. The entity's proposal already released whichever
+        // slot the club had selected, so this normally moves nothing — the status guard inside makes
+        // a second call a no-op — but it means the request cannot end in a dead state while still
+        // holding a time.
+        await PartnerAvailabilityWorkflow.ReleaseForBookingAsync(_db, booking, userId);
 
         if (booking.PartnerOrganizationId.HasValue)
         {
@@ -423,6 +557,116 @@ public class BookingsController : Controller
         return RedirectToAction(nameof(Details), new { id = bookingId });
     }
 
+
+    /// <summary>
+    /// One implementing entity's published availability, as a browsable calendar.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Anonymous visitors may read it.</b> That matches the policy of the public booking
+    /// catalogue this page is reached from — hiding an entity's open times behind a login would
+    /// make the catalogue less useful than it is today, and the times themselves are exactly as
+    /// public as the programmes beside them. Creating a request still requires a signed-in club
+    /// admin, and the sign-in link carries the chosen slot through so the visitor lands back on the
+    /// booking form with it selected.
+    /// </para>
+    /// <para>
+    /// Only Available future slots appear. Pending, Booked, Blocked and Cancelled ones are absent
+    /// rather than greyed out: a placeholder would tell a reader that somebody else asked, and who
+    /// asked is nobody else's business.
+    /// </para>
+    /// </remarks>
+    [AllowAnonymous]
+    [HttpGet("/booking/partner/{partnerId:int}/calendar")]
+    public async Task<IActionResult> PartnerCalendar(int partnerId, int? year = null, int? month = null, int? activityId = null)
+    {
+        var partner = await _db.Organizations.ApprovedPartners().FirstOrDefaultAsync(x => x.Id == partnerId);
+        if (partner is null) return NotFound();
+
+        // A programme filter is only honoured if that programme really belongs to this entity and is
+        // really bookable, so a hand-typed id cannot make the page speak for someone else's offering.
+        Activity? activity = null;
+        if (activityId is > 0)
+        {
+            activity = await BookableOfferings().FirstOrDefaultAsync(x => x.Id == activityId.Value);
+            if (activity is not null && await ResolvePartnerOrganizationIdAsync(activity) != partnerId) activity = null;
+        }
+
+        var today = GharsTime.Today;
+        var y = year is >= 2000 and <= 2100 ? year.Value : today.Year;
+        var m = month is >= 1 and <= 12 ? month.Value : today.Month;
+        var monthStart = new DateOnly(y, m, 1);
+        var gridStart = monthStart.AddDays(-(int)monthStart.DayOfWeek);
+        var gridEnd = gridStart.AddDays(41);
+
+        // Bounded to the rendered grid — six weeks, never the whole table.
+        var slots = await PartnerAvailabilityWorkflow.SelectableFor(_db, partnerId, activity?.Id)
+            .AsNoTracking()
+            .Include(x => x.Activity)
+            .Where(x => x.Date >= gridStart && x.Date <= gridEnd)
+            .OrderBy(x => x.Date).ThenBy(x => x.StartTime)
+            .ToListAsync();
+
+        // Whether this entity has anything at all coming up, so an empty month can say "nothing this
+        // month" rather than "this entity publishes no availability" — two different facts.
+        ViewBag.HasAnyUpcoming = await PartnerAvailabilityWorkflow.SelectableFor(_db, partnerId, activity?.Id).AnyAsync();
+        ViewBag.Partner = partner;
+        ViewBag.Activity = activity;
+        ViewBag.MonthStart = monthStart;
+        ViewBag.GridStart = gridStart;
+        ViewBag.Today = today;
+        ViewBag.Season = await _db.Seasons.Where(x => x.IsActive).OrderByDescending(x => x.StartDate).FirstOrDefaultAsync();
+        return View(slots);
+    }
+
+    /// <summary>
+    /// The published availability of one implementing entity, for the Custom Program request form.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A club picks an entity from a dropdown and the form asks for that entity's times — one
+    /// request for one entity, rather than the page pre-loading every entity's calendar.
+    /// </para>
+    /// <para>
+    /// <b>A projection, not the entity.</b> Six fields leave this endpoint: id, date, start, end,
+    /// the optional programme id and the public note in the reader's language. No status, no
+    /// holder, no audit stamps, no internal note — and because
+    /// <see cref="PartnerAvailabilityWorkflow.SelectableFor"/> returns only Available future slots
+    /// of an approved entity, a slot another club is holding is simply absent rather than listed as
+    /// unavailable. A club cannot learn from this endpoint that another club asked for something.
+    /// </para>
+    /// <para>
+    /// Only general slots are returned: <c>activityId: null</c>. A custom request has no programme,
+    /// so availability an entity pinned to one specific published programme does not apply to it.
+    /// </para>
+    /// </remarks>
+    [Authorize(Roles = RoleNames.ClubAdmin)]
+    [HttpGet("/bookings/partner-availability")]
+    public async Task<IActionResult> PartnerAvailability(int partnerId)
+    {
+        if (partnerId <= 0) return Json(Array.Empty<AvailabilitySlotPublicVm>());
+
+        var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+
+        // Narrowed in SQL to the five columns that leave the endpoint, then formatted in memory:
+        // DateOnly.ToString(format) and TimeOnly.ToString(format) have no SQL translation, so doing
+        // this inside the query would throw at runtime rather than at compile time.
+        var rows = await PartnerAvailabilityWorkflow.SelectableFor(_db, partnerId, activityId: null)
+            .AsNoTracking()
+            .OrderBy(x => x.Date).ThenBy(x => x.StartTime)
+            .Select(x => new { x.Id, x.Date, x.StartTime, x.EndTime, x.ActivityId, x.NotesEn, x.NotesAr })
+            .ToListAsync();
+
+        var slots = rows.Select(x => new AvailabilitySlotPublicVm(
+            x.Id,
+            x.Date.ToString("yyyy-MM-dd"),
+            x.StartTime.ToString(@"HH\:mm"),
+            x.EndTime.ToString(@"HH\:mm"),
+            x.ActivityId,
+            isAr ? (x.NotesAr ?? x.NotesEn) : (x.NotesEn ?? x.NotesAr))).ToList();
+
+        return Json(slots);
+    }
 
     /// <summary>
     /// Every condition an offering must satisfy before a club may request it: it is published, its
@@ -478,7 +722,7 @@ public class BookingsController : Controller
     private async Task<List<int>> UserOrganizationIds(string userId)
         => await _db.OrganizationAdminLinks.Where(x => x.UserId == userId).Select(x => x.OrganizationId).ToListAsync();
 
-    private async Task PopulateCreateViewDataAsync(Activity? activity, List<Organization> orgs)
+    private async Task PopulateCreateViewDataAsync(Activity? activity, List<Organization> orgs, int? partnerOrganizationId = null, int? activityId = null)
     {
         ViewBag.Activity = activity;
         ViewBag.Organizations = orgs;
@@ -486,6 +730,20 @@ public class BookingsController : Controller
         // Approved implementing entities + active seasons for direct entity-first requests.
         ViewBag.Entities = await _db.Organizations.ApprovedPartners().ToListAsync();
         ViewBag.Seasons = await _db.Seasons.Where(x => x.IsActive).OrderByDescending(x => x.StartDate).ToListAsync();
+
+        // The entity's published availability, when the entity is already known — which on the
+        // existing-program path it always is. On the custom path the club has not chosen an entity
+        // yet, so nothing is loaded here and the form fetches slots for whichever entity it picks.
+        //
+        // ONE query, for ONE entity. Empty is the normal case and is not an error: the calendar is
+        // optional, and a club whose entity keeps none simply sees the manual date and time fields
+        // it has always seen.
+        ViewBag.AvailabilitySlots = partnerOrganizationId is > 0
+            ? await PartnerAvailabilityWorkflow.SelectableFor(_db, partnerOrganizationId.Value, activityId)
+                .AsNoTracking()
+                .OrderBy(x => x.Date).ThenBy(x => x.StartTime)
+                .ToListAsync()
+            : new List<PartnerAvailabilitySlot>();
     }
 
     private async Task<Organization?> ResolvePartnerOrganizationAsync(Activity activity)

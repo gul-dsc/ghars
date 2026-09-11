@@ -93,6 +93,10 @@ public class BookingsController : Controllers.BaseController
         });
 
         await Db.SaveChangesAsync();
+        // A DSC approval is still an approval: if the club picked one of the entity's published
+        // times, that time is now taken and must stop being offered. Guarded on the slot being
+        // Pending, so this is a no-op for every booking that carries no slot.
+        await PartnerAvailabilityWorkflow.MarkBookedForBookingAsync(Db, booking, CurrentUserId);
         await AuditAsync("Approve", nameof(BookingRequest), id.ToString(), old, booking);
 
         // Persist notification + broadcast (target org)
@@ -149,6 +153,9 @@ public class BookingsController : Controllers.BaseController
         });
 
         await Db.SaveChangesAsync();
+        // Rejected by DSC frees the time again, exactly as a rejection by the entity does. After the
+        // save, so a rejection that did not persist cannot release the slot underneath it.
+        await PartnerAvailabilityWorkflow.ReleaseForBookingAsync(Db, booking, CurrentUserId);
         await AuditAsync("Reject", nameof(BookingRequest), id.ToString(), old, booking);
 
         await CreateAndDispatchNotificationAsync(

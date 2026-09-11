@@ -1,0 +1,257 @@
+@model List<GharsPlatform.Models.Core.PartnerAvailabilitySlot>
+@using GharsPlatform.Models.Core
+@using GharsPlatform.Models.Identity
+@using GharsPlatform.Helpers
+@using GharsPlatform.ViewModels
+@using System.Globalization
+@{
+    var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string en, string ar) => isAr ? ar : en;
+
+    var partner = (Organization)ViewBag.Partner;
+    var activity = ViewBag.Activity as Activity;
+    var season = ViewBag.Season as Season;
+    var monthStart = (DateOnly)ViewBag.MonthStart;
+    var gridStart = (DateOnly)ViewBag.GridStart;
+    var today = (DateOnly)ViewBag.Today;
+    var hasAnyUpcoming = (bool)(ViewBag.HasAnyUpcoming ?? false);
+
+    string Name(Organization o) => isAr && !string.IsNullOrWhiteSpace(o.NameAr) ? o.NameAr : o.NameEn;
+    string Title(Activity a) => isAr && !string.IsNullOrWhiteSpace(a.TitleAr) ? a.TitleAr : a.TitleEn;
+    string Logo(Organization o) => string.IsNullOrWhiteSpace(o.LogoPath)
+        ? Url.Content("~/img/partners/default-partner.svg")
+        : Url.Content(o.LogoPath);
+
+    ViewData["Title"] = T($"{Name(partner)} — Available Times", $"{Name(partner)} — الأوقات المتاحة");
+
+    var culture = CultureInfo.CurrentUICulture;
+    var monthLabel = monthStart.ToDateTime(TimeOnly.MinValue).ToString("MMMM yyyy", culture);
+    string TimeText(TimeOnly t) => t.ToString("HH\\:mm", CultureInfo.InvariantCulture);
+    string DayLabel(DateOnly d) => d.ToDateTime(TimeOnly.MinValue).ToString("dddd d MMMM", culture);
+
+    var byDate = Model.GroupBy(x => x.Date).ToDictionary(g => g.Key, g => g.ToList());
+    var prev = monthStart.AddMonths(-1);
+    var next = monthStart.AddMonths(1);
+
+    var isClub = User.IsInRole(RoleNames.ClubAdmin);
+    var isAuthenticated = User.Identity?.IsAuthenticated ?? false;
+
+    // Where "Request this time" goes. A slot pinned to a programme continues into the Existing
+    // Program form for that programme; a general slot continues into whichever form the visitor
+    // arrived through.
+    string RequestHref(PartnerAvailabilitySlot slot)
+    {
+        var target = slot.ActivityId ?? activity?.Id;
+        return target.HasValue
+            ? $"/bookings/create?activityId={target.Value}&slotId={slot.Id}"
+            : $"/bookings/custom?partnerId={partner.Id}&slotId={slot.Id}";
+    }
+}
+
+<div class="partner-hero mb-4">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+        @* Whose schedule this is, said with the logo and the name together — a club selecting a time
+           should never have to infer which entity it is selecting from. *@
+        <div class="booking-card-entity-logo flex-shrink-0">
+            <img src="@Logo(partner)" alt="@Name(partner)" />
+        </div>
+        <div>
+            <h1 class="h3 fw-bold mb-1">@Name(partner)</h1>
+            <div class="opacity-75">
+                @T("Available Times", "الأوقات المتاحة")
+                @if (season is not null)
+                {
+                    <span class="ms-2"><i class="bi bi-calendar3 me-1" aria-hidden="true"></i>@(isAr ? season.TitleAr : season.TitleEn)</span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (activity is not null)
+{
+    <div class="alert alert-light border d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <span>
+            <i class="bi bi-journal-text me-1" aria-hidden="true"></i>
+            @T("Showing times for", "عرض الأوقات الخاصة بـ"): <strong>@Title(activity)</strong>
+        </span>
+        <a class="btn btn-sm btn-outline-secondary" href="/booking/partner/@partner.Id/calendar">
+            @T("Show all available times", "عرض جميع الأوقات المتاحة")
+        </a>
+    </div>
+}
+
+<p class="text-muted">
+    @T("These times have been marked as available by the implementing entity. Selecting one sends a booking request — the entity still reviews and confirms it.",
+       "هذه الأوقات حددتها الجهة المنفذة كأوقات متاحة. اختيار أحدها يرسل طلب حجز — وتبقى المراجعة والتأكيد من صلاحية الجهة.")
+</p>
+
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+    <div class="btn-group" role="group" aria-label="@T("Change month", "تغيير الشهر")">
+        <a class="btn btn-outline-secondary btn-sm" href="/booking/partner/@partner.Id/calendar?year=@prev.Year&month=@prev.Month@(activity is null ? "" : $"&activityId={activity.Id}")">
+            <i class="bi bi-chevron-@(isAr ? "right" : "left")" aria-hidden="true"></i>
+            <span class="visually-hidden">@T("Previous month", "الشهر السابق")</span>
+        </a>
+        <span class="btn btn-light btn-sm disabled fw-semibold">@monthLabel</span>
+        <a class="btn btn-outline-secondary btn-sm" href="/booking/partner/@partner.Id/calendar?year=@next.Year&month=@next.Month@(activity is null ? "" : $"&activityId={activity.Id}")">
+            <i class="bi bi-chevron-@(isAr ? "left" : "right")" aria-hidden="true"></i>
+            <span class="visually-hidden">@T("Next month", "الشهر التالي")</span>
+        </a>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" href="/Home/Booking">
+        <i class="bi bi-arrow-@(isAr ? "right" : "left") me-1" aria-hidden="true"></i>@T("Back to Booking", "العودة إلى الحجز")
+    </a>
+</div>
+
+@if (!hasAnyUpcoming)
+{
+    @* The absence message the brief asks for, worded as a fact and never as a configuration error.
+       The second sentence is the important one. *@
+    <div class="empty-state mb-4">
+        <i class="bi bi-calendar3 fs-1 text-muted d-block mb-3" aria-hidden="true"></i>
+        <div class="fw-semibold mb-2">@T("This partner has not published availability.", "لم تنشر هذه الجهة أي أوقات متاحة.")</div>
+        <p class="text-muted mb-3">
+            @T("You can still suggest your preferred date and time.", "بإمكانكم مع ذلك اقتراح التاريخ والوقت المناسبين لكم.")
+        </p>
+        @if (isClub)
+        {
+            <a class="btn btn-ghars" href="@(activity is not null ? $"/bookings/create?activityId={activity.Id}" : $"/bookings/custom?partnerId={partner.Id}")">
+                <i class="bi bi-calendar-plus me-1" aria-hidden="true"></i>@T("Send a booking request", "إرسال طلب حجز")
+            </a>
+        }
+    </div>
+}
+else
+{
+    <div class="ghars-calendar-month mb-4">
+        <table class="table ghars-calendar-table mb-0">
+            <caption class="visually-hidden">@T($"Available times for {monthLabel}", $"الأوقات المتاحة لشهر {monthLabel}")</caption>
+            <thead>
+                <tr>
+                    @for (var i = 0; i < 7; i++)
+                    {
+                        var day = gridStart.AddDays(i).DayOfWeek;
+                        <th scope="col" class="text-center">
+                            <span aria-hidden="true">@culture.DateTimeFormat.GetShortestDayName(day)</span>
+                            <span class="visually-hidden">@culture.DateTimeFormat.GetDayName(day)</span>
+                        </th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @for (var week = 0; week < 6; week++)
+                {
+                    <tr>
+                        @for (var d = 0; d < 7; d++)
+                        {
+                            var date = gridStart.AddDays(week * 7 + d);
+                            var inMonth = date.Month == monthStart.Month && date.Year == monthStart.Year;
+                            var daySlots = byDate.TryGetValue(date, out var list) ? list : null;
+                            <td class="ghars-calendar-cell @(inMonth ? null : "is-outside") @(date == today ? "is-today" : null)">
+                                @if (daySlots is { Count: > 0 })
+                                {
+                                    <button type="button" class="ghars-calendar-day has-slots" data-day-target="day-@date.ToString("yyyy-MM-dd")">
+                                        <span class="ghars-calendar-daynum">@date.Day</span>
+                                        <span class="visually-hidden">@DayLabel(date) — </span>
+                                        <span class="ghars-calendar-daycount">@T($"{daySlots.Count} available", $"{daySlots.Count} متاحة")</span>
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="ghars-calendar-daynum text-muted">@date.Day</span>
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <h2 class="h5 mb-3">@T("Available dates", "التواريخ المتاحة")</h2>
+
+    @if (byDate.Count == 0)
+    {
+        <div class="ghars-filter-empty mb-4">
+            @T("No available times this month. Try the next month.", "لا توجد أوقات متاحة هذا الشهر. جرّبوا الشهر التالي.")
+        </div>
+    }
+
+    @foreach (var day in byDate.OrderBy(x => x.Key))
+    {
+        <section class="metric-card mb-3" id="day-@day.Key.ToString("yyyy-MM-dd")">
+            <h3 class="h6 mb-3">@DayLabel(day.Key)</h3>
+            <div class="ghars-slot-list">
+                @foreach (var slot in day.Value)
+                {
+                    var note = isAr ? (slot.NotesAr ?? slot.NotesEn) : (slot.NotesEn ?? slot.NotesAr);
+                    var place = isAr ? (slot.LocationAr ?? slot.LocationEn) : (slot.LocationEn ?? slot.LocationAr);
+                    <div class="ghars-slot-row">
+                        <div class="ghars-slot-time">
+                            <i class="bi bi-clock me-1" aria-hidden="true"></i>
+                            <span dir="ltr">@TimeText(slot.StartTime) – @TimeText(slot.EndTime)</span>
+                        </div>
+                        <div class="ghars-slot-meta">
+                            @* Every public slot is Available by construction, so the badge is a
+                               constant — but it still carries an icon and a word, never colour alone. *@
+                            <span class="badge text-bg-success">
+                                <i class="bi bi-check-circle me-1" aria-hidden="true"></i>@T("Available", "متاح")
+                            </span>
+                            @if (slot.Activity is not null)
+                            {
+                                <span class="badge text-bg-light border">
+                                    <i class="bi bi-journal-text me-1" aria-hidden="true"></i>@Title(slot.Activity)
+                                </span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(place))
+                            {
+                                <span class="text-muted small"><i class="bi bi-geo-alt me-1" aria-hidden="true"></i>@place</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(note))
+                            {
+                                <span class="text-muted small">@note</span>
+                            }
+                        </div>
+                        <div class="ghars-slot-actions">
+                            @* "Request this time", never "Book now": confirmation is still the
+                               entity's to give, and a button that says otherwise would be lying. *@
+                            @if (isClub)
+                            {
+                                <a class="btn btn-sm btn-ghars" href="@RequestHref(slot)">
+                                    @T("Request this time", "اطلب هذا الوقت")
+                                    <span class="visually-hidden">— @DayLabel(day.Key) @TimeText(slot.StartTime)</span>
+                                </a>
+                            }
+                            else if (!isAuthenticated)
+                            {
+                                @* The chosen slot survives sign-in, so the visitor lands back on the
+                                   booking form with this time already selected. *@
+                                <a class="btn btn-sm btn-outline-success"
+                                   asp-controller="Account" asp-action="Login" asp-route-returnUrl="@RequestHref(slot)">
+                                    <i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>@T("Sign in to request", "سجّل الدخول للطلب")
+                                    <span class="visually-hidden">— @DayLabel(day.Key) @TimeText(slot.StartTime)</span>
+                                </a>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </section>
+    }
+}
+
+@section Scripts{
+<script>
+(function () {
+    document.querySelectorAll('[data-day-target]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var target = document.getElementById(btn.getAttribute('data-day-target'));
+            if (!target) return;
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            target.setAttribute('tabindex', '-1');
+            target.focus({ preventScroll: true });
+        });
+    });
+})();
+</script>
+}

@@ -305,3 +305,43 @@ public enum ContactMessageStatus : byte
     Resolved = 3,
     Spam = 4
 }
+
+/// <summary>
+/// The lifecycle of a <see cref="PartnerAvailabilitySlot"/>.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Five states, and the distinction that matters most is <see cref="Available"/> versus
+/// <see cref="Pending"/>: a club has asked for a pending slot but the implementing entity has not
+/// decided yet, so it must disappear from every other club's view while remaining fully releasable.
+/// A single "is published" bool cannot express that, which is one of the reasons this feature did
+/// not reuse <see cref="CalendarEvent"/>.
+/// </para>
+/// <para>
+/// Only <see cref="Available"/> is ever visible to a club or an anonymous visitor. Every other state
+/// is simply absent from those queries rather than shown as an "unavailable" placeholder — a
+/// placeholder would leak that somebody else asked.
+/// </para>
+/// <para>
+/// Transitions belong to <see cref="Helpers.PartnerAvailabilityWorkflow"/> and nowhere else. The
+/// numeric value of <see cref="Cancelled"/> is referenced by the filtered unique index that stops
+/// duplicate active slots, so these numbers are part of the schema and must not be renumbered.
+/// </para>
+/// </remarks>
+public enum PartnerAvailabilityStatus : byte
+{
+    /// <summary>Published and selectable by a club.</summary>
+    Available = 1,
+
+    /// <summary>A club's booking request references it; the entity has not yet decided.</summary>
+    Pending = 2,
+
+    /// <summary>The entity confirmed a booking against it. Terminal, and kept as history.</summary>
+    Booked = 3,
+
+    /// <summary>The entity temporarily withdrew it. Reversible back to <see cref="Available"/>.</summary>
+    Blocked = 4,
+
+    /// <summary>The entity permanently withdrew an unused slot. Terminal, and kept for audit.</summary>
+    Cancelled = 5
+}

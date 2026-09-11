@@ -67,6 +67,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<GharsAnnualReport> GharsAnnualReports => Set<GharsAnnualReport>();
     public DbSet<ActivityAttachment> ActivityAttachments => Set<ActivityAttachment>();
 
+    /// <summary>
+    /// Optional future times implementing entities are willing to receive requests for. Read by the
+    /// calendar screens and by the booking form; read by nothing in reporting, KPI or the annual
+    /// report — availability is not a business statistic.
+    /// </summary>
+    public DbSet<PartnerAvailabilitySlot> PartnerAvailabilitySlots => Set<PartnerAvailabilitySlot>();
+
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -216,6 +223,74 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<KpiSubmission>()
             .HasIndex(x => x.SatisfactionExternalSurveyId);
+
+        // ── Partner availability calendar ───────────────────────────────────────────────────────
+        //
+        // Optional, additive, and deliberately isolated: nothing that already existed changes shape
+        // because of it. See GHARS_PARTNER_AVAILABILITY_CALENDAR.md.
+
+        // Ownership. NoAction, consistent with every other organization reference in this model: an
+        // organization is soft-deleted, never removed, and a cascade here would add a second delete
+        // path into a table BookingRequests also points at.
+        builder.Entity<PartnerAvailabilitySlot>()
+            .HasOne(x => x.PartnerOrganization)
+            .WithMany()
+            .HasForeignKey(x => x.PartnerOrganizationId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<PartnerAvailabilitySlot>()
+            .HasOne(x => x.Season)
+            .WithMany()
+            .HasForeignKey(x => x.SeasonId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // Optional programme link. NoAction and nullable: removing an offering must not delete the
+        // times an entity published, and a general slot has no offering at all.
+        builder.Entity<PartnerAvailabilitySlot>()
+            .HasOne(x => x.Activity)
+            .WithMany()
+            .HasForeignKey(x => x.ActivityId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // The partner month view, the club "upcoming available" lookup and the DSC per-partner
+        // filter are all (partner, date) range scans narrowed by status.
+        builder.Entity<PartnerAvailabilitySlot>()
+            .HasIndex(x => new { x.PartnerOrganizationId, x.Date, x.Status })
+            .HasDatabaseName("IX_PartnerAvailabilitySlots_Partner_Date_Status");
+
+        // DSC oversight across entities, by season and date range.
+        builder.Entity<PartnerAvailabilitySlot>()
+            .HasIndex(x => new { x.SeasonId, x.Date, x.Status })
+            .HasDatabaseName("IX_PartnerAvailabilitySlots_Season_Date_Status");
+
+        // Programme-specific slots, read on the Existing Program booking screen.
+        builder.Entity<PartnerAvailabilitySlot>()
+            .HasIndex(x => x.ActivityId)
+            .HasDatabaseName("IX_PartnerAvailabilitySlots_ActivityId");
+
+        // No two live slots with the same partner, date and exact times. FILTERED on purpose:
+        // cancelled rows are excluded so that withdrawing a time and later re-publishing it works.
+        //
+        // This is the database backstop for duplicates only. The wider rule — no *overlapping* slots
+        // on a date — cannot be an index, because SQL Server has no range-exclusion constraint; it is
+        // enforced in PartnerAvailabilityWorkflow.OverlapsAsync. The literal below is
+        // PartnerAvailabilityStatus.Cancelled, which is why that enum's numbers are part of the
+        // schema and must not be renumbered.
+        builder.Entity<PartnerAvailabilitySlot>()
+            .HasIndex(x => new { x.PartnerOrganizationId, x.Date, x.StartTime, x.EndTime })
+            .IsUnique()
+            .HasFilter($"[Status] <> {(byte)PartnerAvailabilityStatus.Cancelled}")
+            .HasDatabaseName("UX_PartnerAvailabilitySlots_ActiveUnique");
+
+        // The booking's link to the slot it was made against. Nullable — every existing booking and
+        // every manual-date booking keeps NULL — and NoAction, so a slot can never cascade-delete a
+        // booking. Slots with booking history are not deleted at all; they move through the
+        // lifecycle instead.
+        builder.Entity<BookingRequest>()
+            .HasOne(x => x.PartnerAvailabilitySlot)
+            .WithMany()
+            .HasForeignKey(x => x.PartnerAvailabilitySlotId)
+            .OnDelete(DeleteBehavior.NoAction);
 
         builder.Entity<BookingProposedTimeOption>()
             .HasOne(x => x.BookingRequest)

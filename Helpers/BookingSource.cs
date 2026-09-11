@@ -82,3 +82,46 @@ public enum BookingSourceFilter : byte
     ExistingProgram = 1,
     CustomProgram = 2
 }
+
+/// <summary>
+/// <b>Schedule Source</b> — where a booking's requested time came from. Deliberately a separate axis
+/// from <see cref="BookingSource"/>, which says how the club reached the booking.
+///
+///   Partner Calendar   BookingRequest.PartnerAvailabilitySlotId is set. The club picked a time the
+///                      implementing entity had published as available.
+///
+///   Club Proposed      It is NULL. The club typed the date and time it wanted — the only behaviour
+///                      that existed before the availability calendar, and still the default.
+///
+/// All four combinations of the two axes are valid and reachable: an Existing Program or a Custom
+/// Program request can each arrive from either schedule source. Confusing the two axes is what would
+/// turn "the partner published some times" into a third kind of booking, which is exactly what this
+/// feature must not do.
+///
+/// Derived from the stored slot id and never itself stored, for the same reason
+/// <see cref="BookingSourceFilter"/> is derived from ActivityId: a duplicated column can fall out of
+/// step with the data, and a derived one cannot.
+/// </summary>
+public static class ScheduleSource
+{
+    private static bool IsAr => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+
+    /// <summary>True when the club selected one of the entity's published availability slots.</summary>
+    public static bool IsFromCalendar(BookingRequest booking) => booking.PartnerAvailabilitySlotId.HasValue;
+
+    public static string Label(BookingRequest booking) => IsFromCalendar(booking)
+        ? (IsAr ? "تقويم الجهة المنفذة" : "Partner Calendar")
+        : (IsAr ? "موعد مقترح من النادي" : "Club Proposed");
+
+    public static string BadgeClass(BookingRequest booking) => IsFromCalendar(booking)
+        ? "text-bg-success"
+        : "text-bg-light border";
+
+    /// <summary>
+    /// An icon per schedule source, so the badge never carries its meaning by colour alone. Always
+    /// paired with <see cref="Label"/>, which carries the text.
+    /// </summary>
+    public static string Icon(BookingRequest booking) => IsFromCalendar(booking)
+        ? "bi-calendar2-check"
+        : "bi-pencil";
+}

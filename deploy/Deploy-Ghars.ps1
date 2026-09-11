@@ -56,8 +56,13 @@ param(
     # Idempotent script produced by "dotnet ef migrations script --idempotent".
     [string] $MigrationScript,
 
-    # Base URL smoke-tested after the site comes back, e.g. http://localhost:89/
+    # Canonical site URL, e.g. https://ghars.dubaisc.ae/. Supplies the host name, and therefore
+    # the Host header and the TLS SNI the smoke test must send to match the right IIS binding.
     [string] $HealthCheckUrl,
+
+    # Where the smoke test connects. The probes resolve the host name above to this address, so
+    # they reach this server directly rather than travelling out to the CDN and back.
+    [string] $OriginAddress = '127.0.0.1',
 
     # Rollback copies. Kept OUTSIDE $SitePath so the mirror cannot reach them.
     [string] $ReleaseHistoryRoot,
@@ -118,6 +123,16 @@ if (-not (Test-Path "IIS:\AppPools\$AppPool")) { Fail "Application pool '$AppPoo
 
 $doBackup  = $SqlServer -and $Database -and $BackupRoot
 $doMigrate = $MigrationScript -and (Test-Path $MigrationScript)
+
+# The published appsettings.json carries the development connection string - Server=. with
+# integrated auth. If nothing overrides it, the application starts, fails to reach a local SQL
+# instance that is not there, and dies during DbSeeder with a named-pipes error 40 that reads like
+# a network fault rather than missing configuration. Warn while the site is still up, not after.
+if (-not (Test-Path (Join-Path $SitePath 'appsettings.Production.json'))) {
+    Write-Warning ("No appsettings.Production.json in '$SitePath'. Unless the connection string is " +
+                   "supplied as an app pool environment variable, the application will fall back to " +
+                   "the development 'Server=.' string in appsettings.json and fail to start.")
+}
 
 Write-Host "    source      : $Source"
 Write-Host "    destination : $SitePath"
@@ -274,38 +289,79 @@ Write-Host '    app pool started, app_offline.htm removed'
 Step 'Smoke test'
 
 if ($HealthCheckUrl) {
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    # Loopback against a certificate issued for the public host name. Scoped to this process
-    # only; it does not change machine trust.
-    [Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+    $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
+    if (-not $curl) {
+        Fail "curl.exe not found. It ships with Windows Server 2019 and later, and the smoke test needs it to address the origin directly."
+    }
 
-    $base = $HealthCheckUrl.TrimEnd('/')
+    $uri      = [Uri] $HealthCheckUrl
+    $hostName = $uri.Host
+    $port     = if ($uri.IsDefaultPort) { if ($uri.Scheme -eq 'https') { 443 } else { 80 } } else { $uri.Port }
+    $base     = "$($uri.Scheme)://$hostName" + $(if ($uri.IsDefaultPort) { '' } else { ":$port" })
+
+    # Probe the origin, not the edge.
+    #
+    # --resolve sends the real host name - so the Host header matches the IIS binding and the TLS
+    # SNI selects the right certificate - while connecting to this machine. That matters twice
+    # over. Sending requests to the public URL instead would fail a perfectly good deployment for
+    # a CDN rule, a WAF challenge on the client's user agent, or a locked-down egress path, none
+    # of which this script caused or can fix. And it has to be HTTPS with the right host, because
+    # UseHttpsRedirection() sits ahead of the static-content denial middleware in Program.cs: over
+    # plain HTTP the protected-path probes would answer 307 and never reach the 404 they check for.
+    #
+    # -k because the origin certificate need not be publicly trusted, and it is not being used
+    # here to establish trust - the connection is to a named address on this host.
+    function Get-OriginStatus([string] $Path) {
+        $raw = & $curl -sS -k -o NUL -w '%{http_code}' --max-time 30 `
+                       --resolve "${hostName}:${port}:${OriginAddress}" "$base$Path" 2>&1
+        $text = ($raw | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0) { return "curl exit $LASTEXITCODE ($text)" }
+        return [int] $text
+    }
+
+    Write-Host "    probing $base via $hostName -> ${OriginAddress}:${port}"
 
     $ok = $false
+    $last = 'no response'
     foreach ($attempt in 1..12) {
-        try {
-            $r = Invoke-WebRequest -Uri "$base/" -UseBasicParsing -TimeoutSec 30
-            if ($r.StatusCode -eq 200) { $ok = $true; break }
-        }
-        catch {
-            Write-Host "    attempt $attempt - not ready yet"
-        }
+        $code = Get-OriginStatus '/'
+        if ($code -is [int] -and $code -eq 200) { $ok = $true; break }
+        $last = $code
+        # Report what actually happened. Twelve lines of "not ready yet" hide the difference
+        # between a 500.30 the pool will never recover from and a host that does not resolve.
+        Write-Host "    attempt $attempt - $last"
         Start-Sleep -Seconds 5
     }
-    if (-not $ok) { Fail "Home page did not return 200 from $base/ after warm-up. Check the Windows Application event log and the ASP.NET Core Module stdout log." }
-    Write-Host '    GET / -> 200'
+    if (-not $ok) {
+        Fail ("Origin never returned 200 for $base/ (last: $last).`n" +
+              "    A 5xx means the application is failing to start: read the Windows Application`n" +
+              "    event log, provider 'IIS AspNetCore Module V2', which carries the startup`n" +
+              "    exception. The usual causes are a missing appsettings.Production.json in the`n" +
+              "    site root, or a connection string the server cannot reach.")
+    }
+    Write-Host '    origin GET / -> 200'
 
     # GHARS_PRODUCTION_OPERATIONS.md 2.3: these must be unreachable as static content. A 200 here
-    # means protected evidence is being served straight off disk, so the deployment has failed
-    # even though the site is up.
+    # means protected evidence is being served straight off disk, bypassing ProtectedFilesController
+    # and every permission check in it - so the deployment has failed even though the site is up.
     foreach ($path in @('/protected-uploads/kpi/probe.pdf', '/uploads/kpi/probe.pdf', '/uploads/agenda/probe.jpg', '/uploads/channel/probe.jpg')) {
-        $code = 0
-        try { $code = (Invoke-WebRequest -Uri "$base$path" -UseBasicParsing -TimeoutSec 20).StatusCode }
-        catch {
-            if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode } else { throw }
-        }
+        $code = Get-OriginStatus $path
+        if ($code -isnot [int]) { Fail "Could not probe $path - $code" }
         if ($code -ne 404) { Fail "SECURITY: $path returned $code, expected 404. Protected content is statically reachable." }
-        Write-Host "    GET $path -> 404"
+        Write-Host "    origin GET $path -> 404"
+    }
+
+    # The edge, reported but never enforced. If the CDN in front of this host is misconfigured
+    # that is worth knowing, but it is not something a redeploy caused or can repair, so it must
+    # not fail a deployment that put the right files on the right server.
+    $edgeRaw  = & $curl -sS -o NUL -w '%{http_code}' --max-time 30 "$base/" 2>&1
+    $edgeText = ($edgeRaw | Out-String).Trim()
+    if ($LASTEXITCODE -eq 0 -and $edgeText -eq '200') {
+        Write-Host "    public  GET / -> 200"
+    }
+    else {
+        Write-Warning ("Origin is healthy, but $base/ answered '$edgeText' through the public path. " +
+                       "The deployment is good; check the CDN's origin and SSL settings.")
     }
 }
 else {

@@ -473,17 +473,23 @@ git push
 
 ---
 
-## Part 8 — Environment and approval gate
+## Part 8 — Environment (and an optional approval gate)
 
-Without this, every push to `main` reaches production unattended.
+**Nothing to do here to get running.** The `deployment: DeployIIS` job names the environment
+`Ghars-Production`, and Azure DevOps creates it on the first run if it does not already exist. The
+environment is what records which build reached production and when — that part is automatic.
 
-1. **Pipelines → Environments → New environment** → name **`Ghars-Production`** → Resource: **None**
-   → Create.
-2. Open it → **⋮ → Approvals and checks → Approvals**.
+What is *not* automatic is the approval. As configured, **every push to `main` deploys unattended**.
+That is a deliberate choice here, not an oversight. To add a gate later:
+
+1. **Pipelines → Environments → `Ghars-Production`**.
+2. **⋮ → Approvals and checks → Approvals**.
 3. Add the approvers, and under Advanced clear "Allow approvers to approve their own runs".
 
-The `deployment: DeployIIS` job in the YAML already references this environment, so the Deploy stage
-will now pause for approval and record who released what.
+The deploy stage then pauses until someone approves, and records who released what.
+
+Worth revisiting if the trigger ever widens beyond `main`, or once the platform carries live club
+data — an unattended deployment also applies schema migrations on startup.
 
 ---
 

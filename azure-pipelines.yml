@@ -72,6 +72,10 @@ variables:
   # HTTP they would return 307 and never reach the 404 they are checking for.
   healthUrl: 'https://ghars.dubaisc.ae/'
 
+  # The smoke test resolves healthUrl's host name to this address, so it checks this server rather
+  # than the CDN in front of it. Loopback is right while the agent runs on the web server.
+  originAddress: '127.0.0.1'
+
 stages:
   - stage: Build
     displayName: Build and package
@@ -151,8 +155,11 @@ stages:
         displayName: Deploy to IIS
         pool:
           name: Ghars-SelfHosted
-        # Create this Environment in Azure DevOps and put an approval check on it.
-        # Without the approval, every push to main reaches production unattended.
+        # Azure DevOps creates this Environment on first run if it does not exist. It is what gives
+        # the deploy stage a record of what reached production and when, and it is the hook an
+        # approval check hangs off. No approval is configured, so every push to main deploys
+        # unattended - add one under Environments -> Ghars-Production -> Approvals and checks if
+        # that ever needs to change.
         environment: Ghars-Production
         strategy:
           runOnce:
@@ -164,7 +171,9 @@ stages:
                 # pwsh: false -> Windows PowerShell 5.1, where the WebAdministration module
                 # (Stop-WebAppPool, IIS:\ drive) is available without a compatibility shim.
                 - task: PowerShell@2
-                  displayName: 'Backup, offline, migrate, mirror, online, smoke test'
+                  # The script names its own steps in the log. Naming them here too just invited
+                  # the question of why a deployment was "backing up" when the backup is switched off.
+                  displayName: 'Deploy to IIS'
                   inputs:
                     filePath: '$(Pipeline.Workspace)/ghars-drop/deploy/Deploy-Ghars.ps1'
                     pwsh: false
@@ -179,4 +188,5 @@ stages:
                       -BackupRoot "$(backupRoot)"
                       -MigrationScript "$(migrationScript)"
                       -HealthCheckUrl "$(healthUrl)"
+                      -OriginAddress "$(originAddress)"
                       -ReleaseHistoryRoot "$(releaseRoot)"

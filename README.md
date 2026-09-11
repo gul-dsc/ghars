@@ -221,9 +221,38 @@ dotnet run -- reconcile-organizations            # dry run: prints the plan, cha
 dotnet run -- reconcile-organizations --commit   # applies it
 ```
 
-It is Development-only and refused elsewhere, and it **never deletes an organization**: rows outside
-the roster are set to `Suspended`, which removes them from every selector, catalogue and report while
-leaving their bookings, agenda entries, KPI submissions and audit history untouched.
+It **never deletes an organization**: rows outside the roster are set to `Suspended`, which removes
+them from every selector, catalogue and report while leaving their bookings, agenda entries, KPI
+submissions and audit history untouched.
+
+#### Running it against production
+
+The same command populates a new production database — it is how the 7 clubs and 17 implementing
+entities get there without being typed in by hand. Outside `Development` it needs `--production` as
+well, on the dry run as much as on the commit, so a refusal can never be mistaken for "the plan was
+empty":
+
+```bash
+dotnet GharsPlatform.dll reconcile-organizations --production            # dry run
+dotnet GharsPlatform.dll reconcile-organizations --production --commit   # applies it
+```
+
+Run it from the deployed folder on the server (`C:\inetpub\ghars`), where the connection string is,
+and it prints the environment, server and database name above the plan so you can see which database
+you are about to change.
+
+Two differences from Development, both deliberate:
+
+- **It is additive only.** Organizations outside the roster are listed but *not* suspended, because on
+  a live system a row missing from this hard-coded list is more likely one the DSC added through the
+  admin screens than a stale fixture. `--allow-deactivate` asks for the other half explicitly.
+- **It prints what it could not know.** Created organizations carry placeholder contact details — the
+  roster holds names and logos, not telephone numbers — so finish them in Admin → Organizations.
+
+It creates **no user accounts** in any environment. Each organization's own administrator is created
+in Admin → Users, which needs the bootstrap administrator described above to exist first. The full
+order for a new production database is: bootstrap administrator → `reconcile-organizations
+--production --commit` → contact details and users in the admin screens.
 
 > **This repository is public, and earlier commits contain literal demo passwords.** Those values are
 > permanently exposed. Any database seeded before 2026-09-06 should have its demo passwords rotated —

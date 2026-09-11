@@ -81,6 +81,22 @@ Work through this during a deployment. Background and the reasoning behind each 
       returns 0. Anything else means the application was started in `Development`; those credentials
       are public, so delete the accounts and rotate whatever they could reach
 
+## Master data — new installations only
+
+A new production database is created empty. Until these are done the booking catalogue reads
+*Existing Programs (0)*, and no club or implementing entity exists to sign in as.
+
+- [ ] Roster loaded — from `C:\inetpub\ghars`, run
+      `dotnet GharsPlatform.dll reconcile-organizations --production` and read the plan, then re-run
+      with `--commit`. Confirm the environment, server and database it prints are the right ones
+- [ ] `SELECT COUNT(*) FROM Organizations WHERE Status = 2` returns 25 — 7 clubs, 17 implementing
+      entities, and Dubai Sports Council itself
+- [ ] Placeholder contact details replaced in **Admin → Organizations** — no live row should keep
+      `…@ghars.seed.local`, phone `0000000000`, or the generic address.
+      `SELECT COUNT(*) FROM Organizations WHERE Email LIKE '%@ghars.seed.local'` should reach 0
+- [ ] Each organization's administrator created in **Admin → Users** — real addresses, never
+      `@ghars.local`
+
 ## Smoke tests
 
 - [ ] Public home page renders, in both English and Arabic

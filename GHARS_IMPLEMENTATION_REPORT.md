@@ -3265,9 +3265,17 @@ implementing-entity selector, with no filter anywhere needing to name it.
 
 ### 35.9 Reconciliation of the existing database
 
-`dotnet run -- reconcile-organizations [--commit]` — Development only, refused elsewhere, dry run by
-default. Not a startup step: a routine that rewrote the organization table on every launch would be a
-standing hazard, and there would be no moment at which a human read the plan.
+`dotnet run -- reconcile-organizations [--commit]` — dry run by default. Not a startup step: a routine
+that rewrote the organization table on every launch would be a standing hazard, and there would be no
+moment at which a human read the plan.
+
+Outside `Development` it additionally requires `--production` — on the dry run as well as the commit,
+so a refusal cannot be mistaken for an empty plan — and prints the environment, server and database
+name above the plan. In that mode it is **additive only**: rows outside the roster are listed but not
+suspended, because on a live system an organization missing from a hard-coded list is more likely one
+the DSC added through the admin screens than a stale fixture. `--allow-deactivate` asks for the other
+half by name. It creates no user accounts in any environment, and says so after creating rows whose
+contact details are placeholders.
 
 **It never deletes an organization.** Rows outside the roster are set to `ApprovalStatus.Suspended`,
 which removes them from every selector, catalogue, filter and report while leaving their bookings,

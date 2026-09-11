@@ -152,17 +152,22 @@ if (args.Length > 0 && string.Equals(args[0], "reset-demo-passwords", StringComp
     return await DbSeeder.ResetDevelopmentDemoPasswordsAsync(resetScope.ServiceProvider, app.Environment);
 }
 
-// Brings an existing development database in line with the approved Ghars organization roster.
+// Brings a database in line with the approved Ghars organization roster.
 // Deliberately a command rather than a startup step: it prints the exact plan and changes nothing
-// without --commit, and it never deletes an organization. Refused outside Development.
+// without --commit, and it never deletes an organization.
 //   dotnet run -- reconcile-organizations [--commit]
+// Outside Development --production is required as well, and the command is additive only unless
+// --allow-deactivate is also given. See Helpers/OrganizationReconciler.cs.
+//   dotnet GharsPlatform.dll reconcile-organizations --production [--commit] [--allow-deactivate]
 if (args.Length > 0 && string.Equals(args[0], "reconcile-organizations", StringComparison.OrdinalIgnoreCase))
 {
     using var reconcileScope = app.Services.CreateScope();
     return await OrganizationReconciler.RunAsync(
         reconcileScope.ServiceProvider,
         app.Environment,
-        commit: args.Contains("--commit"));
+        commit: args.Contains("--commit"),
+        allowProduction: args.Contains("--production"),
+        allowDeactivate: args.Contains("--allow-deactivate"));
 }
 
 // Migrate and seed at startup. Structural data (roles, the active season) and the configured bootstrap

@@ -297,6 +297,33 @@ in. A step-by-step operator version with checkboxes is in
    `ASPNETCORE_ENVIRONMENT=Development`. Those accounts and their passwords are public — see
    `SEED_CREDENTIALS.md`. Delete them and rotate anything they could have reached.
 
+10. **Load the approved organization roster.** A production database is created empty, so until this
+    runs there are no clubs and no implementing entities: the booking catalogue reads *Existing
+    Programs (0)*, nobody can be given a club or partner account, and every entity-facing feature —
+    including the availability calendar — has nothing to show. Run it from the deployed folder, where
+    the connection string is:
+
+    ```powershell
+    cd C:\inetpub\ghars
+    dotnet GharsPlatform.dll reconcile-organizations --production            # dry run: read the plan
+    dotnet GharsPlatform.dll reconcile-organizations --production --commit   # apply it
+    ```
+
+    It prints the environment, server and database name above the plan — check them before
+    committing. Expect 25 created on a new install: 7 clubs, 17 implementing entities and Dubai Sports
+    Council itself. Outside `Development` the command is **additive only**; organizations not on the
+    roster are listed but left alone unless you also pass `--allow-deactivate`.
+
+    ```sql
+    SELECT COUNT(*) FROM Organizations WHERE Status = 2;   -- expect 25 on a new install
+    ```
+
+11. **Finish the organizations by hand.** The roster carries names, types and logos — not contact
+    details, and no user accounts. In **Admin → Organizations**, replace each created row's
+    placeholder email (`…@ghars.seed.local`), phone (`0000000000`) and address. Then in **Admin →
+    Users**, create each organization's own administrator. Only after an implementing entity has an
+    administrator can that entity publish availability or receive booking requests.
+
 The startup log states which path ran. On a correct production start you will see
 `Demo/sample seeding skipped: environment is Production, not Development.`
 

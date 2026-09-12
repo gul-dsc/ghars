@@ -422,6 +422,57 @@ If `20260505103249_new one ` appears, it is a pre-existing database and needs th
 7. Run the full §4.1 verification, including the negative checks.
 8. Keep the old host intact until verification passes.
 
+### 6.5 Nobody can sign in
+
+Two different faults look identical from the login page. Separate them before acting — the log tells
+you which one you have. Start the application and read what it says about the bootstrap administrator:
+
+| Log line | Meaning | Fix |
+|---|---|---|
+| `This installation has no administrator and no bootstrap configuration…` (critical) | The database has no administrator at all | Set `GHARS_BOOTSTRAP_ADMIN_EMAIL` / `GHARS_BOOTSTRAP_ADMIN_PASSWORD` and restart — §6.2 step 5 |
+| `Bootstrap administrator <email> created with role Super Admin` | It has just been created | Sign in, change the password, unset the variable |
+| **Nothing at all about bootstrap** | An administrator already exists, so bootstrap was skipped | §6.5.1 below — the password has to be set explicitly |
+
+The third row is the confusing one: the absence of a message *is* the diagnosis. Bootstrap skips
+silently once any Super Admin or DSC Admin exists, so setting the environment variables achieves
+nothing and gives no hint as to why.
+
+#### 6.5.1 Setting a known password on an existing administrator
+
+```powershell
+cd C:\inetpub\ghars
+dotnet GharsPlatform.dll set-admin-password --email <the administrator's address> --production
+```
+
+It prints the environment, server and database it is about to change, then the account, its roles and
+its lockout state, and prompts twice for the new password without echoing it. Nothing is written until
+both entries match and the password satisfies the configured rules. The password is never accepted as
+a command-line argument; for an unattended run set `GHARS_ADMIN_PASSWORD` and remove it afterwards.
+
+To find out which addresses qualify, name one that does not — the refusal lists every administrator
+account on the database. Or query it directly:
+
+```sql
+SELECT u.Email, r.Name AS RoleName, u.LockoutEnd, u.AccessFailedCount
+FROM AspNetUsers u
+JOIN AspNetUserRoles ur ON ur.UserId = u.Id
+JOIN AspNetRoles r ON r.Id = ur.RoleId
+ORDER BY r.Name, u.Email;
+```
+
+Two things the command deliberately will not do. It only targets accounts already holding **Super
+Admin** or **DSC Admin** — a console command able to rewrite any password would be a way to sign in as
+a club and act as them, so everyone else is reset from Admin → Users by a signed-in human. And it never
+creates an account: a mistyped address fails loudly rather than quietly minting a second administrator.
+
+Lockout is cleared as part of the same operation. Five failed attempts lock an account for fifteen
+minutes, and a locked account rejects even the correct password — so a password set without clearing
+the lock would look exactly like the command having failed. If sign-in fails and `AccessFailedCount`
+is at 5, waiting fifteen minutes may be the entire fix.
+
+Changing the password rotates the security stamp, which signs out every existing session for that
+account. That is intended.
+
 ---
 
 ## 7. Disaster recovery
@@ -455,6 +506,8 @@ If `20260505103249_new one ` appears, it is a pre-existing database and needs th
 | Migrate protected files (dry run) | `dotnet GharsPlatform.dll migrate-protected-files` |
 | Migrate protected files (commit) | `dotnet GharsPlatform.dll migrate-protected-files --commit` |
 | Purge legacy copies | `dotnet GharsPlatform.dll migrate-protected-files --purge` |
+| Load the approved roster | `dotnet GharsPlatform.dll reconcile-organizations --production [--commit]` |
+| Reset an administrator password | `dotnet GharsPlatform.dll set-admin-password --email <address> --production` |
 | Verify protection | `GET /uploads/kpi/<file>` → **404** |
 
 **Related:** `GHARS_IMPLEMENTATION_REPORT.md` §20 (protected storage architecture and authorization rules)

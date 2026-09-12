@@ -170,6 +170,20 @@ if (args.Length > 0 && string.Equals(args[0], "reconcile-organizations", StringC
         allowDeactivate: args.Contains("--allow-deactivate"));
 }
 
+// Recovery for a forgotten administrator password, where the admin screens cannot help because nobody
+// can sign in to reach them. Only ever targets an account that already holds an administrative role,
+// and takes the password from the console or GHARS_ADMIN_PASSWORD, never from an argument.
+//   dotnet GharsPlatform.dll set-admin-password --email <address> [--production]
+if (args.Length > 0 && string.Equals(args[0], "set-admin-password", StringComparison.OrdinalIgnoreCase))
+{
+    using var passwordScope = app.Services.CreateScope();
+    return await AdminPasswordSetter.RunAsync(
+        passwordScope.ServiceProvider,
+        app.Environment,
+        email: AdminPasswordSetter.ReadEmailArgument(args),
+        allowProduction: args.Contains("--production"));
+}
+
 // Migrate and seed at startup. Structural data (roles, the active season) and the configured bootstrap
 // administrator run in every environment; demo/sample data is Development-only. Nothing here changes
 // an existing user's password — see Data/DbSeeder.cs.

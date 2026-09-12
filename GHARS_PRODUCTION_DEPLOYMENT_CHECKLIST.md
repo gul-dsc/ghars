@@ -72,7 +72,9 @@ Work through this during a deployment. Background and the reasoning behind each 
 - [ ] Log shows `Demo/sample seeding skipped: environment is Production, not Development.`
 - [ ] Required roles seeded — `SELECT COUNT(*) FROM AspNetRoles` returns 7
 - [ ] An active season exists — `SELECT COUNT(*) FROM Seasons WHERE IsActive = 1` returns at least 1
-- [ ] Administrator sign-in works
+- [ ] Administrator sign-in works. If it does not, read the log before changing anything: **no**
+      bootstrap message at all means an administrator already exists and bootstrap was skipped
+      silently — see `GHARS_PRODUCTION_OPERATIONS.md` §6.5
 - [ ] Bootstrap password changed after first sign-in, and
       `GHARS_BOOTSTRAP_ADMIN_PASSWORD` removed from the deployment environment
 - [ ] Restart the application, then sign in again — **the password still works.** Startup must never

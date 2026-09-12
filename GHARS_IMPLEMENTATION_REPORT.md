@@ -3959,3 +3959,69 @@ pattern — `PartnerProfile` and `RewardRedemption` already produce the identica
 harmless here because every club-facing query filters entities through
 `Organizations.ApprovedPartnerIds()`, which applies the soft-delete filter itself, so a
 soft-deleted entity's slots are excluded rather than orphaned.
+
+---
+
+## 39. Administrator Password Recovery (2026-09-12)
+
+### 39.1 The gap
+
+A production database reached a state the application could not repair from inside itself: an
+administrator account existed, but nobody knew its password. Every route out was closed.
+
+* **Admin → Users** resets any password, but needs a signed-in Super Admin to reach it.
+* **Bootstrap** (`GHARS_BOOTSTRAP_ADMIN_*`) returns immediately once any Super Admin or DSC Admin
+  exists, and even when it does run against an address that already has an account it grants the role
+  and leaves the password alone. Both behaviours are correct — bootstrap must never be a way to seize
+  an existing account — and both mean it cannot help here.
+* **`reset-demo-passwords`** is scoped to the `@ghars.local` domain and refuses outside Development.
+* There is **no forgot-password flow** and no email sender configured, so no self-service path exists.
+
+The failure is also silent. Bootstrap's skip is logged at `Debug`, so at the default `Information`
+level an operator setting the environment variables sees no message at all — not an error, not a
+confirmation. The absence of output is the only signal, which is exactly the signal nobody reads.
+
+### 39.2 The command
+
+`Helpers/AdminPasswordSetter.cs`, wired in `Program.cs` beside the other operational commands:
+
+```
+dotnet GharsPlatform.dll set-admin-password --email <address> --production
+```
+
+| Safety | Why |
+|---|---|
+| `--production` required outside Development | Changing a live credential should be a deliberate act, not a command recalled from shell history. Same rule as `reconcile-organizations`. |
+| Target must already hold Super Admin or DSC Admin | A console command able to rewrite any password would be a way to sign in as a club and act as them. The blast radius is capped at accounts an administrator could already reset from the admin screens. |
+| Target must already exist | A typo should fail loudly, not quietly mint a second administrator. |
+| Password never a command-line argument | Arguments appear in the process list and persist in shell history. It is read unechoed and typed twice, or taken from `GHARS_ADMIN_PASSWORD`. |
+| Goes through `UserManager` | Applies the configured password rules, produces the hash format sign-in verifies, and rotates the security stamp — which signs out existing sessions, as a password change should. |
+| Prints environment, server and database first | The operator sees which database is about to change, then the account, roles and lockout state, before typing anything. |
+| Refusals list the administrators that do exist | The next question after "not that one" is "then which?", and the operator is already at a console with database access. |
+
+Lockout is cleared in the same operation. Five failed attempts lock an account for fifteen minutes and
+a locked account rejects even a correct password, so setting a new one without clearing the lock would
+present as the command having silently failed.
+
+### 39.3 Verification
+
+Against a scratch database (`GharsPlatformPwTest`, created and dropped by the run), environment
+`Production` throughout:
+
+| Scenario | Result |
+|---|---|
+| No `--production` | Refused, exit 1 |
+| Address with no account | Refused, exit 1, administrator list printed |
+| Account holding no administrative role | Refused, exit 1, roles reported as `none` |
+| Password below the configured rules | Refused with all four Identity messages; hash and `AccessFailedCount` unchanged |
+| Valid password on a locked account | Exit 0; security stamp rotated, `AccessFailedCount` 5 → 0, `LockoutEnd` → null |
+| **Sign-in with the old password** | HTTP 200 (login page re-rendered), **no auth cookie** |
+| **Sign-in with the new password** | HTTP 302, `.AspNetCore.Identity.Application` cookie issued |
+
+The last two rows are the ones that matter: `ResetPasswordAsync` reporting success is not the same
+claim as the account being able to sign in, so both were exercised over HTTP against the running
+application rather than inferred from the return value.
+
+### 39.4 Build
+
+`dotnet build` → **0 errors, 1 warning** — the retained `CS0108` on `Activity.CreatedByUserId`.

@@ -258,6 +258,27 @@ order for a new production database is: bootstrap administrator → `reconcile-o
 > permanently exposed. Any database seeded before 2026-09-06 should have its demo passwords rotated —
 > see the notice at the top of `SEED_CREDENTIALS.md`.
 
+### Recovering a forgotten administrator password
+
+There is one state the application cannot fix from inside itself: the administrator password is
+unknown, so nobody can reach Admin → Users to reset it. The bootstrap settings do not help — they are
+skipped entirely once any administrator exists, and against an address that already has an account
+they grant the role and leave the password alone, because bootstrap must never be a way to seize an
+existing account. Run this from the deployed folder instead:
+
+```bash
+dotnet GharsPlatform.dll set-admin-password --email someone@example.com --production
+```
+
+It prompts for the new password twice, unechoed, and never accepts it as an argument — arguments are
+visible in the process list and persist in shell history. For an unattended run, set
+`GHARS_ADMIN_PASSWORD` instead and remove it afterwards.
+
+The account must already exist and must already hold **Super Admin** or **DSC Admin**; anything else
+is refused, and the refusal lists the administrator accounts the database actually has. Everyone else
+is reset through Admin → Users by a signed-in human. Lockout is cleared as part of the same operation,
+because a locked account rejects even a correct password and would look like the command had failed.
+
 ### Runtime verification and test fixtures
 
 A verification pass that creates rows in the development database must be able to remove exactly

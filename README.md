@@ -297,6 +297,18 @@ passwords are printed once at the end of a committed run and stored nowhere; a l
 Admin → Users. Dubai Sports Council is deliberately excluded — it is not an entity a club books from,
 and its people are administrators.
 
+**If the printed passwords are lost**, issue new ones rather than hunting for them — they are stored
+nowhere and cannot be recovered:
+
+```bash
+dotnet run -- seed-organization-accounts --domain dubaisc.ae --production --reset-passwords --commit
+```
+
+This only ever touches accounts at the addresses the command itself generates. An organization whose
+link belongs to some other account — a real person's, say — is reported as *linked to a different
+account* and left untouched; that address match is the whole safety of the flag. Lockout is cleared at
+the same time, and the security stamp rotates, which signs out any existing session.
+
 **Do not copy the development accounts to production instead.** They live at `@ghars.local` and share
 four passwords that are permanently published in this repository's git history. This command exists so
 that the production accounts are new accounts with new secrets.

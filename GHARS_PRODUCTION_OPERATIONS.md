@@ -514,6 +514,33 @@ regardless of what `ASPNETCORE_ENVIRONMENT` says. That is the check that matters
 `dotnet run` locally picks up `launchSettings.json`, which forces the environment to Development, so an
 environment-based gate would wave this straight through.
 
+#### 6.6.1.1 The printed passwords were lost
+
+They are unrecoverable. Each is generated at the moment of creation, printed once, and stored nowhere —
+not in the database, not in a log, not in the command. There is nothing to look up.
+
+The tell that this has happened is a dry run reporting `Create (0)` with everything under
+`Leave alone (24)`: the accounts exist, so the command has nothing to create and prints no
+credentials. A `--commit` run in that state writes nothing and prints nothing, which is easy to
+misread as the command having failed.
+
+Issue new passwords instead:
+
+```powershell
+dotnet run -- seed-organization-accounts --domain dubaisc.ae --production --reset-passwords          # plan
+dotnet run -- seed-organization-accounts --domain dubaisc.ae --production --reset-passwords --commit |
+    Tee-Object -FilePath "$env:USERPROFILE\ghars-accounts.txt"
+```
+
+**Use a new capture filename if the old one still exists** — `Tee-Object` overwrites, and a run that
+creates nothing will happily replace a file that held real credentials with one that holds none.
+
+The flag only reaches accounts at the addresses the command itself generates
+(`club-<slug>@domain`, `partner-<slug>@domain`). An organization whose link belongs to any other
+account is reported as *linked to a different account* and left untouched, so a real person's account
+cannot be caught up in a bulk reset. Lockout is cleared at the same time, and the rotated security
+stamp signs out any existing session for the accounts that were reset.
+
 #### 6.6.2 Why Admin → Users is not sufficient on its own
 
 Every scoped surface — bookings, agenda, attendance, KPI, gallery, annual reports, protected file
@@ -581,6 +608,7 @@ figures inside DSC's governance reporting.
 | Load the approved roster | `dotnet GharsPlatform.dll reconcile-organizations --production [--commit]` |
 | Reset an administrator password | `dotnet GharsPlatform.dll set-admin-password --email <address> --production` |
 | Create the club/entity accounts | `dotnet run -- seed-organization-accounts --domain <domain> --production [--commit]` |
+| Re-issue their passwords | `… seed-organization-accounts --domain <domain> --production --reset-passwords --commit` |
 | Verify protection | `GET /uploads/kpi/<file>` → **404** |
 
 **Related:** `GHARS_IMPLEMENTATION_REPORT.md` §20 (protected storage architecture and authorization rules)

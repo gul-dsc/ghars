@@ -175,6 +175,9 @@ if (args.Length > 0 && string.Equals(args[0], "reconcile-organizations", StringC
 // Development come from demo seeding, which never runs outside it. Dry run unless --commit is given,
 // and --production is required whenever the target database is not on this machine.
 //   dotnet run -- seed-organization-accounts --domain dubaisc.ae --production [--commit]
+// The generated passwords are printed once and stored nowhere, so --reset-passwords issues new ones
+// for the accounts this command owns — those at the addresses it generates, and no others.
+//   dotnet run -- seed-organization-accounts --domain dubaisc.ae --production --reset-passwords --commit
 // See Helpers/OrganizationAccountSeeder.cs.
 if (args.Length > 0 && string.Equals(args[0], "seed-organization-accounts", StringComparison.OrdinalIgnoreCase))
 {
@@ -184,7 +187,8 @@ if (args.Length > 0 && string.Equals(args[0], "seed-organization-accounts", Stri
         app.Environment,
         domain: OrganizationAccountSeeder.ReadDomainArgument(args),
         commit: args.Contains("--commit"),
-        allowProduction: args.Contains("--production"));
+        allowProduction: args.Contains("--production"),
+        resetPasswords: args.Contains("--reset-passwords"));
 }
 
 // Recovery for a forgotten administrator password, where the admin screens cannot help because nobody

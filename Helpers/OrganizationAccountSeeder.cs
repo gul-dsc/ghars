@@ -71,6 +71,12 @@ public static class OrganizationAccountSeeder
         /// <summary>An account exists but is missing its link or role: repair those, keep the password.</summary>
         Repair,
 
+        /// <summary>
+        /// <c>--reset-passwords</c>: this command's own account for the organization exists, and is
+        /// being given a new generated password because the original was printed once and lost.
+        /// </summary>
+        ResetPassword,
+
         /// <summary>Already has a linked account: leave it entirely alone.</summary>
         Skip
     }
@@ -88,7 +94,8 @@ public static class OrganizationAccountSeeder
         IHostEnvironment environment,
         string? domain,
         bool commit,
-        bool allowProduction)
+        bool allowProduction,
+        bool resetPasswords = false)
     {
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("OrganizationAccountSeeder");
         var db = services.GetRequiredService<AppDbContext>();
@@ -134,6 +141,8 @@ public static class OrganizationAccountSeeder
         Console.WriteLine(commit
             ? "Mode        : COMMIT — accounts will be created"
             : "Mode        : DRY RUN — nothing will be written (add --commit to apply)");
+        if (resetPasswords)
+            Console.WriteLine("Passwords   : RESET — every account listed below gets a new one");
 
         var clubs = await db.Organizations.ApprovedClubs().ToListAsync();
         var partners = await db.Organizations.ApprovedPartners().ToListAsync();
@@ -144,9 +153,9 @@ public static class OrganizationAccountSeeder
 
         var plans = new List<Plan>();
         foreach (var club in clubs)
-            plans.Add(await PlanForAsync(userManager, club, RoleNames.ClubAdmin, "club", cleanDomain, linkedOrgIds));
+            plans.Add(await PlanForAsync(userManager, club, RoleNames.ClubAdmin, "club", cleanDomain, linkedOrgIds, resetPasswords));
         foreach (var partner in partners)
-            plans.Add(await PlanForAsync(userManager, partner, RoleNames.PartnerAdmin, "partner", cleanDomain, linkedOrgIds));
+            plans.Add(await PlanForAsync(userManager, partner, RoleNames.PartnerAdmin, "partner", cleanDomain, linkedOrgIds, resetPasswords));
 
         if (plans.Count == 0)
         {
@@ -180,6 +189,8 @@ public static class OrganizationAccountSeeder
         }
 
         PrintSection("Create", plans.Where(x => x.Action == PlannedAction.Create).ToList());
+        if (resetPasswords)
+            PrintSection("Reset password", plans.Where(x => x.Action == PlannedAction.ResetPassword).ToList());
         PrintSection("Repair", plans.Where(x => x.Action == PlannedAction.Repair).ToList());
         PrintSection("Leave alone", plans.Where(x => x.Action == PlannedAction.Skip).ToList());
 
@@ -242,6 +253,39 @@ public static class OrganizationAccountSeeder
                     break;
                 }
 
+                case PlannedAction.ResetPassword:
+                {
+                    var user = plan.ExistingUser!;
+                    var password = GeneratePassword();
+
+                    // Through a reset token rather than by writing a hash: it applies the configured
+                    // password rules, produces the hash sign-in actually verifies, and rotates the
+                    // security stamp — which signs out any existing session, as a password change should.
+                    var token = await userManager.GeneratePasswordResetTokenAsync(user);
+                    var reset = await userManager.ResetPasswordAsync(user, token, password);
+                    if (!reset.Succeeded)
+                    {
+                        logger.LogError(
+                            "The password for {Email} was NOT changed: {Errors}",
+                            plan.Email, string.Join(", ", reset.Errors.Select(e => e.Description)));
+                        failed++;
+                        continue;
+                    }
+
+                    // A new password on a still-locked account is rejected at sign-in, which reads as
+                    // this command having silently failed.
+                    await userManager.SetLockoutEndDateAsync(user, null);
+                    await userManager.ResetAccessFailedCountAsync(user);
+
+                    // The account may also predate its link, so make sure both hold.
+                    if (!await userManager.IsInRoleAsync(user, plan.Role))
+                        await userManager.AddToRoleAsync(user, plan.Role);
+                    EnsureLink(db, plan.Organization, user.Id);
+
+                    created.Add((plan.Organization.NameEn, plan.Email, password));
+                    break;
+                }
+
                 case PlannedAction.Repair:
                 {
                     var user = plan.ExistingUser!;
@@ -269,7 +313,9 @@ public static class OrganizationAccountSeeder
         {
             var width = Math.Max(created.Max(x => x.Email.Length), 5);
             Console.WriteLine();
-            Console.WriteLine("New accounts. These passwords are shown once and are stored nowhere —");
+            Console.WriteLine(resetPasswords
+                ? "New passwords. These are shown once and are stored nowhere —"
+                : "New accounts. These passwords are shown once and are stored nowhere —");
             Console.WriteLine("record them now, then hand each organization its own line.");
             Console.WriteLine();
             Console.WriteLine($"{"Email".PadRight(width)}  Password          Organization");
@@ -279,7 +325,9 @@ public static class OrganizationAccountSeeder
         }
 
         Console.WriteLine();
-        Console.WriteLine($"Created {created.Count}, repaired {repaired}, failed {failed}.");
+        Console.WriteLine(resetPasswords
+            ? $"Passwords set {created.Count}, repaired {repaired}, failed {failed}."
+            : $"Created {created.Count}, repaired {repaired}, failed {failed}.");
 
         if (created.Count > 0)
         {
@@ -302,26 +350,36 @@ public static class OrganizationAccountSeeder
         string role,
         string prefix,
         string domain,
-        HashSet<int> linkedOrgIds)
+        HashSet<int> linkedOrgIds,
+        bool resetPasswords)
     {
         var email = BuildEmail(prefix, organization.NameEn, domain);
         var existing = await userManager.Users.FirstOrDefaultAsync(x => x.Email == email);
+        var orgIsLinked = linkedOrgIds.Contains(organization.Id);
 
-        if (linkedOrgIds.Contains(organization.Id))
+        if (existing is null)
         {
-            // Somebody is already attached to this organization. Whether that is this address or a real
-            // person's account created by hand, it is not this command's business to touch it.
-            return new Plan(organization, PlannedAction.Skip, email, role, existing, "already has a linked account");
+            // Somebody else is attached to this organization — a real person created by hand, say.
+            // Not this command's account, so not this command's business.
+            return orgIsLinked
+                ? new Plan(organization, PlannedAction.Skip, email, role, null, "linked to a different account")
+                : new Plan(organization, PlannedAction.Create, email, role, null, string.Empty);
         }
 
-        if (existing is not null)
+        // The account at the address this command generates: one it created, or one deliberately named
+        // to match. That address match is the whole safety of --reset-passwords — it is why the flag
+        // cannot reach a person's own account that merely happens to be linked to an organization.
+        if (resetPasswords)
+            return new Plan(organization, PlannedAction.ResetPassword, email, role, existing, "new password");
+
+        if (!orgIsLinked)
         {
             // The Admin -> Users case: created through the UI, which writes PrimaryOrganizationId but
             // no link, so it signs in to an empty workspace.
             return new Plan(organization, PlannedAction.Repair, email, role, existing, "account exists, link missing");
         }
 
-        return new Plan(organization, PlannedAction.Create, email, role, null, string.Empty);
+        return new Plan(organization, PlannedAction.Skip, email, role, existing, "already has a linked account");
     }
 
     private static void EnsureLink(AppDbContext db, Organization organization, string userId)

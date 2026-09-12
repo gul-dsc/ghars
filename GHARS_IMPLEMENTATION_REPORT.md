@@ -4116,6 +4116,36 @@ Tests 11–14 are the ones that matter. `CreateAsync` reporting success is not t
 able to sign in, and signing in is not the same claim as the workspace resolving — 13 and 14 are the
 organization link being read back by the application through its own code path.
 
-### 40.5 Build
+### 40.5 `--reset-passwords`, and the failure that prompted it
+
+Generated-once-printed-once is the right design and it has an obvious failure mode, which occurred on
+the first production run: the output was lost, and there is nothing to look up. Worse, the second
+attempt is silent about it — with the accounts already created, the plan reads `Create (0)` /
+`Leave alone (24)` and a `--commit` writes nothing and prints nothing, which looks like a broken
+command rather than a correct refusal.
+
+`--reset-passwords` issues new ones. Its safety is not a role check but an **address match**: it only
+touches the account at the address the command itself generates for that organization. An organization
+whose link belongs to anything else is reported as *linked to a different account* and skipped, so a
+bulk reset cannot reach a person's own account that merely happens to be linked to an organization.
+The reset goes through `GeneratePasswordResetTokenAsync` / `ResetPasswordAsync`, clears lockout, and
+rotates the security stamp.
+
+Verified on a scratch database of 24 seeded accounts, one of which was re-addressed to
+`ahmed.person@dubaisc.ae` to stand in for a real person holding an organization link:
+
+| Check | Result |
+|---|---|
+| Dry run | 23 to reset; the person's organization reported *linked to a different account* |
+| Commit | `Passwords set 23` |
+| Hashes changed | 23 |
+| Hashes **unchanged** | 1 — `ahmed.person@dubaisc.ae`, exactly the account that must not be touched |
+| Security stamps rotated | 23 |
+| Distinct hashes | 24 of 24 |
+| Links / roles / lockouts | 24 links, 24 roles, 0 lockouts |
+| **HTTP sign-in, old password** | 200, no cookie |
+| **HTTP sign-in, new password** | 302 + auth cookie; `/partner` names *Dubai Police* |
+
+### 40.6 Build
 
 `dotnet build` → **0 errors, 1 warning** — the retained `CS0108` on `Activity.CreatedByUserId`.

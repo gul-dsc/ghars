@@ -170,6 +170,23 @@ if (args.Length > 0 && string.Equals(args[0], "reconcile-organizations", StringC
         allowDeactivate: args.Contains("--allow-deactivate"));
 }
 
+// Creates the sign-in account each approved club and implementing entity needs. A production database
+// has the organization roster but no organization accounts, because the accounts that exist in
+// Development come from demo seeding, which never runs outside it. Dry run unless --commit is given,
+// and --production is required whenever the target database is not on this machine.
+//   dotnet run -- seed-organization-accounts --domain dubaisc.ae --production [--commit]
+// See Helpers/OrganizationAccountSeeder.cs.
+if (args.Length > 0 && string.Equals(args[0], "seed-organization-accounts", StringComparison.OrdinalIgnoreCase))
+{
+    using var accountScope = app.Services.CreateScope();
+    return await OrganizationAccountSeeder.RunAsync(
+        accountScope.ServiceProvider,
+        app.Environment,
+        domain: OrganizationAccountSeeder.ReadDomainArgument(args),
+        commit: args.Contains("--commit"),
+        allowProduction: args.Contains("--production"));
+}
+
 // Recovery for a forgotten administrator password, where the admin screens cannot help because nobody
 // can sign in to reach them. Only ever targets an account that already holds an administrative role,
 // and takes the password from the console or GHARS_ADMIN_PASSWORD, never from an argument.

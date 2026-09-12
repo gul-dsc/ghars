@@ -96,8 +96,22 @@ A new production database is created empty. Until these are done the booking cat
 - [ ] Placeholder contact details replaced in **Admin → Organizations** — no live row should keep
       `…@ghars.seed.local`, phone `0000000000`, or the generic address.
       `SELECT COUNT(*) FROM Organizations WHERE Email LIKE '%@ghars.seed.local'` should reach 0
-- [ ] Each organization's administrator created in **Admin → Users** — real addresses, never
-      `@ghars.local`
+- [ ] Organization accounts created — from a working copy with the production connection string in
+      `ConnectionStrings__DefaultConnection`, run
+      `dotnet run -- seed-organization-accounts --domain <domain> --production`, read the plan, then
+      re-run with `--commit`. One account per approved club and implementing entity, each with its own
+      generated password, **printed once and stored nowhere**. Capture that output before closing the
+      window
+- [ ] Generated passwords distributed, one line per organization, and the capture file deleted
+- [ ] `SELECT COUNT(DISTINCT OrganizationId) FROM OrganizationAdminLinks` returns 24
+- [ ] No account can sign in to an empty workspace — this must return no rows:
+      `SELECT u.Email FROM AspNetUsers u JOIN AspNetUserRoles ur ON ur.UserId = u.Id
+      JOIN AspNetRoles r ON r.Id = ur.RoleId AND r.Name IN ('Club Admin','Partner Admin')
+      WHERE NOT EXISTS (SELECT 1 FROM OrganizationAdminLinks l WHERE l.UserId = u.Id)`.
+      **Admin → Users writes `PrimaryOrganizationId` but not the link**, and every scoped surface reads
+      the link — see `GHARS_PRODUCTION_OPERATIONS.md` §6.6.2. Re-running the command repairs these
+      without changing any password
+- [ ] Any additional people created in **Admin → Users** — real addresses, never `@ghars.local`
 
 ## Smoke tests
 

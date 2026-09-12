@@ -4025,3 +4025,97 @@ application rather than inferred from the return value.
 ### 39.4 Build
 
 `dotnet build` → **0 errors, 1 warning** — the retained `CS0108` on `Activity.CreatedByUserId`.
+
+---
+
+## 40. Organization Account Provisioning (2026-09-12)
+
+### 40.1 The gap
+
+A production database reaches a working state through two commands and one startup path: migrations
+build the schema, `reconcile-organizations` loads the approved roster, and the bootstrap settings
+create the first administrator. Nothing in that sequence creates the accounts the organizations
+themselves sign in with. Those exist in development only because `DbSeeder.SeedOrgUsersAndLearningProgramsAsync`
+creates them, and demo seeding never runs outside Development.
+
+The result is a platform that works for DSC and for nobody else: 24 approved organizations that are
+records rather than tenants, a booking catalogue with no offerings because no entity can sign in to
+publish one, and no obvious error anywhere to explain it.
+
+The instinct is to copy the development accounts across. They cannot be copied. They live at
+`@ghars.local` and share four passwords that are permanently published in this repository's git
+history, and more broadly the development database is not a source of production content — every row
+in it is generated demo data, including bookings, certificates, KPI submissions and survey responses
+that feed the executive dashboard and the annual report.
+
+### 40.2 The command
+
+`Helpers/OrganizationAccountSeeder.cs`, wired into `Program.cs` beside the other operational commands
+and returning before the web host starts:
+
+```
+dotnet run -- seed-organization-accounts --domain <domain> --production [--commit]
+```
+
+One account per approved club and implementing entity, addressed `club-<slug>@domain` and
+`partner-<slug>@domain` to match development. Dubai Sports Council is excluded by
+`ApprovedPartners()`, which has always excluded it — DSC is not an entity a club books from, and its
+people are administrators.
+
+| Safety | Why |
+|---|---|
+| Dry run unless `--commit` | The plan is printed in full first. "Create two dozen accounts" is not a sentence to run on trust |
+| `--production` required whenever the target database is **not local** | This is expected to run from a developer machine against a remote database. `dotnet run` reads `launchSettings.json`, which forces `Development`, so an environment-based gate would wave it straight through. The connection string is the honest signal, and it is read without opening a connection |
+| `--domain` required, `.local` refused | The demo domain carries published passwords. No default, because the address is what each organization signs in with |
+| Never touches an existing password | An organization with a linked account is skipped entirely; one whose account exists but lacks the link is repaired, password and security stamp untouched |
+| Required roles verified up front | Roles are seeded at startup. Without them `AddToRoleAsync` fails per account, leaving users who sign in holding no authority at all |
+| Duplicate addresses caught before writing | Two names differing only in punctuation slug identically; the second `CreateAsync` would fail halfway through a committed run |
+| Per-account CSPRNG password, printed once | No shared password, nothing derived from the organization name, nothing stored |
+
+Passwords are 16 characters over an alphabet excluding `0/O` and `1/l/I`, with one character
+guaranteed from each required class and the result shuffled with a CSPRNG Fisher-Yates — without the
+shuffle the first four positions would always be lower/upper/digit/symbol, giving away a quarter of
+the password.
+
+### 40.3 The link, which is the actual point
+
+Every scoped surface in the application — bookings, agenda, attendance, KPI, gallery, annual reports,
+protected file downloads — resolves *which organization is this user* from `OrganizationAdminLink`, and
+so does `WorkspaceContext`. `ApplicationUser.PrimaryOrganizationId` is a convenience field read by the
+admin user screens and one attendance default.
+
+**`Admin → Users` writes the field and not the link.** An account created there signs in successfully
+and then sees an empty workspace, which reads as a broken deployment rather than a half-finished
+account. The deployment checklist previously directed operators to create organization administrators
+exactly that way; §6.6.2 of `GHARS_PRODUCTION_OPERATIONS.md` and the checklist now carry the query that
+detects it, and re-running this command repairs it in place.
+
+### 40.4 Verification
+
+Against a scratch database (`GharsOrgAcctTest`) carrying the 25-organization production roster, then
+dropped:
+
+| # | Scenario | Result |
+|---|---|---|
+| 1 | Roles not seeded | Refused, exit 1, names the missing role |
+| 2 | No `--domain` | Refused, exit 1 |
+| 3 | `--domain ghars.local --commit` | Refused, exit 1, nothing written |
+| 4 | Remote server, no `--production` | Refused, exit 1, **before opening a connection** |
+| 5 | Dry run | 24 planned — 7 clubs, 17 entities, DSC absent; nothing written |
+| 6 | `--commit` | 24 created: 7 Club Admin, 17 Partner Admin |
+| 7 | Row integrity | 0 accounts without a role, without a link, without a password hash, or with a link disagreeing with `PrimaryOrganizationId`; `RoleHint` matched `OrganizationType` throughout |
+| 8 | Password independence | 24 distinct password hashes |
+| 9 | Re-run | 24 "leave alone", nothing written |
+| 10 | Link deleted, re-run | 1 repaired; `PasswordHash` and `SecurityStamp` byte-identical before and after |
+| 11 | **HTTP sign-in, wrong password** | 200, no auth cookie |
+| 12 | **HTTP sign-in, generated password** | 302 with `.AspNetCore.Identity.Application` |
+| 13 | **`/partner` as the entity** | 200, page names *Dubai Police* |
+| 14 | **`/Bookings/Create` as the club** | 200, page names *Hatta Club* |
+
+Tests 11–14 are the ones that matter. `CreateAsync` reporting success is not the same claim as being
+able to sign in, and signing in is not the same claim as the workspace resolving — 13 and 14 are the
+organization link being read back by the application through its own code path.
+
+### 40.5 Build
+
+`dotnet build` → **0 errors, 1 warning** — the retained `CS0108` on `Activity.CreatedByUserId`.

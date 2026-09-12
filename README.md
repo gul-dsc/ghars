@@ -279,6 +279,43 @@ is refused, and the refusal lists the administrator accounts the database actual
 is reset through Admin → Users by a signed-in human. Lockout is cleared as part of the same operation,
 because a locked account rejects even a correct password and would look like the command had failed.
 
+### Creating the club and implementing-entity accounts
+
+`reconcile-organizations` gives a production database its organizations. It does not give them
+accounts: the club and partner logins that exist in development come from demo seeding, which never
+runs outside Development. Until this command is run, the 24 approved organizations are records that
+nobody can sign in as.
+
+```bash
+dotnet run -- seed-organization-accounts --domain dubaisc.ae --production            # prints the plan
+dotnet run -- seed-organization-accounts --domain dubaisc.ae --production --commit   # applies it
+```
+
+One account per approved club and implementing entity, addressed `club-<slug>@domain` and
+`partner-<slug>@domain` to match development, each with its own password generated from a CSPRNG. The
+passwords are printed once at the end of a committed run and stored nowhere; a lost one is reset from
+Admin → Users. Dubai Sports Council is deliberately excluded — it is not an entity a club books from,
+and its people are administrators.
+
+**Do not copy the development accounts to production instead.** They live at `@ghars.local` and share
+four passwords that are permanently published in this repository's git history. This command exists so
+that the production accounts are new accounts with new secrets.
+
+**It writes the organization link, and that is the point.** Every scoped surface in the application —
+bookings, agenda, attendance, KPI, gallery, annual reports, protected file downloads — resolves *which
+organization is this user* from `OrganizationAdminLink`, and so does the workspace header.
+`ApplicationUser.PrimaryOrganizationId` is a convenience field that almost nothing reads. An account
+created through **Admin → Users** gets the field but not the link, so it signs in successfully and then
+sees an empty workspace. Re-running this command repairs such an account: it adds the missing link and
+role and leaves the password untouched.
+
+`--production` is required whenever the target database is not on this machine, **regardless of the
+hosting environment** — running it from a developer machine against a remote database is the expected
+way to use it, and `ASPNETCORE_ENVIRONMENT` would otherwise say Development and waive the
+confirmation. A `.local` domain is refused outright. Nothing is written without `--commit`, and an
+organization that already has a linked account is left entirely alone, so the command is safe to
+re-run after the roster grows.
+
 ### Runtime verification and test fixtures
 
 A verification pass that creates rows in the development database must be able to remove exactly

@@ -62,13 +62,23 @@ public static class AdminPasswordSetter
     {
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("AdminPasswordSetter");
 
+        var db = services.GetRequiredService<Data.AppDbContext>();
+        var connection = db.Database.GetDbConnection();
+
+        // The environment says how the process was configured; the connection string says whose
+        // credential is about to be rewritten. A working copy run against a remote database reports
+        // Development — launchSettings.json forces it — so the environment alone would waive the
+        // confirmation on exactly the run that most needs it. Read without opening a connection, so
+        // the refusal happens before the database is touched at all.
         var isDevelopment = environment.IsDevelopment();
-        if (!isDevelopment && !allowProduction)
+        var isRemote = !DatabaseTarget.IsLocalServer(connection.DataSource);
+
+        if ((isRemote || !isDevelopment) && !allowProduction)
         {
             logger.LogError(
-                "set-admin-password refused: the environment is {Environment}, not Development. " +
-                "Re-run with --production to confirm you mean to change a live administrator's credential.",
-                environment.EnvironmentName);
+                "set-admin-password refused: the target is {Server}/{Database} in the {Environment} environment. " +
+                "Re-run with --production to confirm you mean to change that administrator's credential.",
+                connection.DataSource, connection.Database, environment.EnvironmentName);
             return 1;
         }
 
@@ -82,13 +92,11 @@ public static class AdminPasswordSetter
 
         email = email.Trim();
 
-        var db = services.GetRequiredService<Data.AppDbContext>();
-
-        // Outside Development this rewrites a live credential, so name the target before touching it —
-        // the same reason the reconciler prints its banner. See Helpers/OrganizationReconciler.cs.
-        if (!isDevelopment)
+        // Against anything but a local development database this rewrites a live credential, so name
+        // the target before touching it — the same reason the reconciler prints its banner. See
+        // Helpers/OrganizationReconciler.cs.
+        if (isRemote || !isDevelopment)
         {
-            var connection = db.Database.GetDbConnection();
             Console.WriteLine();
             Console.WriteLine($"Environment : {environment.EnvironmentName}");
             Console.WriteLine($"Server      : {connection.DataSource}");

@@ -174,6 +174,8 @@ public class DashboardController : Controller
 
         ViewBag.IsSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
         ViewBag.ActiveSeason = activeSeason;
+        // What the header names. Follows the filter, so the season on screen is the season measured.
+        ViewBag.SelectedSeason = selectedSeasonId.HasValue ? seasons.FirstOrDefault(x => x.Id == selectedSeasonId.Value) : null;
         ViewBag.Filters = new { seasonId = selectedSeasonId, clubId, partnerId, activityType, from, to, kpiCategory };
         ViewBag.Seasons = seasons.Select(x => new SelectListItem(x.TitleEn, x.Id.ToString(), selectedSeasonId == x.Id)).ToList();
         ViewBag.Clubs = clubs.Select(x => new SelectListItem(x.NameEn, x.Id.ToString(), clubId == x.Id)).ToList();
@@ -212,17 +214,37 @@ public class DashboardController : Controller
 
         var months = Enumerable.Range(0, 12).Select(i => new DateTime(now.Year, now.Month, 1).AddMonths(-11 + i)).ToList();
         var monthLabels = months.Select(m => m.ToString("MMM yyyy")).ToList();
-        var bookingTrend = new List<int>();
-        var attendanceTrend = new List<int>();
-        var uploadTrend = new List<int>();
-        foreach (var m in months)
+
+        // One grouped query per series instead of one count per month. This used to be a 12-iteration
+        // loop issuing three counts each — 36 of the 83 commands a single dashboard render cost. The
+        // window and the filters are identical, so every monthly figure is unchanged; only the number
+        // of round trips is. Months with no rows are still reported as 0, exactly as the loop did.
+        var windowStart = months.First();
+        var windowEnd = months.Last().AddMonths(1);
+
+        static List<int> Spread(List<DateTime> buckets, IEnumerable<(int Year, int Month, int Count)> rows)
         {
-            var start = m;
-            var end = m.AddMonths(1);
-            bookingTrend.Add(await bookings.CountAsync(x => x.CreatedAtUtc >= start && x.CreatedAtUtc < end));
-            attendanceTrend.Add(await attendance.CountAsync(x => x.CheckInUtc >= start && x.CheckInUtc < end));
-            uploadTrend.Add(await albums.CountAsync(x => x.AlbumDate >= start && x.AlbumDate < end));
+            var byMonth = rows.ToDictionary(r => (r.Year, r.Month), r => r.Count);
+            return buckets.Select(m => byMonth.TryGetValue((m.Year, m.Month), out var c) ? c : 0).ToList();
         }
+
+        var bookingTrend = Spread(months, (await bookings
+            .Where(x => x.CreatedAtUtc >= windowStart && x.CreatedAtUtc < windowEnd)
+            .GroupBy(x => new { x.CreatedAtUtc.Year, x.CreatedAtUtc.Month })
+            .Select(g => new { g.Key.Year, g.Key.Month, Count = g.Count() })
+            .ToListAsync()).Select(x => (x.Year, x.Month, x.Count)));
+
+        var attendanceTrend = Spread(months, (await attendance
+            .Where(x => x.CheckInUtc >= windowStart && x.CheckInUtc < windowEnd)
+            .GroupBy(x => new { x.CheckInUtc.Year, x.CheckInUtc.Month })
+            .Select(g => new { g.Key.Year, g.Key.Month, Count = g.Count() })
+            .ToListAsync()).Select(x => (x.Year, x.Month, x.Count)));
+
+        var uploadTrend = Spread(months, (await albums
+            .Where(x => x.AlbumDate >= windowStart && x.AlbumDate < windowEnd)
+            .GroupBy(x => new { x.AlbumDate.Year, x.AlbumDate.Month })
+            .Select(g => new { g.Key.Year, g.Key.Month, Count = g.Count() })
+            .ToListAsync()).Select(x => (x.Year, x.Month, x.Count)));
 
         var bookingStatus = await bookings.GroupBy(x => x.Status).Select(g => new { Label = g.Key.ToString(), Value = g.Count() }).ToListAsync();
         var programType = await activities.GroupBy(x => x.Type).Select(g => new { Label = g.Key.ToString(), Value = g.Count() }).ToListAsync();
@@ -244,16 +266,25 @@ public class DashboardController : Controller
             new { Label = KpiLabel(GharsKpiCatalog.Satisfaction), Target = GharsKpiCatalog.Satisfaction.Target ?? 0m, Actual = satisfactionScore ?? 0m }
         };
 
+        // Dashboard Top-N only: the full club and entity breakdowns stay untouched in Reports &
+        // Analytics, which these cards link to. The score projection is deliberately left exactly as it
+        // was — it is one row per KPI submission, not a per-club average, and it is not filtered to
+        // Approved. Both are pre-existing definitions and changing either belongs to a KPI task, not a
+        // layout one. The added tiebreak only makes the ordering deterministic: ties used to be
+        // returned in whatever order the server chose, so the same data could rank differently between
+        // two refreshes.
         var clubComparison = await kpis.Where(x => x.Organization != null)
             .Select(x => new { Club = x.Organization!.NameEn, Score = (x.PlayerParticipationRate + x.AttendanceRate + x.EthicalValuesAdherenceRate + x.HealthyDietaryHabitsRate + x.SatisfactionRate) / 5 })
             .OrderByDescending(x => x.Score)
-            .Take(8)
+            .ThenBy(x => x.Club)
+            .Take(7)
             .ToListAsync();
 
         var partnerContribution = await activities.Where(x => x.PartnerOrganization != null)
             .GroupBy(x => x.PartnerOrganization!.NameEn)
             .Select(g => new { Partner = g.Key, Programs = g.Count(), Capacity = g.Sum(x => x.Capacity) })
             .OrderByDescending(x => x.Programs)
+            .ThenBy(x => x.Partner)
             .Take(8)
             .ToListAsync();
 
@@ -274,9 +305,20 @@ public class DashboardController : Controller
             new { Label = "Agenda submissions", Value = await agenda.CountAsync(x => x.Status == AgendaEntryStatus.Submitted) }
         };
 
+        // Take(30) with no ordering returned an arbitrary thirty of the club/type pairs, so the same
+        // data could show a different set on each refresh. Ordered and capped at the twelve densest
+        // pairs: the dashboard shows where activity concentrates, and Reports & Analytics still holds
+        // the complete club/type breakdown.
+        // The ordering sits before the projection on purpose: ordering the projected rows instead makes
+        // SQL Server sort an aggregate the grouped join has already collapsed, which EF cannot
+        // translate. ActivityType is ordered by its underlying value rather than ToString() for the
+        // same reason — the string only exists client side.
         var heatmap = await agenda.GroupBy(x => new { x.Organization!.NameEn, x.ActivityType })
+            .OrderByDescending(g => g.Count())
+            .ThenBy(g => g.Key.NameEn)
+            .ThenBy(g => g.Key.ActivityType)
             .Select(g => new { Club = g.Key.NameEn, Type = g.Key.ActivityType.ToString(), Count = g.Count() })
-            .Take(30)
+            .Take(12)
             .ToListAsync();
 
         ViewBag.MonthLabelsJson = JsonSerializer.Serialize(monthLabels);
@@ -296,25 +338,50 @@ public class DashboardController : Controller
         ViewBag.Approvals = approvals;
         ViewBag.Heatmap = heatmap;
 
+        // The dashboard is bilingual, so the sentences it prints have to be. These were English-only,
+        // which left the Arabic dashboard with an English panel. The figures are unchanged; only the
+        // wrapping sentence is chosen by culture, the same way the rest of the view picks its labels.
         var coverageTarget = GharsKpiCatalog.ProgramCoverage.Target ?? 80m;
         var insights = new List<string>();
         insights.Add(growth >= 0
-            ? $"Participation is {growth:0.#}% above the {GharsKpiCatalog.BaselineYear} baseline."
-            : $"Participation is {Math.Abs(growth):0.#}% below the {GharsKpiCatalog.BaselineYear} baseline.");
+            ? isAr ? $"المشاركة أعلى بنسبة {growth:0.#}% من خط أساس {GharsKpiCatalog.BaselineYear}."
+                   : $"Participation is {growth:0.#}% above the {GharsKpiCatalog.BaselineYear} baseline."
+            : isAr ? $"المشاركة أقل بنسبة {Math.Abs(growth):0.#}% من خط أساس {GharsKpiCatalog.BaselineYear}."
+                   : $"Participation is {Math.Abs(growth):0.#}% below the {GharsKpiCatalog.BaselineYear} baseline.");
         insights.Add(programCoverage >= coverageTarget
-            ? "Program coverage is on target."
-            : $"Program coverage is below the {coverageTarget:0}% target and needs intervention.");
+            ? isAr ? "تغطية البرنامج ضمن المستهدف." : "Program coverage is on target."
+            : isAr ? $"تغطية البرنامج أقل من المستهدف البالغ {coverageTarget:0}% وتحتاج إلى تدخل."
+                   : $"Program coverage is below the {coverageTarget:0}% target and needs intervention.");
         if (violationsReduction.HasValue)
         {
             var violationsTarget = GharsKpiCatalog.ViolationsReduction.Target ?? 15m;
             insights.Add(violationsReduction.Value >= violationsTarget
-                ? $"Violations fell {violationsReduction.Value:0.#}% year on year, meeting the {violationsTarget:0}% reduction target."
-                : $"Violations changed by {violationsReduction.Value:0.#}% year on year, short of the {violationsTarget:0}% reduction target.");
+                ? isAr ? $"انخفضت المخالفات بنسبة {violationsReduction.Value:0.#}% سنوياً، محققةً مستهدف الخفض البالغ {violationsTarget:0}%."
+                       : $"Violations fell {violationsReduction.Value:0.#}% year on year, meeting the {violationsTarget:0}% reduction target."
+                : isAr ? $"تغيرت المخالفات بنسبة {violationsReduction.Value:0.#}% سنوياً، دون مستهدف الخفض البالغ {violationsTarget:0}%."
+                       : $"Violations changed by {violationsReduction.Value:0.#}% year on year, short of the {violationsTarget:0}% reduction target.");
         }
-        if (!avgPhysicalActivity.HasValue) insights.Add("Physical-activity compliance has not been reported by clubs for this selection.");
-        insights.Add(pendingApprovals > 10 ? "Pending approvals exceed the operational threshold." : "Pending approvals are within a manageable range.");
-        if (clubComparison.Any()) insights.Add($"{clubComparison.First().Club} currently leads club KPI performance.");
-        if (upcomingEvents > 0) insights.Add($"{upcomingEvents} upcoming published activities are scheduled.");
+        if (!avgPhysicalActivity.HasValue)
+        {
+            insights.Add(isAr
+                ? "لم تُبلّغ الأندية عن الالتزام بالنشاط البدني لهذا التحديد."
+                : "Physical-activity compliance has not been reported by clubs for this selection.");
+        }
+        insights.Add(pendingApprovals > 10
+            ? isAr ? "الموافقات المعلقة تتجاوز الحد التشغيلي." : "Pending approvals exceed the operational threshold."
+            : isAr ? "الموافقات المعلقة ضمن النطاق المقبول." : "Pending approvals are within a manageable range.");
+        if (clubComparison.Any())
+        {
+            insights.Add(isAr
+                ? $"{clubComparison.First().Club} يتصدر حالياً أداء المؤشرات بين الأندية."
+                : $"{clubComparison.First().Club} currently leads club KPI performance.");
+        }
+        if (upcomingEvents > 0)
+        {
+            insights.Add(isAr
+                ? $"{upcomingEvents} من الأنشطة المنشورة القادمة مجدولة."
+                : $"{upcomingEvents} upcoming published activities are scheduled.");
+        }
         ViewBag.Insights = insights;
 
         return View();

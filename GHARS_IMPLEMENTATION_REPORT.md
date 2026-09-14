@@ -4149,3 +4149,224 @@ Verified on a scratch database of 24 seeded accounts, one of which was re-addres
 ### 40.6 Build
 
 `dotnet build` → **0 errors, 1 warning** — the retained `CS0108` on `Activity.CreatedByUserId`.
+
+---
+
+## 41. DSC / Super Admin Dashboard Responsive Analytics Redesign (2026-09-14)
+
+The executive dashboard had stopped working as a dashboard: at 1440px it ran to **10,716px — almost twelve
+screens** — and at 390px to **32,559px, over thirty-eight screens**. This section records why, and what
+changed. It is a presentation change: no metric definition, KPI, report, schema or deployment step was
+touched.
+
+### 41.1 Root cause
+
+Not one cause, but one dominant one.
+
+**Chart.js was inflating its own canvases.** `.chart-card` declared `min-height: 360px` and no resolved
+height, so its height came from its content. Every chart was configured `maintainAspectRatio: false`, which
+tells Chart.js to size the canvas from its parent's *computed* height. The parent's only content was the
+canvas, so each measurement fed the next one and the canvas grew until it settled at an absurd size. The
+inflated value was written back into the canvas `height` attribute, which is how the growth was confirmed to
+be Chart.js's doing rather than a CSS rule:
+
+| Width | Page height | Screens | Tallest canvas |
+|---|---|---|---|
+| 1440 | 10,716px | 11.91 | 1,836px |
+| 1366 | 10,928px | 12.14 | 2,168px |
+| 1200 | 12,960px | 14.40 | 2,568px |
+| 1024 | 21,533px | 23.93 | **3,287px** |
+| 768 | 23,972px | 26.64 | 1,900px |
+| 390 | 32,559px | 38.58 | 2,476px |
+
+A 313px-wide doughnut chart was rendering 1,836px tall.
+
+Contributing causes, all real and all fixed:
+
+1. **Ten canvases in six full-width rows.** Even correctly sized, that is a report, not a dashboard.
+2. **Twelve KPI cards** at `col-xl-3` with `min-height: 146px` — three rows, roughly 470px, before the first
+   chart.
+3. **A decorative hero** (28px padding, `display-6` heading, radial gradient) plus an eight-field filter
+   panel consumed the entire first screen.
+4. **The 360px floor was inherited by two non-chart cards.** The Annual Reports and Ghars Channel status
+   cards each held two numbers and were forced to 360px tall.
+5. **Bottom legends on every chart**, uncapped. Legend height is part of the parent measurement, so it fed
+   cause (1) directly.
+6. **`heatmap` used `.Take(30)` with no `OrderBy`** — an arbitrary thirty club/type pairs, and a different
+   arbitrary thirty on the next refresh.
+7. **An N+1 in the trend series.** A twelve-iteration loop issued three counts per month: **36 of the 83 SQL
+   commands** a single dashboard render cost.
+
+### 41.2 What the dashboard shows now
+
+| Band | Content |
+|---|---|
+| Header | One `h1`, the season being measured, a one-line subtitle, a link to Reports & Analytics |
+| Filters | One compact toolbar; collapsed behind a Filters button below 992px |
+| Primary KPIs | Six headline cards: Active Clubs, Implementing Entities, Programmes, Participants Reached, Booking Requests, Overall Satisfaction |
+| Performance strip | Programme coverage, Compliance score, Attendance, Growth vs 2026, Upcoming activities, Active users |
+| Needs attention | Six actionable counts, each linking to the screen that clears it |
+| Charts | Six, in a two-column grid |
+| Panels | Smart insights, Recent bookings, Upcoming activities |
+| Snapshot | Six operational figures in one strip |
+| More analytics | Collapsed: four secondary charts and the activity concentration tiles |
+
+### 41.3 Charts retained, and why each earns its place
+
+| Chart | Type | Change |
+|---|---|---|
+| Bookings & attendance trend | Line, 12 months | Kept as the primary, wide chart |
+| Booking status | Doughnut | Kept; legend capped |
+| KPI target vs actual | **Horizontal** bar | Was a vertical grouped bar; seven long bilingual indicator names were unreadable rotated |
+| Top 7 clubs by KPI score | **Horizontal** bar | Was a vertical bar, Top 8, ties unordered. Now Top 7, deterministic, with *View all clubs* |
+| Programme type mix | Doughnut | Was a pie; made consistent with the other part-to-whole chart |
+| Participants by category | Vertical bar | Kept; five short categories suit a vertical axis |
+
+### 41.4 Nothing was removed
+
+Four lower-priority charts — Entity contribution, Upload momentum, Digital library, Gallery & media — and the
+activity concentration tiles moved into a **collapsed "More analytics" section** rather than off the page.
+Their canvases are created the first time the section is opened, so a closed section costs nothing to render
+and cannot contribute to page height. This was chosen over deleting them or pushing them into Reports &
+Analytics: no reporting capability is lost, no second screen had to be modified, and no query changed.
+
+Every figure the old dashboard displayed is still displayed. The twelve KPI cards became six headline cards
+plus a six-item performance strip; Pending Actions moved into *Needs attention*; the hero's two figures moved
+into the performance strip.
+
+### 41.5 Chart height strategy
+
+The fix is a frame with a resolved height, which is what Chart.js documents and what the old markup lacked:
+
+```css
+.chart-frame { position: relative; width: 100%; height: 300px; }
+```
+
+`maintainAspectRatio: false` is now correct, because the parent's height no longer depends on the canvas.
+
+| Viewport | Standard chart | Primary trend chart |
+|---|---|---|
+| 1440 | 330px | 380px |
+| 1366 | 320px | 360px |
+| 1200 | 320px | 360px |
+| 1024 | 300px | 340px |
+| 768 | 280px | 300px |
+| 390 | 260px | 280px |
+
+A chart with nothing to plot renders an **88px** empty state instead of a blank 330px canvas. On a season
+with no data, seven of ten frames collapse this way.
+
+### 41.6 Responsive layout
+
+| Viewport | KPI cards / row | Chart cards / row | Page height | Horizontal overflow |
+|---|---|---|---|---|
+| 1440 | 6 | 2 | 2,628px | none |
+| 1366 | 6 | 2 | 2,679px | none |
+| 1200 | 6 | 2 | 2,918px | none |
+| 1024 | 3 | 2 | 3,619px | none |
+| 768 | 3 | 1 | 4,196px | none |
+| 390 | 2 | 1 | 4,620px | none |
+
+### 41.7 Before and after
+
+| Viewport | Before | After | Reduction |
+|---|---|---|---|
+| 1440 | 10,716px (11.91 screens) | **2,628px (2.92)** | **-75%** |
+| 1366 | 10,928px (12.14) | **2,679px (2.98)** | **-75%** |
+| 1200 | 12,960px (14.40) | **2,918px (3.24)** | **-77%** |
+| 1024 | 21,533px (23.93) | **3,619px (4.02)** | **-83%** |
+| 768 | 23,972px (26.64) | **4,196px (4.66)** | **-82%** |
+| 390 | 32,559px (38.58) | **4,620px (5.47)** | **-86%** |
+
+Tallest canvas at 1024px: **3,287px to 340px**.
+
+A resize storm (1440 → 1200 → 900 → 1440 → 700 → 1440) leaves every canvas height identical, which is the
+direct proof that the feedback loop is gone.
+
+### 41.8 Arabic and RTL
+
+Verified at all six widths in Arabic; page heights within 3% of English and no horizontal overflow.
+
+- **Horizontal bars mirror**: the category axis moves to the right and the value axis runs right to left.
+- **The month axis does not.** Reversing a time series would state that the programme ran backwards, so the
+  trend and upload charts keep chronological order in both languages. This is deliberate.
+- Two Arabic defects were found and fixed:
+  - **The counter animation destroyed precision.** Values are formatted in the request's culture and Arabic
+    uses U+066B as the decimal separator, which `parseFloat` stops at — so the animation reprinted 85.8% as
+    **85%**. The final frame now restores the server-rendered text verbatim instead of reprinting the number.
+  - **Smart Insights were hardcoded English**, leaving an English panel on the Arabic dashboard. Each
+    sentence now has an Arabic form. The figures inside them are unchanged.
+
+Still English under Arabic, both pre-existing and both left alone as app-wide conventions rather than
+dashboard concerns: enum names used as status labels and chart categories (`Approved`, `Workshop`,
+`PartnerProposedNewTime`), and organization names, which are projected from `NameEn`.
+
+### 41.9 Accessibility
+
+- Exactly one `h1`; sections carry headings, two of them visually hidden for structure without visual noise.
+- **Every chart is also a table.** Ten visually-hidden tables are generated from the same serialized data, so
+  a screen reader receives the figures rather than an unlabelled canvas. Each canvas additionally carries
+  `role="img"` and a descriptive `aria-label`.
+- The *Needs attention* waiting state is carried by an icon and the count, not by background colour alone.
+- KPI cards and attention items are real links with visible `:focus-visible` styling.
+- Every filter control keeps its bound `<label for>`.
+- `prefers-reduced-motion` disables the counters and the card transitions.
+
+One trap worth recording: putting `.visually-hidden` **on** a `<table>` causes horizontal page overflow. The
+class sets `width: 1px`, but a table cannot shrink below its min-content width, and the deprecated `clip`
+property does not remove it from the document's scroll extent. It produced 35px of overflow at 1024px and
+19px at 390px. The fix is to wrap the table in a `<div class="visually-hidden">`, which clips it properly.
+
+### 41.10 Performance
+
+**83 to 50 SQL commands** for one dashboard render, measured from EF command logging around a single request.
+
+The twelve-iteration month loop became three grouped queries — one per series — over the same window with the
+same filters. Months with no rows still report 0. No metric changed; only the number of round trips.
+
+No N+1 remains. No query was added by the layout work: the four collapsed charts reuse data the controller
+already serialized.
+
+### 41.11 Business logic
+
+No metric definition changed. Two pre-existing definitions in the club comparison are **documented in the
+controller and deliberately left alone**, because correcting them belongs to a KPI task rather than a layout
+one:
+
+- the projection is one row per KPI submission, not a per-club average, so a club with two submissions can
+  occupy two bars;
+- it is not filtered to `Approved`, despite the card previously being labelled "Top clubs by approved KPI
+  score" — the subtitle no longer makes that claim.
+
+Three ordering fixes were made, all about determinism rather than definition: `clubComparison` and
+`partnerContribution` gained a name tiebreak, and `heatmap` gained an explicit ordering. The heatmap ordering
+must sit **before** the projection; ordering the projected rows makes EF attempt to sort an aggregate the
+grouped join has already collapsed, which it cannot translate and which fails at runtime.
+
+The dead `kpiCategory` filter control was removed from the toolbar. It was never used in any query — an
+administrator could select a KPI category, press Apply, and nothing would change. The action still accepts
+the parameter, so bookmarked URLs carrying it return 200 rather than breaking.
+
+### 41.12 Verification
+
+| Check | Result |
+|---|---|
+| Build | 0 errors, 1 warning — the retained `CS0108` |
+| Migration | None. No schema, model or configuration change |
+| Super Admin / DSC Admin | 200 / 200; measurements identical at all six widths |
+| Club Admin | 302 — correctly denied |
+| Filters | Season, club, entity, activity type, date range all round-trip and echo the selection |
+| Legacy `?kpiCategory=` URL | 200 |
+| Season with no data | 200; seven frames collapse to 88px; no overflow |
+| Lazy secondary charts | 0x0 while collapsed, 512x330 once opened |
+| Close and reopen twice | Charts rebuild; no *Canvas is already in use* |
+| Resize storm | Canvas heights identical before and after |
+| Browser console | No errors or exceptions in either language |
+| Admin regression | 19 admin routes return 200 |
+| Reports & Analytics | Unaffected; its charts use the Chart.js default aspect ratio and never had this bug |
+
+### 41.13 Deployment
+
+View, CSS, JavaScript and controller projection only. No new frontend dependency: Chart.js 4.4.1 is still the
+only charting library and still loads from the CDN reference already in `_AdminLayout.cshtml`. Nothing
+requires a manual production step, and the Azure pipeline is unchanged.

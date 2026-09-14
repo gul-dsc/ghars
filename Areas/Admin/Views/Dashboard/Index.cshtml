@@ -1,9 +1,10 @@
 @using GharsPlatform.Models.Core
 @using Microsoft.AspNetCore.Mvc.Rendering
 @using System.Globalization
+@using System.Text.Json
 @{
-    ViewData["Title"] = "Executive Dashboard";
-    ViewData["PageTitle"] = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? "لوحة المؤشرات التنفيذية" : "Executive Dashboard";
+    ViewData["Title"] = "Ghars Dashboard";
+    ViewData["PageTitle"] = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? "لوحة غرس" : "Ghars Dashboard";
     var isRtl = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string en, string ar) => isRtl ? ar : en;
     var seasons = ViewBag.Seasons as List<SelectListItem> ?? new();
@@ -16,6 +17,13 @@
     var heatmap = ViewBag.Heatmap as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
     var insights = ViewBag.Insights as IEnumerable<string> ?? Enumerable.Empty<string>();
 
+    var selectedSeason = ViewBag.SelectedSeason as Season;
+    var activeSeason = ViewBag.ActiveSeason as Season;
+    var headerSeason = selectedSeason ?? activeSeason;
+    var seasonName = headerSeason == null
+        ? T("All seasons", "كل المواسم")
+        : (isRtl && !string.IsNullOrWhiteSpace(headerSeason.TitleAr) ? headerSeason.TitleAr : headerSeason.TitleEn);
+
     // Missing measurements render as "No Data" - never as 0% (approved KPI rule).
     string NoData() => T("No Data", "لا توجد بيانات");
     string Pct(object? value) => value is decimal d ? $"{d:0.#}%" : NoData();
@@ -25,191 +33,552 @@
     var avgPhysicalActivity = ViewBag.AvgPhysicalActivity as decimal?;
     var violationsReduction = ViewBag.ViolationsReduction as decimal?;
     var internalStarScore = ViewBag.InternalStarScore as decimal?;
+
+    var arAwaiting = (int)(ViewBag.AnnualReportsAwaitingReview ?? 0);
+    var arApproved = (int)(ViewBag.AnnualReportsApproved ?? 0);
+    var chAwaiting = (int)(ViewBag.ChannelSubmissionsAwaitingReview ?? 0);
+
+    // A chart is a picture. Every one of them is also emitted as a visually-hidden table built from the
+    // same serialized data, so a screen reader gets the figures rather than an unlabelled canvas.
+    List<(string Label, string Value)> Pairs(object? json, string labelProp, string valueProp)
+    {
+        var result = new List<(string, string)>();
+        var text = json as string;
+        if (string.IsNullOrWhiteSpace(text)) return result;
+        using var doc = JsonDocument.Parse(text);
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return result;
+        foreach (var element in doc.RootElement.EnumerateArray())
+        {
+            var label = element.TryGetProperty(labelProp, out var lp) ? lp.ToString() : string.Empty;
+            var value = element.TryGetProperty(valueProp, out var vp) ? vp.ToString() : string.Empty;
+            result.Add((label, value));
+        }
+        return result;
+    }
+
+    List<(string Label, string Value)> Series(object? labelsJson, object? valuesJson)
+    {
+        var result = new List<(string, string)>();
+        if (labelsJson is not string l || valuesJson is not string v) return result;
+        using var labelDoc = JsonDocument.Parse(l);
+        using var valueDoc = JsonDocument.Parse(v);
+        var labelList = labelDoc.RootElement.EnumerateArray().Select(x => x.ToString()).ToList();
+        var valueList = valueDoc.RootElement.EnumerateArray().Select(x => x.ToString()).ToList();
+        for (var i = 0; i < labelList.Count && i < valueList.Count; i++) result.Add((labelList[i], valueList[i]));
+        return result;
+    }
 }
 
 @section Head {
 <style>
-    .exec-dashboard { --ghars: #4f9a5d; --ghars-dark: #1f5b37; --ink: #1f2530; --muted: #687281; }
-    .exec-hero { position: relative; overflow: hidden; border-radius: 28px; padding: 28px; color: #fff; background: radial-gradient(circle at top right, rgba(115,192,125,.95), rgba(45,91,55,.92) 42%, rgba(31,37,48,.98)); box-shadow: 0 18px 48px rgba(0,0,0,.16); }
-    .exec-hero:after { content:""; position:absolute; inset:auto -80px -130px auto; width:320px; height:320px; border-radius:50%; background:rgba(255,255,255,.09); }
-    .hero-kicker { display:inline-flex; align-items:center; gap:.5rem; padding:.45rem .85rem; border-radius:999px; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.22); font-weight:700; }
-    .filter-panel, .dash-card, .chart-card, .insight-card { border:0; border-radius:22px; background:#fff; box-shadow: 0 12px 34px rgba(22,34,51,.08); }
-    .filter-panel .form-label { font-weight: 700; color:#3b4350; }
-    .kpi-card { position:relative; overflow:hidden; min-height:146px; padding:20px; border-radius:22px; background:#fff; box-shadow: 0 12px 34px rgba(22,34,51,.08); border:1px solid rgba(31,91,55,.06); transition: transform .22s ease, box-shadow .22s ease; }
-    .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 18px 44px rgba(22,34,51,.13); }
-    .kpi-card .icon { width:46px; height:46px; display:grid; place-items:center; border-radius:15px; background:rgba(79,154,93,.12); color:var(--ghars-dark); font-size:1.35rem; }
-    .kpi-card .label { color:var(--muted); font-size:.86rem; font-weight:700; }
-    .kpi-card .value { font-size:2rem; font-weight:900; color:var(--ink); line-height:1.1; }
-    .kpi-card .trend { font-size:.78rem; font-weight:700; color:#4f9a5d; }
-    .kpi-card:after { content:""; position:absolute; width:110px; height:110px; border-radius:50%; background:rgba(79,154,93,.08); right:-35px; bottom:-45px; }
-    html[dir="rtl"] .kpi-card:after { right:auto; left:-35px; }
-    .chart-card { padding:20px; min-height:360px; }
-    .chart-title { font-size:1rem; font-weight:900; color:var(--ink); margin-bottom:.25rem; }
-    .chart-subtitle { color:var(--muted); font-size:.85rem; margin-bottom:1rem; }
-    .activity-row { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.82rem 0; border-bottom:1px solid #edf0f3; }
-    .activity-row:last-child { border-bottom:0; }
-    .status-pill { display:inline-flex; align-items:center; padding:.25rem .65rem; border-radius:999px; background:rgba(79,154,93,.13); color:#2f6840; font-weight:800; font-size:.78rem; }
-    .approval-item { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.7rem .85rem; border-radius:15px; background:#f7f9fb; margin-bottom:.55rem; }
-    .heat-cell { min-width:72px; padding:.55rem .7rem; border-radius:12px; color:#1f2530; background:rgba(79,154,93,.08); text-align:center; font-weight:800; }
-    .mini-bar { height:7px; border-radius:999px; background:#edf0f3; overflow:hidden; }
-    .mini-bar span { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#4f9a5d,#8bc88f); }
-    .fade-up { animation: dashFadeUp .52s ease both; }
-    @@keyframes dashFadeUp { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform: translateY(0); } }
-    @@media (max-width: 992px) { .exec-hero { padding:22px; } .kpi-card .value { font-size:1.6rem; } .chart-card { min-height:300px; } }
+    .exec-dashboard { --ghars: #4f9a5d; --ghars-dark: #1f5b37; --ink: #1f2530; --muted: #687281; --line: #e8edf1; }
+
+    /* ---- Header: a band, not a hero. The old one spent a full screen on decoration. ---- */
+    .dash-head { border-radius: 18px; padding: 18px 22px; color: #fff; margin-bottom: 16px;
+                 background: linear-gradient(120deg, #2d6b41, #1f5b37 58%, #1b3d2a); }
+    .dash-head h1 { font-size: 1.5rem; font-weight: 800; margin: 0 0 .2rem; line-height: 1.2; }
+    .dash-head p { margin: 0; font-size: .88rem; opacity: .82; }
+    .dash-season { display: inline-flex; align-items: center; gap: .4rem; padding: .3rem .7rem; border-radius: 999px;
+                   background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.24); font-size: .8rem; font-weight: 700; }
+
+    /* ---- Filters: one toolbar, collapsed on small screens ---- */
+    .dash-filters { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 16px; }
+    .dash-filters .form-label { font-size: .74rem; font-weight: 700; color: #4a5462; margin-bottom: .15rem; }
+    .dash-filters .form-select, .dash-filters .form-control { font-size: .85rem; padding: .34rem .6rem; }
+
+    /* ---- KPI cards: compact tiles, fixed height, no growth ---- */
+    .kpi-card { display: block; height: 100%; min-height: 96px; padding: 12px 14px; border-radius: 14px; background: #fff;
+                border: 1px solid var(--line); text-decoration: none; color: inherit; transition: border-color .18s ease, box-shadow .18s ease; }
+    .kpi-card:hover, .kpi-card:focus-visible { border-color: rgba(79,154,93,.5); box-shadow: 0 6px 18px rgba(22,34,51,.09); color: inherit; }
+    .kpi-card .icon { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px;
+                      background: rgba(79,154,93,.12); color: var(--ghars-dark); font-size: .9rem; margin-bottom: .45rem; }
+    .kpi-card .label { color: var(--muted); font-size: .74rem; font-weight: 700; line-height: 1.25; }
+    .kpi-card .value { font-size: 1.45rem; font-weight: 800; color: var(--ink); line-height: 1.15; }
+
+    /* ---- Performance strip: the percentages that are context, not headlines ---- */
+    .perf-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .perf-item { flex: 1 1 150px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; }
+    .perf-item .k { font-size: .72rem; color: var(--muted); font-weight: 700; }
+    .perf-item .v { font-size: 1.05rem; font-weight: 800; color: var(--ink); }
+
+    /* ---- Needs attention ---- */
+    .attention { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; }
+    /* Six items, so the column count is always a divisor of six. auto-fit produced five across and one
+       orphan on a wide screen, which reads as a layout bug rather than a grid. */
+    .attention-grid { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    @@media (min-width: 768px) { .attention-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @@media (min-width: 1400px) { .attention-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+    .attention-item { display: flex; align-items: center; gap: .6rem; padding: .55rem .7rem; border-radius: 11px;
+                      background: #f7f9fb; border: 1px solid transparent; text-decoration: none; color: inherit; }
+    .attention-item:hover, .attention-item:focus-visible { border-color: rgba(79,154,93,.45); color: inherit; }
+    .attention-item .n { font-size: 1.15rem; font-weight: 800; min-width: 1.8rem; color: var(--ink); }
+    .attention-item .t { font-size: .78rem; color: #4a5462; font-weight: 600; line-height: 1.25; }
+    /* Waiting state is carried by the word and the icon, not by colour alone. */
+    .attention-item.is-waiting { background: #fff8e8; }
+    .attention-item.is-waiting .n { color: #8a5a00; }
+
+    /* ---- Chart cards ---- */
+    .chart-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; height: 100%;
+                  display: flex; flex-direction: column; }
+    .chart-card h3 { font-size: .92rem; font-weight: 800; color: var(--ink); margin: 0; }
+    .chart-card .chart-sub { color: var(--muted); font-size: .76rem; margin: .1rem 0 0; }
+    .chart-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; margin-bottom: .6rem; }
+    .chart-head .btn { flex-shrink: 0; }
+
+    /* The whole fix in four lines. Chart.js sizes a responsive canvas from its parent's computed
+       height; the old parent had only min-height, so its height came from its content -- the canvas --
+       and every resize fed the next one. A frame with a resolved height breaks that loop for good. */
+    .chart-frame { position: relative; width: 100%; height: 300px; }
+    .chart-frame > canvas { display: block; }
+    .chart-frame--primary { height: 340px; }
+    @@media (min-width: 1200px) { .chart-frame { height: 320px; } .chart-frame--primary { height: 360px; } }
+    @@media (min-width: 1400px) { .chart-frame { height: 330px; } .chart-frame--primary { height: 380px; } }
+    @@media (max-width: 991.98px) { .chart-frame { height: 280px; } .chart-frame--primary { height: 300px; } }
+    @@media (max-width: 575.98px) { .chart-frame { height: 260px; } .chart-frame--primary { height: 280px; } }
+    /* Nothing to plot gets a line of text, not 330px of blank canvas. */
+    .chart-frame.is-empty { height: auto; }
+    .chart-empty { display: flex; align-items: center; justify-content: center; gap: .5rem; min-height: 88px;
+                   border: 1px dashed #cfd8e0; border-radius: 11px; color: var(--muted); font-size: .82rem; text-align: center; padding: .75rem; }
+
+    /* ---- Lists ---- */
+    .panel { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; height: 100%; }
+    .panel h3 { font-size: .92rem; font-weight: 800; color: var(--ink); margin: 0 0 .6rem; }
+    .list-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .5rem 0; border-bottom: 1px solid #f0f3f6; }
+    .list-row:last-child { border-bottom: 0; }
+    .list-row .m { font-size: .82rem; font-weight: 700; color: var(--ink); }
+    .list-row .s { font-size: .72rem; color: var(--muted); }
+    .status-pill { display: inline-flex; align-items: center; padding: .18rem .55rem; border-radius: 999px;
+                   background: rgba(79,154,93,.13); color: #2f6840; font-weight: 700; font-size: .72rem; white-space: nowrap; }
+    .snapshot { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    @@media (min-width: 768px) { .snapshot { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @@media (min-width: 1400px) { .snapshot { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+    .snapshot-item { background: #f7f9fb; border-radius: 11px; padding: .5rem .7rem; }
+    .snapshot-item .k { font-size: .72rem; color: var(--muted); font-weight: 600; line-height: 1.25; }
+    .snapshot-item .v { font-size: .98rem; font-weight: 800; color: var(--ink); }
+    .insight-row { display: flex; gap: .5rem; padding: .42rem 0; font-size: .8rem; color: #3d4652; border-bottom: 1px solid #f0f3f6; }
+    .insight-row:last-child { border-bottom: 0; }
+
+    .heat-cell { min-width: 96px; padding: .45rem .6rem; border-radius: 10px; background: rgba(79,154,93,.09); text-align: center; }
+    .heat-cell .c { font-size: .68rem; color: var(--muted); line-height: 1.2; }
+    .heat-cell .n { font-size: 1rem; font-weight: 800; color: var(--ink); }
+
+    .more-toggle[aria-expanded="true"] .bi-chevron-down { transform: rotate(180deg); }
+    .more-toggle .bi-chevron-down { transition: transform .2s ease; }
+
+    @@media (max-width: 575.98px) {
+        .dash-head { padding: 14px 16px; }
+        .dash-head h1 { font-size: 1.2rem; }
+        .kpi-card .value { font-size: 1.25rem; }
+    }
+    @@media (prefers-reduced-motion: reduce) { .exec-dashboard * { transition: none !important; animation: none !important; } }
 </style>
 }
 
 <div class="exec-dashboard">
-    <div class="exec-hero mb-4 fade-up">
-        <div class="row align-items-center g-4">
-            <div class="col-lg-7">
-                <div class="hero-kicker mb-3"><i class="bi bi-speedometer2"></i>@T("360° Ghars Intelligence Center", "مركز غرس التحليلي الشامل")</div>
-                <h1 class="display-6 fw-black mb-2">@T("Executive Analytics Dashboard", "لوحة التحليلات التنفيذية")</h1>
-                <p class="mb-0 opacity-75 fs-5">@T("A complete live overview of clubs, partners, programs, bookings, KPI progress, attendance, library, gallery, and governance actions.", "نظرة شاملة ومباشرة على الأندية والشركاء والبرامج والحجوزات والمؤشرات والحضور والمكتبة والمعرض وإجراءات الحوكمة.")</p>
+
+    @* ---------- A. Header ---------- *@
+    <header class="dash-head">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+                <h1>@T("Ghars Dashboard", "لوحة غرس")</h1>
+                <p>@T("Overview of Ghars programme activity, participation and performance.", "نظرة عامة على نشاط برنامج غرس والمشاركة والأداء.")</p>
             </div>
-            <div class="col-lg-5">
-                <div class="row g-3">
-                    <div class="col-6"><div class="p-3 rounded-4" style="background:rgba(255,255,255,.13);"><div class="small opacity-75">@T("Program Coverage", "تغطية البرنامج")</div><div class="h2 mb-0 fw-bold counter" data-target="@ViewBag.ProgramCoverage">0</div><div class="small">%</div></div></div>
-                    <div class="col-6"><div class="p-3 rounded-4" style="background:rgba(255,255,255,.13);"><div class="small opacity-75">@T("Compliance Score", "درجة الامتثال")</div>@if(complianceScore.HasValue){<div class="h2 mb-0 fw-bold counter" data-target="@complianceScore">0</div><div class="small">%</div>}else{<div class="h5 mb-0 fw-bold">@NoData()</div>}</div></div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="dash-season"><i class="bi bi-calendar3" aria-hidden="true"></i>@seasonName</span>
+                <a class="btn btn-sm btn-light fw-semibold" asp-area="Admin" asp-controller="Reports" asp-action="Analytics">
+                    @T("Detailed reports", "التقارير التفصيلية") <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    @* ---------- Filters: one compact toolbar ---------- *@
+    <form method="get" class="dash-filters">
+        <div class="d-flex align-items-center justify-content-between gap-2 mb-2 d-lg-none">
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#dashFilterFields" aria-expanded="false" aria-controls="dashFilterFields">
+                <i class="bi bi-funnel me-1" aria-hidden="true"></i>@T("Filters", "الفلاتر")
+            </button>
+            <a class="btn btn-sm btn-link text-decoration-none" asp-area="Admin" asp-controller="Dashboard" asp-action="Index">@T("Reset", "إعادة تعيين")</a>
+        </div>
+        <div class="collapse d-lg-block" id="dashFilterFields">
+            <div class="row g-2 align-items-end">
+                <div class="col-6 col-md-4 col-lg-2"><label class="form-label" for="f-dash-seasonId">@T("Season", "الموسم")</label><select id="f-dash-seasonId" name="seasonId" class="form-select form-select-sm"><option value="">@T("All", "الكل")</option>@foreach (var s in seasons){<option value="@s.Value" selected="@s.Selected">@s.Text</option>}</select></div>
+                <div class="col-6 col-md-4 col-lg-2"><label class="form-label" for="f-dash-clubId">@T("Club", "النادي")</label><select id="f-dash-clubId" name="clubId" class="form-select form-select-sm"><option value="">@T("All clubs", "كل الأندية")</option>@foreach (var c in clubs){<option value="@c.Value" selected="@c.Selected">@c.Text</option>}</select></div>
+                <div class="col-6 col-md-4 col-lg-2"><label class="form-label" for="f-dash-partnerId">@T("Entity", "الجهة")</label><select id="f-dash-partnerId" name="partnerId" class="form-select form-select-sm"><option value="">@T("All entities", "كل الجهات")</option>@foreach (var p in partners){<option value="@p.Value" selected="@p.Selected">@p.Text</option>}</select></div>
+                <div class="col-6 col-md-4 col-lg-2"><label class="form-label" for="f-dash-activityType">@T("Activity type", "نوع النشاط")</label><select id="f-dash-activityType" name="activityType" class="form-select form-select-sm"><option value="">@T("All types", "كل الأنواع")</option>@foreach (ActivityType item in Enum.GetValues(typeof(ActivityType))){<option value="@item" selected="@(filters.activityType == item)">@item</option>}</select></div>
+                <div class="col-6 col-md-4 col-lg-1"><label class="form-label" for="f-dash-from">@T("From", "من")</label><input id="f-dash-from" class="form-control form-control-sm" type="date" name="from" value="@(filters.from == null ? "" : ((DateTime)filters.from).ToString("yyyy-MM-dd"))" /></div>
+                <div class="col-6 col-md-4 col-lg-1"><label class="form-label" for="f-dash-to">@T("To", "إلى")</label><input id="f-dash-to" class="form-control form-control-sm" type="date" name="to" value="@(filters.to == null ? "" : ((DateTime)filters.to).ToString("yyyy-MM-dd"))" /></div>
+                <div class="col-12 col-lg-2 d-flex gap-2">
+                    <button class="btn btn-sm btn-primary flex-grow-1" type="submit"><i class="bi bi-sliders me-1" aria-hidden="true"></i>@T("Apply", "تطبيق")</button>
+                    <a class="btn btn-sm btn-outline-secondary d-none d-lg-inline-flex align-items-center" asp-area="Admin" asp-controller="Dashboard" asp-action="Index">@T("Reset", "إعادة تعيين")</a>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <form method="get" class="filter-panel p-3 p-lg-4 mb-4 fade-up">
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-            <div class="h5 fw-bold mb-0"><i class="bi bi-funnel me-2"></i>@T("Dashboard Filters", "فلاتر لوحة التحكم")</div>
-            <a class="btn btn-outline-secondary" asp-area="Admin" asp-controller="Dashboard" asp-action="Index">@T("Reset", "إعادة تعيين")</a>
-        </div>
-        <div class="row g-3">
-            <div class="col-md-3"><label class="form-label" for="f-dash-seasonId">@T("Sports season", "الموسم الرياضي")</label><select id="f-dash-seasonId" name="seasonId" class="form-select"><option value="">@T("All", "الكل")</option>@foreach (var s in seasons){<option value="@s.Value" selected="@s.Selected">@s.Text</option>}</select></div>
-            <div class="col-md-3"><label class="form-label" for="f-dash-clubId">@T("Club", "النادي")</label><select id="f-dash-clubId" name="clubId" class="form-select"><option value="">@T("All clubs", "كل الأندية")</option>@foreach (var c in clubs){<option value="@c.Value" selected="@c.Selected">@c.Text</option>}</select></div>
-            <div class="col-md-3"><label class="form-label" for="f-dash-partnerId">@T("Partner / entity", "الشريك / الجهة")</label><select id="f-dash-partnerId" name="partnerId" class="form-select"><option value="">@T("All entities", "كل الجهات")</option>@foreach (var p in partners){<option value="@p.Value" selected="@p.Selected">@p.Text</option>}</select></div>
-            <div class="col-md-3"><label class="form-label" for="f-dash-activityType">@T("Activity type", "نوع النشاط")</label><select id="f-dash-activityType" name="activityType" class="form-select"><option value="">@T("All types", "كل الأنواع")</option>@foreach (ActivityType item in Enum.GetValues(typeof(ActivityType))){<option value="@item" selected="@(filters.activityType == item)">@item</option>}</select></div>
-            <div class="col-md-3"><label class="form-label" for="f-dash-from">@T("From", "من")</label><input id="f-dash-from" class="form-control" type="date" name="from" value="@(filters.from == null ? "" : ((DateTime)filters.from).ToString("yyyy-MM-dd"))" /></div>
-            <div class="col-md-3"><label class="form-label" for="f-dash-to">@T("To", "إلى")</label><input id="f-dash-to" class="form-control" type="date" name="to" value="@(filters.to == null ? "" : ((DateTime)filters.to).ToString("yyyy-MM-dd"))" /></div>
-            <div class="col-md-3"><label class="form-label" for="f-dash-kpiCategory">@T("KPI category", "فئة المؤشر")</label><select id="f-dash-kpiCategory" name="kpiCategory" class="form-select"><option value="">@T("All KPIs", "كل المؤشرات")</option><option>Coverage</option><option>Participation</option><option>Attendance</option><option>Health</option><option>Behavior</option><option>Satisfaction</option></select></div>
-            <div class="col-md-3 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit"><i class="bi bi-sliders me-2"></i>@T("Apply filters", "تطبيق الفلاتر")</button></div>
         </div>
     </form>
 
-    <div class="row g-3 mb-4">
+    @* ---------- B. Primary KPI cards ---------- *@
+    <h2 class="visually-hidden">@T("Headline figures", "الأرقام الرئيسية")</h2>
+    <div class="row g-2 g-md-3 mb-3">
         @foreach (var card in new[] {
-            new { Icon="bi-buildings", Label=T("Total Clubs", "إجمالي الأندية"), Value=(object)ViewBag.TotalClubs, Hint=T("Covered by Ghars", "ضمن غرس") },
-            new { Icon="bi-diagram-3", Label=T("Partners / Entities", "الشركاء / الجهات"), Value=(object)ViewBag.TotalPartners, Hint=T("Implementing entities", "جهات منفذة") },
-            new { Icon="bi-calendar-event", Label=T("Total Programs", "إجمالي البرامج"), Value=(object)ViewBag.TotalPrograms, Hint=T("Lectures, workshops, training", "محاضرات وورش وتدريب") },
-            new { Icon="bi-people", Label=T("Participants", "المشاركون"), Value=(object)ViewBag.TotalParticipants, Hint=T("From agenda data", "من بيانات الأجندة") },
-            new { Icon="bi-journal-check", Label=T("Bookings", "الحجوزات"), Value=(object)ViewBag.TotalBookings, Hint=T("All statuses", "كل الحالات") },
-            new { Icon="bi-hourglass-split", Label=T("Pending Actions", "إجراءات معلقة"), Value=(object)ViewBag.PendingApprovals, Hint=T("Needs response", "تحتاج إجراء") },
-            new { Icon="bi-person-check", Label=T("Attendance Rate", "نسبة الحضور"), Value=(object)(avgAttendance.HasValue ? Pct(avgAttendance) : Pct(ViewBag.AttendanceRate)), Hint=avgAttendance.HasValue ? T("Approved KPI data", "بيانات معتمدة") : T("Check-ins vs capacity", "الحضور مقابل السعة") },
-            new { Icon="bi-emoji-smile", Label=T("Happiness Score", "مؤشر السعادة"), Value=(object)Pct(satisfactionScore), Hint=T("Official survey results", "نتائج الاستبيان الرسمي") },
-            new { Icon="bi-bullseye", Label=T("Coverage", "التغطية"), Value=(object)(ViewBag.ProgramCoverage + "%"), Hint=T("Target ≥ 80%", "المستهدف ≥ 80%") },
-            new { Icon="bi-graph-up-arrow", Label=T("Growth vs 2026", "النمو مقابل 2026"), Value=(object)(ViewBag.ParticipationGrowth + "%"), Hint=T("Baseline comparison", "مقارنة بالأساس") },
-            new { Icon="bi-person-lines-fill", Label=T("Active Users", "المستخدمون النشطون"), Value=(object)ViewBag.ActiveUsers, Hint=T("Platform accounts", "حسابات المنصة") },
-            new { Icon="bi-calendar2-week", Label=T("Upcoming Events", "الفعاليات القادمة"), Value=(object)ViewBag.UpcomingEvents, Hint=T("Published programs", "برامج منشورة") }
+            new { Icon="bi-buildings", Label=T("Active Clubs", "الأندية النشطة"), Value=(object)ViewBag.TotalClubs, Href="/Admin/Organizations" },
+            new { Icon="bi-diagram-3", Label=T("Implementing Entities", "الجهات المنفذة"), Value=(object)ViewBag.TotalPartners, Href="/Admin/Organizations" },
+            new { Icon="bi-calendar-event", Label=T("Programmes", "البرامج"), Value=(object)ViewBag.TotalPrograms, Href="/Admin/Activities" },
+            new { Icon="bi-people", Label=T("Participants Reached", "المشاركون"), Value=(object)ViewBag.TotalParticipants, Href="/Admin/Reports/Analytics" },
+            new { Icon="bi-journal-check", Label=T("Booking Requests", "طلبات الحجز"), Value=(object)ViewBag.TotalBookings, Href="/Admin/Bookings" },
+            new { Icon="bi-emoji-smile", Label=T("Overall Satisfaction", "الرضا العام"), Value=(object)Pct(satisfactionScore), Href="/Admin/Surveys" }
         })
         {
-            <div class="col-12 col-sm-6 col-xl-3 fade-up">
-                <div class="kpi-card">
-                    <div class="d-flex justify-content-between align-items-start mb-3"><div class="icon"><i class="bi @card.Icon"></i></div><span class="trend"><i class="bi bi-lightning-charge"></i> @card.Hint</span></div>
+            <div class="col-6 col-sm-4 col-xl-2">
+                <a class="kpi-card" href="@card.Href">
+                    <div class="icon"><i class="bi @card.Icon" aria-hidden="true"></i></div>
                     <div class="label">@card.Label</div>
-                    <div class="value counter" data-target="@card.Value">@card.Value</div>
-                </div>
+                    <div class="value js-counter" data-target="@card.Value">@card.Value</div>
+                </a>
             </div>
         }
     </div>
 
+    @* ---------- Performance strip: context percentages, one short row ---------- *@
+    <div class="perf-strip">
+        <div class="perf-item"><div class="k">@T("Programme coverage", "تغطية البرنامج")</div><div class="v">@ViewBag.ProgramCoverage%</div></div>
+        <div class="perf-item"><div class="k">@T("Compliance score", "درجة الامتثال")</div><div class="v">@Pct(complianceScore)</div></div>
+        <div class="perf-item"><div class="k">@(avgAttendance.HasValue ? T("Attendance (approved KPI)", "الحضور (مؤشر معتمد)") : T("Attendance (check-ins)", "الحضور (تسجيل الدخول)"))</div><div class="v">@(avgAttendance.HasValue ? Pct(avgAttendance) : Pct(ViewBag.AttendanceRate))</div></div>
+        <div class="perf-item"><div class="k">@T("Growth vs 2026 baseline", "النمو مقابل أساس 2026")</div><div class="v">@ViewBag.ParticipationGrowth%</div></div>
+        <div class="perf-item"><div class="k">@T("Upcoming activities", "الأنشطة القادمة")</div><div class="v">@ViewBag.UpcomingEvents</div></div>
+        <div class="perf-item"><div class="k">@T("Active users", "المستخدمون النشطون")</div><div class="v">@ViewBag.ActiveUsers</div></div>
+    </div>
+
+    @* ---------- C. Needs attention ---------- *@
     @{
-        // Governance shortcuts: what is waiting for a DSC decision. Counts and links only - the detail
-        // belongs on the review screens, not here.
-        var arAwaiting = (int)(ViewBag.AnnualReportsAwaitingReview ?? 0);
-        var arApproved = (int)(ViewBag.AnnualReportsApproved ?? 0);
-        var chAwaiting = (int)(ViewBag.ChannelSubmissionsAwaitingReview ?? 0);
+        var attentionLinks = new Dictionary<string, string>
+        {
+            ["Booking approvals"] = "/Admin/Bookings",
+            ["Proposed-time responses"] = "/Admin/Bookings",
+            ["KPI submissions"] = "/Admin/Kpi",
+            ["Agenda submissions"] = "/Admin/Reports/Analytics"
+        };
+        var attentionLabels = new Dictionary<string, string>
+        {
+            ["Booking approvals"] = T("Booking approvals", "موافقات الحجز"),
+            ["Proposed-time responses"] = T("Proposed-time responses", "الردود على الأوقات المقترحة"),
+            ["KPI submissions"] = T("KPI submissions", "تقارير المؤشرات"),
+            ["Agenda submissions"] = T("Agenda submissions", "تقارير الأجندة")
+        };
+        var totalWaiting = (int)(ViewBag.PendingApprovals ?? 0) + arAwaiting + chAwaiting;
     }
-    <div class="row g-3 mb-4">
-        <div class="col-md-6 col-xl-4">
-            <div class="chart-card h-100">
-                <div class="chart-title"><i class="bi bi-file-earmark-text me-1" aria-hidden="true"></i>@T("Ghars Annual Reports", "التقارير السنوية لغرس")</div>
-                <div class="d-flex flex-wrap align-items-center gap-3 mt-2">
-                    <div>
-                        <div class="fs-3 fw-semibold">@arAwaiting</div>
-                        <div class="small text-muted">@T("Awaiting review", "بانتظار المراجعة")</div>
-                    </div>
-                    <div>
-                        <div class="fs-3 fw-semibold">@arApproved</div>
-                        <div class="small text-muted">@T("Approved", "معتمدة")</div>
-                    </div>
-                    <a class="btn btn-sm @(arAwaiting > 0 ? "btn-warning" : "btn-outline-secondary") ms-auto" href="/Admin/AnnualReports">
-                        @T("Open", "فتح")
-                    </a>
-                </div>
-            </div>
+    <section class="attention" aria-labelledby="attention-heading">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+            <h2 class="h6 fw-bold mb-0" id="attention-heading">
+                <i class="bi bi-exclamation-circle me-1" aria-hidden="true"></i>@T("Needs attention", "يحتاج إلى إجراء")
+            </h2>
+            <span class="small text-muted">@T("Items awaiting a DSC decision", "عناصر بانتظار قرار المجلس"): <strong>@totalWaiting</strong></span>
         </div>
-        <div class="col-md-6 col-xl-4">
-            <div class="chart-card h-100">
-                <div class="chart-title"><i class="bi bi-collection-play me-1" aria-hidden="true"></i>@T("Ghars Channel", "قناة غرس")</div>
-                <div class="d-flex flex-wrap align-items-center gap-3 mt-2">
-                    <div>
-                        <div class="fs-3 fw-semibold">@chAwaiting</div>
-                        <div class="small text-muted">@T("Submissions awaiting review", "محتوى بانتظار المراجعة")</div>
-                    </div>
-                    <a class="btn btn-sm @(chAwaiting > 0 ? "btn-warning" : "btn-outline-secondary") ms-auto" href="/Admin/Gallery/MediaItems">
-                        @T("Open", "فتح")
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row g-4 mb-4">
-        <div class="col-xl-8"><div class="chart-card"><div class="chart-title">@T("Booking & Attendance Trend", "اتجاه الحجوزات والحضور")</div><div class="chart-subtitle">@T("Monthly movement across selected filters", "الحركة الشهرية حسب الفلاتر المحددة")</div><canvas id="trendChart"></canvas></div></div>
-        <div class="col-xl-4"><div class="chart-card"><div class="chart-title">@T("Booking Status Distribution", "توزيع حالات الحجوزات")</div><div class="chart-subtitle">@T("Confirmed, rejected, modified and pending", "مؤكد ومرفوض ومعدل ومعلق")</div><canvas id="bookingStatusChart"></canvas></div></div>
-    </div>
-
-    <div class="row g-4 mb-4">
-        <div class="col-lg-4"><div class="chart-card"><div class="chart-title">@T("Program Type Mix", "توزيع أنواع البرامج")</div><div class="chart-subtitle">@T("Lectures, workshops, courses and training", "محاضرات وورش ودورات وتدريب")</div><canvas id="programTypeChart"></canvas></div></div>
-        <div class="col-lg-4"><div class="chart-card"><div class="chart-title">@T("Participants by Category", "المشاركون حسب الفئة")</div><div class="chart-subtitle">@T("Players, coaches, administrators, parents and others", "لاعبون ومدربون وإداريون وأولياء أمور وغيرهم")</div><canvas id="categoryChart"></canvas></div></div>
-        <div class="col-lg-4"><div class="chart-card"><div class="chart-title">@T("KPI Target vs Actual", "المستهدف مقابل الفعلي")</div><div class="chart-subtitle">@T("Traffic-light KPI monitoring", "متابعة المؤشرات بالألوان")</div><canvas id="kpiChart"></canvas></div></div>
-    </div>
-
-    <div class="row g-4 mb-4">
-        <div class="col-xl-6"><div class="chart-card"><div class="chart-title">@T("Club KPI Comparison", "مقارنة أداء الأندية")</div><div class="chart-subtitle">@T("Top clubs by approved KPI score", "أفضل الأندية حسب المؤشرات المعتمدة")</div><canvas id="clubChart"></canvas></div></div>
-        <div class="col-xl-6"><div class="chart-card"><div class="chart-title">@T("Partner Contribution", "مساهمة الشركاء")</div><div class="chart-subtitle">@T("Programs and total capacity by entity", "البرامج والسعة حسب الجهة")</div><canvas id="partnerChart"></canvas></div></div>
-    </div>
-
-    <div class="row g-4 mb-4">
-        <div class="col-xl-4"><div class="chart-card"><div class="chart-title">@T("Digital Library", "المكتبة الرقمية")</div><div class="chart-subtitle">@T("Content count by type", "عدد المحتويات حسب النوع")</div><canvas id="libraryChart"></canvas></div></div>
-        <div class="col-xl-4"><div class="chart-card"><div class="chart-title">@T("Gallery & Media", "المعرض والوسائط")</div><div class="chart-subtitle">@T("Media type distribution", "توزيع أنواع الوسائط")</div><canvas id="mediaChart"></canvas></div></div>
-        <div class="col-xl-4"><div class="chart-card"><div class="chart-title">@T("Upload Momentum", "زخم الرفع")</div><div class="chart-subtitle">@T("Album upload trend", "اتجاه رفع الألبومات")</div><canvas id="uploadChart"></canvas></div></div>
-    </div>
-
-    <div class="row g-4 mb-4">
-        <div class="col-xl-4"><div class="insight-card p-4 h-100"><div class="h5 fw-bold mb-3"><i class="bi bi-magic me-2"></i>@T("Smart Insights", "رؤى ذكية")</div>@foreach (var insight in insights){<div class="approval-item"><span>@insight</span><i class="bi bi-chevron-right"></i></div>}</div></div>
-        <div class="col-xl-4"><div class="insight-card p-4 h-100"><div class="h5 fw-bold mb-3"><i class="bi bi-bell me-2"></i>@T("Governance & Pending Actions", "الحوكمة والإجراءات المعلقة")</div>@foreach (var item in approvals){<div class="approval-item"><span>@item.Label</span><span class="status-pill">@item.Value</span></div>}</div></div>
-        <div class="col-xl-4"><div class="insight-card p-4 h-100"><div class="h5 fw-bold mb-3"><i class="bi bi-award me-2"></i>@T("Operational Snapshot", "ملخص تشغيلي")</div>
-            <div class="approval-item"><span>@T("Violations reduction (vs last season)", "خفض المخالفات (مقارنة بالموسم السابق)")</span><span class="status-pill">@Pct(violationsReduction)</span></div>
-            <div class="approval-item"><span>@T("Physical activity ≥150 min/week", "النشاط البدني ≥150 دقيقة أسبوعياً")</span><span class="status-pill">@Pct(avgPhysicalActivity)</span></div>
-            <div class="approval-item"><span>@T("Certificates issued", "الشهادات الصادرة")</span><span class="status-pill">@ViewBag.CertificatesIssued</span></div>
-            <div class="approval-item"><span>@T("Library items", "مواد المكتبة")</span><span class="status-pill">@ViewBag.LibraryCount</span></div>
-            <div class="approval-item"><span>@T("Gallery uploads", "مرفوعات المعرض")</span><span class="status-pill">@ViewBag.GalleryUploadCount</span></div>
-            @* Internal Ghars survey - kept visibly separate from the official Happiness Score above. *@
-            <div class="approval-item"><span>@T("Ghars internal survey score", "مؤشر استبيان غرس الداخلي")</span><span class="status-pill">@Pct(internalStarScore)</span></div>
-        </div></div>
-    </div>
-
-    <div class="row g-4 mb-4">
-        <div class="col-xl-6"><div class="insight-card p-4 h-100"><div class="h5 fw-bold mb-3"><i class="bi bi-activity me-2"></i>@T("Real-Time Activity", "النشاط اللحظي")</div>@foreach (var item in recentActivity){<div class="activity-row"><div><div class="fw-bold">@item.Title</div><div class="small text-muted">@item.Club · @item.Date</div></div><span class="status-pill">@item.Status</span></div>}</div></div>
-        <div class="col-xl-6"><div class="insight-card p-4 h-100"><div class="h5 fw-bold mb-3"><i class="bi bi-calendar-week me-2"></i>@T("Upcoming Activities", "الأنشطة القادمة")</div>@foreach (var item in upcomingList){<div class="activity-row"><div><div class="fw-bold">@item.Title</div><div class="small text-muted">@item.Entity · @item.Date</div></div><span class="status-pill">@item.Type</span></div>}</div></div>
-    </div>
-
-    <div class="insight-card p-4 mb-4">
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-            <div><div class="h5 fw-bold mb-1"><i class="bi bi-grid-3x3-gap me-2"></i>@T("Activity Heatmap", "خريطة كثافة الأنشطة")</div><div class="text-muted small">@T("Club and activity type concentration", "تركيز الأنشطة حسب النادي والنوع")</div></div>
-        </div>
-        <div class="d-flex flex-wrap gap-2">
-            @foreach (var h in heatmap)
+        <div class="attention-grid">
+            @foreach (var item in approvals)
             {
-                <div class="heat-cell"><div class="small text-muted">@h.Club</div><div>@h.Type</div><div class="fs-5">@h.Count</div></div>
+                var key = (string)item.Label;
+                var count = (int)item.Value;
+                var href = attentionLinks.TryGetValue(key, out var link) ? link : "/Admin/Reports/Analytics";
+                var text = attentionLabels.TryGetValue(key, out var label) ? label : key;
+                <a class="attention-item @(count > 0 ? "is-waiting" : "")" href="@href">
+                    <i class="bi @(count > 0 ? "bi-hourglass-split" : "bi-check2-circle")" aria-hidden="true"></i>
+                    <span class="n">@count</span>
+                    <span class="t">@text</span>
+                </a>
+            }
+            <a class="attention-item @(arAwaiting > 0 ? "is-waiting" : "")" href="/Admin/AnnualReports">
+                <i class="bi @(arAwaiting > 0 ? "bi-hourglass-split" : "bi-check2-circle")" aria-hidden="true"></i>
+                <span class="n">@arAwaiting</span>
+                <span class="t">@T("Annual reports awaiting review", "تقارير سنوية بانتظار المراجعة")<br /><span class="text-muted">@arApproved @T("approved", "معتمدة")</span></span>
+            </a>
+            <a class="attention-item @(chAwaiting > 0 ? "is-waiting" : "")" href="/Admin/Gallery/MediaItems">
+                <i class="bi @(chAwaiting > 0 ? "bi-hourglass-split" : "bi-check2-circle")" aria-hidden="true"></i>
+                <span class="n">@chAwaiting</span>
+                <span class="t">@T("Ghars Channel submissions", "محتوى قناة غرس")</span>
+            </a>
+        </div>
+    </section>
+
+    @* ---------- D. Chart grid ---------- *@
+    <h2 class="visually-hidden">@T("Performance charts", "الرسوم البيانية للأداء")</h2>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-xl-8">
+            <div class="chart-card">
+                <div class="chart-head">
+                    <div>
+                        <h3>@T("Bookings & attendance trend", "اتجاه الحجوزات والحضور")</h3>
+                        <p class="chart-sub">@T("Last 12 months, current filters", "آخر 12 شهراً وفق الفلاتر الحالية")</p>
+                    </div>
+                </div>
+                <div class="chart-frame chart-frame--primary">
+                    <canvas id="trendChart" role="img"
+                            aria-label="@T("Line chart of monthly booking and attendance counts over the last twelve months", "رسم خطي لعدد الحجوزات والحضور شهرياً خلال آخر اثني عشر شهراً")"></canvas>
+                </div>
+                <div class="visually-hidden"><table>
+                    <caption>@T("Bookings and attendance by month", "الحجوزات والحضور حسب الشهر")</caption>
+                    <thead><tr><th scope="col">@T("Month", "الشهر")</th><th scope="col">@T("Bookings", "الحجوزات")</th><th scope="col">@T("Attendance", "الحضور")</th></tr></thead>
+                    <tbody>
+                        @{ var bookingSeries = Series(ViewBag.MonthLabelsJson, ViewBag.BookingTrendJson);
+                           var attendanceSeries = Series(ViewBag.MonthLabelsJson, ViewBag.AttendanceTrendJson); }
+                        @for (var i = 0; i < bookingSeries.Count; i++)
+                        {
+                            <tr><th scope="row">@bookingSeries[i].Label</th><td>@bookingSeries[i].Value</td><td>@(i < attendanceSeries.Count ? attendanceSeries[i].Value : "0")</td></tr>
+                        }
+                    </tbody>
+                </table></div>
+            </div>
+        </div>
+        <div class="col-12 col-xl-4">
+            <div class="chart-card">
+                <div class="chart-head">
+                    <div>
+                        <h3>@T("Booking status", "حالات الحجز")</h3>
+                        <p class="chart-sub">@T("Share of requests by status", "توزيع الطلبات حسب الحالة")</p>
+                    </div>
+                    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Bookings">@T("Open", "فتح")</a>
+                </div>
+                <div class="chart-frame">
+                    <canvas id="bookingStatusChart" role="img"
+                            aria-label="@T("Doughnut chart of booking requests by status", "رسم دائري لطلبات الحجز حسب الحالة")"></canvas>
+                </div>
+                <div class="visually-hidden"><table>
+                    <caption>@T("Booking requests by status", "طلبات الحجز حسب الحالة")</caption>
+                    <thead><tr><th scope="col">@T("Status", "الحالة")</th><th scope="col">@T("Requests", "الطلبات")</th></tr></thead>
+                    <tbody>@foreach (var row in Pairs(ViewBag.BookingStatusJson, "Label", "Value")) { <tr><th scope="row">@row.Label</th><td>@row.Value</td></tr> }</tbody>
+                </table></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-6">
+            <div class="chart-card">
+                <div class="chart-head">
+                    <div>
+                        <h3>@T("KPI target vs actual", "المستهدف مقابل الفعلي")</h3>
+                        <p class="chart-sub">@T("Ghars indicators against their targets", "مؤشرات غرس مقارنة بالمستهدفات")</p>
+                    </div>
+                    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Kpi">@T("Open", "فتح")</a>
+                </div>
+                <div class="chart-frame">
+                    <canvas id="kpiChart" role="img"
+                            aria-label="@T("Horizontal bar chart comparing each Ghars indicator against its target", "رسم شريطي أفقي يقارن كل مؤشر غرس بمستهدفه")"></canvas>
+                </div>
+                <div class="visually-hidden"><table>
+                    <caption>@T("Ghars indicators, target and actual", "مؤشرات غرس: المستهدف والفعلي")</caption>
+                    <thead><tr><th scope="col">@T("Indicator", "المؤشر")</th><th scope="col">@T("Target", "المستهدف")</th><th scope="col">@T("Actual", "الفعلي")</th></tr></thead>
+                    <tbody>
+                        @{ var kpiTargetRows = Pairs(ViewBag.KpiTargetsJson, "Label", "Target");
+                           var kpiActualRows = Pairs(ViewBag.KpiTargetsJson, "Label", "Actual"); }
+                        @for (var i = 0; i < kpiTargetRows.Count; i++)
+                        {
+                            <tr><th scope="row">@kpiTargetRows[i].Label</th><td>@kpiTargetRows[i].Value</td><td>@(i < kpiActualRows.Count ? kpiActualRows[i].Value : "")</td></tr>
+                        }
+                    </tbody>
+                </table></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-6">
+            <div class="chart-card">
+                <div class="chart-head">
+                    <div>
+                        <h3>@T("Top 7 clubs by KPI score", "أفضل 7 أندية حسب المؤشرات")</h3>
+                        <p class="chart-sub">@T("Dashboard shows the leaders; the full list is in reports", "تعرض اللوحة المتصدرين، والقائمة الكاملة في التقارير")</p>
+                    </div>
+                    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Reports/Analytics">@T("View all clubs", "كل الأندية")</a>
+                </div>
+                <div class="chart-frame">
+                    <canvas id="clubChart" role="img"
+                            aria-label="@T("Horizontal bar chart of the seven highest scoring clubs by KPI score", "رسم شريطي أفقي لأعلى سبعة أندية حسب درجة المؤشرات")"></canvas>
+                </div>
+                <div class="visually-hidden"><table>
+                    <caption>@T("Top clubs by KPI score", "أفضل الأندية حسب درجة المؤشرات")</caption>
+                    <thead><tr><th scope="col">@T("Club", "النادي")</th><th scope="col">@T("KPI score", "درجة المؤشر")</th></tr></thead>
+                    <tbody>@foreach (var row in Pairs(ViewBag.ClubComparisonJson, "Club", "Score")) { <tr><th scope="row">@row.Label</th><td>@row.Value</td></tr> }</tbody>
+                </table></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-6">
+            <div class="chart-card">
+                <div class="chart-head">
+                    <div>
+                        <h3>@T("Programme type mix", "توزيع أنواع البرامج")</h3>
+                        <p class="chart-sub">@T("Lectures, workshops, courses and training", "محاضرات وورش ودورات وتدريب")</p>
+                    </div>
+                    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Activities">@T("Open", "فتح")</a>
+                </div>
+                <div class="chart-frame">
+                    <canvas id="programTypeChart" role="img"
+                            aria-label="@T("Doughnut chart of programmes by type", "رسم دائري للبرامج حسب النوع")"></canvas>
+                </div>
+                <div class="visually-hidden"><table>
+                    <caption>@T("Programmes by type", "البرامج حسب النوع")</caption>
+                    <thead><tr><th scope="col">@T("Type", "النوع")</th><th scope="col">@T("Programmes", "البرامج")</th></tr></thead>
+                    <tbody>@foreach (var row in Pairs(ViewBag.ProgramTypeJson, "Label", "Value")) { <tr><th scope="row">@row.Label</th><td>@row.Value</td></tr> }</tbody>
+                </table></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-6">
+            <div class="chart-card">
+                <div class="chart-head">
+                    <div>
+                        <h3>@T("Participants by category", "المشاركون حسب الفئة")</h3>
+                        <p class="chart-sub">@T("Players, coaches, administrators, parents and others", "لاعبون ومدربون وإداريون وأولياء أمور وغيرهم")</p>
+                    </div>
+                    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Reports/Analytics">@T("Open", "فتح")</a>
+                </div>
+                <div class="chart-frame">
+                    <canvas id="categoryChart" role="img"
+                            aria-label="@T("Bar chart of participants by target category", "رسم شريطي للمشاركين حسب الفئة المستهدفة")"></canvas>
+                </div>
+                <div class="visually-hidden"><table>
+                    <caption>@T("Participants by target category", "المشاركون حسب الفئة المستهدفة")</caption>
+                    <thead><tr><th scope="col">@T("Category", "الفئة")</th><th scope="col">@T("Participants", "المشاركون")</th></tr></thead>
+                    <tbody>@foreach (var row in Pairs(ViewBag.AgendaCategoryJson, "Label", "Value")) { <tr><th scope="row">@row.Label</th><td>@row.Value</td></tr> }</tbody>
+                </table></div>
+            </div>
+        </div>
+    </div>
+
+    @* ---------- E. Insights and activity ---------- *@
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-4">
+            <div class="panel">
+                <h3><i class="bi bi-lightbulb me-1" aria-hidden="true"></i>@T("Smart insights", "رؤى ذكية")</h3>
+                @foreach (var insight in insights)
+                {
+                    <div class="insight-row"><i class="bi bi-dot" aria-hidden="true"></i><span>@insight</span></div>
+                }
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="panel">
+                <h3><i class="bi bi-activity me-1" aria-hidden="true"></i>@T("Recent bookings", "أحدث الحجوزات")</h3>
+                @if (!recentActivity.Any())
+                {
+                    <div class="chart-empty">@T("No recent bookings for this selection.", "لا توجد حجوزات حديثة لهذا التحديد.")</div>
+                }
+                @foreach (var item in recentActivity)
+                {
+                    <div class="list-row"><div><div class="m">@item.Title</div><div class="s">@item.Club · @item.Date</div></div><span class="status-pill">@item.Status</span></div>
+                }
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="panel">
+                <h3><i class="bi bi-calendar-week me-1" aria-hidden="true"></i>@T("Upcoming activities", "الأنشطة القادمة")</h3>
+                @if (!upcomingList.Any())
+                {
+                    <div class="chart-empty">@T("No upcoming published activities.", "لا توجد أنشطة منشورة قادمة.")</div>
+                }
+                @foreach (var item in upcomingList)
+                {
+                    <div class="list-row"><div><div class="m">@item.Title</div><div class="s">@item.Entity · @item.Date</div></div><span class="status-pill">@item.Type</span></div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ---------- Operational snapshot: one compact strip ---------- *@
+    <div class="panel mb-3">
+        <h3><i class="bi bi-clipboard-data me-1" aria-hidden="true"></i>@T("Operational snapshot", "ملخص تشغيلي")</h3>
+        <div class="snapshot">
+            <div class="snapshot-item"><div class="k">@T("Violations reduction (vs last season)", "خفض المخالفات (مقارنة بالموسم السابق)")</div><div class="v">@Pct(violationsReduction)</div></div>
+            <div class="snapshot-item"><div class="k">@T("Physical activity ≥150 min/week", "النشاط البدني ≥150 دقيقة أسبوعياً")</div><div class="v">@Pct(avgPhysicalActivity)</div></div>
+            <div class="snapshot-item"><div class="k">@T("Certificates issued", "الشهادات الصادرة")</div><div class="v">@ViewBag.CertificatesIssued</div></div>
+            <div class="snapshot-item"><div class="k">@T("Library items", "مواد المكتبة")</div><div class="v">@ViewBag.LibraryCount</div></div>
+            <div class="snapshot-item"><div class="k">@T("Gallery uploads", "مرفوعات المعرض")</div><div class="v">@ViewBag.GalleryUploadCount</div></div>
+            @* Internal Ghars survey - kept visibly separate from the official satisfaction score above. *@
+            <div class="snapshot-item"><div class="k">@T("Ghars internal survey score", "مؤشر استبيان غرس الداخلي")</div><div class="v">@Pct(internalStarScore)</div></div>
+        </div>
+    </div>
+
+    @* ---------- F. Secondary analytics, collapsed ----------
+         Nothing is removed: the four lower-priority charts and the activity heatmap still live here, but
+         they no longer cost the reader five screens of scrolling to get past. Their canvases are only
+         created when the section is first opened, so a closed section costs nothing to render. *@
+    <div class="text-center mb-4">
+        <button class="btn btn-outline-secondary btn-sm more-toggle" type="button" data-bs-toggle="collapse"
+                data-bs-target="#secondaryAnalytics" aria-expanded="false" aria-controls="secondaryAnalytics">
+            @T("More analytics", "تحليلات إضافية") <i class="bi bi-chevron-down ms-1" aria-hidden="true"></i>
+        </button>
+    </div>
+
+    <div class="collapse" id="secondaryAnalytics">
+        <div class="row g-3 mb-3">
+            <div class="col-12 col-lg-6">
+                <div class="chart-card">
+                    <div class="chart-head"><div><h3>@T("Entity contribution", "مساهمة الجهات")</h3><p class="chart-sub">@T("Programmes and capacity by implementing entity", "البرامج والسعة حسب الجهة المنفذة")</p></div></div>
+                    <div class="chart-frame"><canvas id="partnerChart" role="img" aria-label="@T("Horizontal bar chart of programmes and capacity by implementing entity", "رسم شريطي أفقي للبرامج والسعة حسب الجهة المنفذة")"></canvas></div>
+                    <div class="visually-hidden"><table>
+                        <caption>@T("Programmes by implementing entity", "البرامج حسب الجهة المنفذة")</caption>
+                        <thead><tr><th scope="col">@T("Entity", "الجهة")</th><th scope="col">@T("Programmes", "البرامج")</th><th scope="col">@T("Capacity", "السعة")</th></tr></thead>
+                        <tbody>
+                            @{ var partnerPrograms = Pairs(ViewBag.PartnerContributionJson, "Partner", "Programs");
+                               var partnerCapacity = Pairs(ViewBag.PartnerContributionJson, "Partner", "Capacity"); }
+                            @for (var i = 0; i < partnerPrograms.Count; i++)
+                            {
+                                <tr><th scope="row">@partnerPrograms[i].Label</th><td>@partnerPrograms[i].Value</td><td>@(i < partnerCapacity.Count ? partnerCapacity[i].Value : "")</td></tr>
+                            }
+                        </tbody>
+                    </table></div>
+                </div>
+            </div>
+            <div class="col-12 col-lg-6">
+                <div class="chart-card">
+                    <div class="chart-head"><div><h3>@T("Upload momentum", "زخم الرفع")</h3><p class="chart-sub">@T("Gallery album uploads per month", "رفع ألبومات المعرض شهرياً")</p></div></div>
+                    <div class="chart-frame"><canvas id="uploadChart" role="img" aria-label="@T("Line chart of gallery album uploads per month", "رسم خطي لرفع ألبومات المعرض شهرياً")"></canvas></div>
+                    <div class="visually-hidden"><table>
+                        <caption>@T("Album uploads by month", "رفع الألبومات حسب الشهر")</caption>
+                        <thead><tr><th scope="col">@T("Month", "الشهر")</th><th scope="col">@T("Albums", "الألبومات")</th></tr></thead>
+                        <tbody>@foreach (var row in Series(ViewBag.MonthLabelsJson, ViewBag.UploadTrendJson)) { <tr><th scope="row">@row.Label</th><td>@row.Value</td></tr> }</tbody>
+                    </table></div>
+                </div>
+            </div>
+            <div class="col-12 col-lg-6">
+                <div class="chart-card">
+                    <div class="chart-head"><div><h3>@T("Digital library", "المكتبة الرقمية")</h3><p class="chart-sub">@T("Published content by type", "المحتوى المنشور حسب النوع")</p></div><a class="btn btn-sm btn-outline-secondary" href="/Admin/Library/Categories">@T("Open", "فتح")</a></div>
+                    <div class="chart-frame"><canvas id="libraryChart" role="img" aria-label="@T("Doughnut chart of published library content by type", "رسم دائري لمحتوى المكتبة المنشور حسب النوع")"></canvas></div>
+                    <div class="visually-hidden"><table>
+                        <caption>@T("Library content by type", "محتوى المكتبة حسب النوع")</caption>
+                        <thead><tr><th scope="col">@T("Type", "النوع")</th><th scope="col">@T("Items", "المواد")</th></tr></thead>
+                        <tbody>@foreach (var row in Pairs(ViewBag.LibraryDistributionJson, "Label", "Value")) { <tr><th scope="row">@row.Label</th><td>@row.Value</td></tr> }</tbody>
+                    </table></div>
+                </div>
+            </div>
+            <div class="col-12 col-lg-6">
+                <div class="chart-card">
+                    <div class="chart-head"><div><h3>@T("Gallery & media", "المعرض والوسائط")</h3><p class="chart-sub">@T("Media type distribution", "توزيع أنواع الوسائط")</p></div><a class="btn btn-sm btn-outline-secondary" href="/Admin/Gallery">@T("Open", "فتح")</a></div>
+                    <div class="chart-frame"><canvas id="mediaChart" role="img" aria-label="@T("Doughnut chart of gallery media by type", "رسم دائري لوسائط المعرض حسب النوع")"></canvas></div>
+                    <div class="visually-hidden"><table>
+                        <caption>@T("Gallery media by type", "وسائط المعرض حسب النوع")</caption>
+                        <thead><tr><th scope="col">@T("Type", "النوع")</th><th scope="col">@T("Items", "العناصر")</th></tr></thead>
+                        <tbody>@foreach (var row in Pairs(ViewBag.MediaDistributionJson, "Label", "Value")) { <tr><th scope="row">@row.Label</th><td>@row.Value</td></tr> }</tbody>
+                    </table></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel mb-4">
+            <h3><i class="bi bi-grid-3x3-gap me-1" aria-hidden="true"></i>@T("Activity concentration", "تركيز الأنشطة")</h3>
+            <p class="chart-sub mb-2">@T("The twelve densest club and activity-type pairs. The full breakdown is in reports.", "أكثر اثني عشر اقتراناً بين النادي ونوع النشاط. التفصيل الكامل في التقارير.")</p>
+            @if (!heatmap.Any())
+            {
+                <div class="chart-empty">@T("No agenda activity for the selected season.", "لا يوجد نشاط في الأجندة للموسم المحدد.")</div>
+            }
+            else
+            {
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var h in heatmap)
+                    {
+                        <div class="heat-cell"><div class="c">@h.Club</div><div class="c">@h.Type</div><div class="n">@h.Count</div></div>
+                    }
+                </div>
             }
         </div>
     </div>
@@ -219,6 +588,8 @@
 <script>
 (function () {
     const rtl = document.documentElement.dir === 'rtl';
+    const EMPTY = @Html.Raw(JsonSerializer.Serialize(T("No data available for the selected season.", "لا توجد بيانات للموسم المحدد.")));
+
     const labels = @Html.Raw(ViewBag.MonthLabelsJson ?? "[]");
     const bookingTrend = @Html.Raw(ViewBag.BookingTrendJson ?? "[]");
     const attendanceTrend = @Html.Raw(ViewBag.AttendanceTrendJson ?? "[]");
@@ -232,37 +603,200 @@
     const clubComparison = @Html.Raw(ViewBag.ClubComparisonJson ?? "[]");
     const partnerContribution = @Html.Raw(ViewBag.PartnerContributionJson ?? "[]");
 
+    const GREEN = '#4f9a5d', DARK = '#1f5b37', SAND = '#e0b25c', SKY = '#5b8fc9', CLAY = '#c96f5b', SLATE = '#8792a3';
+    const PALETTE = [GREEN, SKY, SAND, CLAY, DARK, SLATE, '#7fb98a', '#9fb8d6'];
+
     Chart.defaults.font.family = "system-ui, -apple-system, Segoe UI, sans-serif";
+    Chart.defaults.font.size = 11;
     Chart.defaults.color = '#566070';
-    const grid = { color: 'rgba(90,105,120,.12)' };
-    const opts = { responsive: true, maintainAspectRatio: false, animation: { duration: 900, easing: 'easeOutQuart' }, plugins: { legend: { position: 'bottom', rtl: rtl } }, scales: { y: { beginAtZero: true, grid: grid }, x: { grid: { display:false } } } };
-    const pickLabels = arr => arr.map(x => x.Label || x.Club || x.Partner);
-    const pickValues = (arr, key='Value') => arr.map(x => x[key] ?? 0);
+    Chart.defaults.animation.duration = 600;
 
-    function chart(id, config) { const el = document.getElementById(id); if (el) new Chart(el, config); }
-    chart('trendChart', { type:'line', data:{ labels, datasets:[{ label:'@T("Bookings", "الحجوزات")', data:bookingTrend, tension:.35, fill:true },{ label:'@T("Attendance", "الحضور")', data:attendanceTrend, tension:.35, fill:true }] }, options:opts });
-    chart('bookingStatusChart', { type:'doughnut', data:{ labels:pickLabels(bookingStatus), datasets:[{ data:pickValues(bookingStatus) }] }, options:{ responsive:true, maintainAspectRatio:false, animation:{duration:900}, plugins:{ legend:{position:'bottom', rtl:rtl} } } });
-    chart('programTypeChart', { type:'pie', data:{ labels:pickLabels(programType), datasets:[{ data:pickValues(programType) }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'bottom', rtl:rtl} } } });
-    chart('categoryChart', { type:'bar', data:{ labels:pickLabels(agendaCategory), datasets:[{ label:'@T("Participants", "المشاركون")', data:pickValues(agendaCategory) }] }, options:opts });
-    chart('kpiChart', { type:'bar', data:{ labels:kpiTargets.map(x=>x.Label), datasets:[{ label:'@T("Target", "المستهدف")', data:kpiTargets.map(x=>x.Target) },{ label:'@T("Actual", "الفعلي")', data:kpiTargets.map(x=>x.Actual) }] }, options:opts });
-    chart('clubChart', { type:'bar', data:{ labels:pickLabels(clubComparison), datasets:[{ label:'@T("KPI Score", "درجة المؤشر")', data:clubComparison.map(x=>Math.round((x.Score ?? 0)*10)/10) }] }, options:opts });
-    chart('partnerChart', { type:'bar', data:{ labels:pickLabels(partnerContribution), datasets:[{ label:'@T("Programs", "البرامج")', data:partnerContribution.map(x=>x.Programs ?? 0) },{ label:'@T("Capacity", "السعة")', data:partnerContribution.map(x=>x.Capacity ?? 0) }] }, options:opts });
-    chart('libraryChart', { type:'doughnut', data:{ labels:pickLabels(libraryDistribution), datasets:[{ data:pickValues(libraryDistribution) }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'bottom', rtl:rtl} } } });
-    chart('mediaChart', { type:'doughnut', data:{ labels:pickLabels(mediaDistribution), datasets:[{ data:pickValues(mediaDistribution) }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'bottom', rtl:rtl} } } });
-    chart('uploadChart', { type:'line', data:{ labels, datasets:[{ label:'@T("Albums", "الألبومات")', data:uploadTrend, tension:.35, fill:true }] }, options:opts });
+    const gridLine = { color: 'rgba(90,105,120,.12)', drawBorder: false };
+    const trunc = (s, n) => { s = String(s ?? ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
-    document.querySelectorAll('.counter').forEach(el => {
-        const raw = String(el.dataset.target || el.textContent || '0').replace('%','');
+    // Legends are capped so a long category list eats chart area instead of growing the card. Height is
+    // fixed by .chart-frame either way, but an uncapped legend can crowd the plot down to nothing.
+    const legendBottom = { position: 'bottom', rtl: rtl, maxHeight: 56,
+        labels: { boxWidth: 10, boxHeight: 10, padding: 8, usePointStyle: true, pointStyle: 'circle' } };
+
+    const pickLabels = arr => arr.map(x => x.Label ?? x.Club ?? x.Partner ?? '');
+    const pickValues = (arr, key = 'Value') => arr.map(x => Number(x[key] ?? 0));
+
+    const charts = new Map();
+
+    function hasData(values) {
+        return Array.isArray(values) && values.some(v => Number(v) > 0);
+    }
+
+    // One creation path for every chart: it refuses to draw an empty canvas, and it destroys any
+    // previous instance for the same id so a re-render can never hit "Canvas is already in use".
+    function render(id, values, config) {
+        const canvas = document.getElementById(id);
+        if (!canvas) return;
+        const frame = canvas.closest('.chart-frame');
+        if (!hasData(values)) {
+            if (frame) {
+                frame.classList.add('is-empty');
+                frame.innerHTML = '<div class="chart-empty"><i class="bi bi-bar-chart" aria-hidden="true"></i><span></span></div>';
+                frame.querySelector('span').textContent = EMPTY;
+            }
+            return;
+        }
+        const existing = charts.get(id);
+        if (existing) { existing.destroy(); charts.delete(id); }
+        charts.set(id, new Chart(canvas, config));
+    }
+
+    // Horizontal bars for anything whose categories are organization or indicator names: they are long,
+    // bilingual, and unreadable rotated 45 degrees on a vertical axis.
+    function horizontalBar(datasets, labelsIn, maxLabel) {
+        return {
+            type: 'bar',
+            data: { labels: labelsIn, datasets },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: { padding: { right: 6, left: 6 } },
+                plugins: {
+                    legend: datasets.length > 1 ? legendBottom : { display: false },
+                    tooltip: { rtl: rtl }
+                },
+                scales: {
+                    x: { beginAtZero: true, grid: gridLine, reverse: rtl, ticks: { maxTicksLimit: 6 } },
+                    // In Arabic the category axis moves to the right and the value axis runs right to
+                    // left. Magnitude mirrors correctly; chronological order never does, which is why
+                    // the month series below is deliberately left alone.
+                    y: { grid: { display: false }, position: rtl ? 'right' : 'left',
+                         ticks: { autoSkip: false, callback(v) { return trunc(this.getLabelForValue(v), maxLabel); } } }
+                }
+            }
+        };
+    }
+
+    function verticalBar(datasets, labelsIn) {
+        return {
+            type: 'bar',
+            data: { labels: labelsIn, datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: datasets.length > 1 ? legendBottom : { display: false }, tooltip: { rtl: rtl } },
+                scales: {
+                    y: { beginAtZero: true, grid: gridLine, ticks: { maxTicksLimit: 6 } },
+                    x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: false, callback(v) { return trunc(this.getLabelForValue(v), 12); } } }
+                }
+            }
+        };
+    }
+
+    function doughnut(labelsIn, values) {
+        return {
+            type: 'doughnut',
+            data: { labels: labelsIn, datasets: [{ data: values, backgroundColor: PALETTE, borderWidth: 0 }] },
+            options: {
+                responsive: true, maintainAspectRatio: false, cutout: '58%',
+                plugins: { legend: legendBottom, tooltip: { rtl: rtl } }
+            }
+        };
+    }
+
+    // ---- Primary charts ----
+    render('trendChart', [].concat(bookingTrend, attendanceTrend), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                { label: @Html.Raw(JsonSerializer.Serialize(T("Bookings", "الحجوزات"))), data: bookingTrend, tension: .35, fill: true,
+                  borderColor: GREEN, backgroundColor: 'rgba(79,154,93,.16)', pointRadius: 2, borderWidth: 2 },
+                { label: @Html.Raw(JsonSerializer.Serialize(T("Attendance", "الحضور"))), data: attendanceTrend, tension: .35, fill: true,
+                  borderColor: SKY, backgroundColor: 'rgba(91,143,201,.14)', pointRadius: 2, borderWidth: 2 }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: { legend: legendBottom, tooltip: { rtl: rtl } },
+            scales: {
+                y: { beginAtZero: true, grid: gridLine, ticks: { maxTicksLimit: 6 } },
+                // Months stay left to right in both languages: reversing a time axis would say the
+                // programme ran backwards.
+                x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } }
+            }
+        }
+    });
+
+    render('bookingStatusChart', pickValues(bookingStatus), doughnut(pickLabels(bookingStatus), pickValues(bookingStatus)));
+
+    render('kpiChart', kpiTargets.map(x => Number(x.Actual ?? 0)).concat(kpiTargets.map(x => Number(x.Target ?? 0))),
+        horizontalBar([
+            { label: @Html.Raw(JsonSerializer.Serialize(T("Actual", "الفعلي"))), data: kpiTargets.map(x => Number(x.Actual ?? 0)), backgroundColor: GREEN, borderRadius: 3, barPercentage: .8 },
+            { label: @Html.Raw(JsonSerializer.Serialize(T("Target", "المستهدف"))), data: kpiTargets.map(x => Number(x.Target ?? 0)), backgroundColor: 'rgba(31,91,55,.22)', borderRadius: 3, barPercentage: .8 }
+        ], kpiTargets.map(x => x.Label), 26));
+
+    render('clubChart', clubComparison.map(x => Number(x.Score ?? 0)),
+        horizontalBar([
+            { label: @Html.Raw(JsonSerializer.Serialize(T("KPI score", "درجة المؤشر"))), data: clubComparison.map(x => Math.round((x.Score ?? 0) * 10) / 10), backgroundColor: GREEN, borderRadius: 3 }
+        ], pickLabels(clubComparison), 24));
+
+    render('programTypeChart', pickValues(programType), doughnut(pickLabels(programType), pickValues(programType)));
+
+    render('categoryChart', pickValues(agendaCategory),
+        verticalBar([{ label: @Html.Raw(JsonSerializer.Serialize(T("Participants", "المشاركون"))), data: pickValues(agendaCategory), backgroundColor: SKY, borderRadius: 3 }],
+            pickLabels(agendaCategory)));
+
+    // ---- Secondary charts: built the first time the section is opened ----
+    let secondaryBuilt = false;
+    function buildSecondary() {
+        if (secondaryBuilt) return;
+        secondaryBuilt = true;
+
+        render('partnerChart', partnerContribution.map(x => Number(x.Programs ?? 0)),
+            horizontalBar([
+                { label: @Html.Raw(JsonSerializer.Serialize(T("Programmes", "البرامج"))), data: partnerContribution.map(x => Number(x.Programs ?? 0)), backgroundColor: GREEN, borderRadius: 3 },
+                { label: @Html.Raw(JsonSerializer.Serialize(T("Capacity", "السعة"))), data: partnerContribution.map(x => Number(x.Capacity ?? 0)), backgroundColor: SAND, borderRadius: 3 }
+            ], pickLabels(partnerContribution), 22));
+
+        render('uploadChart', uploadTrend, {
+            type: 'line',
+            data: { labels, datasets: [{ label: @Html.Raw(JsonSerializer.Serialize(T("Albums", "الألبومات"))), data: uploadTrend, tension: .35, fill: true,
+                     borderColor: SAND, backgroundColor: 'rgba(224,178,92,.18)', pointRadius: 2, borderWidth: 2 }] },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { rtl: rtl } },
+                scales: { y: { beginAtZero: true, grid: gridLine, ticks: { maxTicksLimit: 6 } },
+                          x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } } }
+            }
+        });
+
+        render('libraryChart', pickValues(libraryDistribution), doughnut(pickLabels(libraryDistribution), pickValues(libraryDistribution)));
+        render('mediaChart', pickValues(mediaDistribution), doughnut(pickLabels(mediaDistribution), pickValues(mediaDistribution)));
+    }
+
+    const secondary = document.getElementById('secondaryAnalytics');
+    if (secondary) secondary.addEventListener('shown.bs.collapse', buildSecondary);
+
+    // ---- Headline counters ----
+    // The final frame restores the server-rendered text verbatim rather than reprinting the number.
+    // Values are formatted in the request's culture, and Arabic uses U+066B as the decimal separator,
+    // which parseFloat stops at: counting up to a reprinted value turned 85.8% into 85%.
+    document.querySelectorAll('.js-counter').forEach(el => {
+        const finalText = el.textContent;
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        const raw = String(el.dataset.target ?? '').replace('%', '').trim();
         const target = parseFloat(raw);
-        if (Number.isNaN(target)) return;
-        const suffix = String(el.textContent).includes('%') || String(el.dataset.target).includes('%') ? '%' : '';
+        if (!raw || Number.isNaN(target)) return;
+        const suffix = raw !== String(el.dataset.target ?? '').trim() ? '%' : '';
         let start = null;
         function step(ts) {
             start ??= ts;
-            const p = Math.min((ts - start) / 900, 1);
-            const val = target * p;
-            el.textContent = (target % 1 === 0 ? Math.round(val) : val.toFixed(1)) + suffix;
-            if (p < 1) requestAnimationFrame(step);
+            const p = Math.min((ts - start) / 700, 1);
+            if (p < 1) {
+                const val = target * p;
+                el.textContent = (target % 1 === 0 ? Math.round(val) : val.toFixed(1)) + suffix;
+                requestAnimationFrame(step);
+            } else {
+                el.textContent = finalText;
+            }
         }
         requestAnimationFrame(step);
     });

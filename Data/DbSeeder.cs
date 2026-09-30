@@ -10,7 +10,39 @@ namespace GharsPlatform.Data;
 public static class DbSeeder
 {
     /// <summary>Domain used by every demo account. Nothing outside it is ever touched by demo seeding.</summary>
-    private const string DemoEmailDomain = "@ghars.local";
+    public const string DemoEmailDomain = "@ghars.local";
+
+    /// <summary>
+    /// The two organization demo accounts. Named for what they are rather than after a real club or
+    /// entity, so that nobody has to work out from an address whether an account belongs to a person.
+    /// </summary>
+    public const string DemoClubEmail = "democlub" + DemoEmailDomain;
+    public const string DemoEntityEmail = "demoentity" + DemoEmailDomain;
+
+    /// <summary>
+    /// The demo administrator accounts, kept alongside the two organization ones. These are unchanged:
+    /// the reduction is to the club and entity accounts, which were one per approved organization.
+    /// </summary>
+    public static readonly string[] DemoAdminEmails =
+    {
+        "superadmin" + DemoEmailDomain,
+        "dscadmin" + DemoEmailDomain,
+        "admin1" + DemoEmailDomain,
+        "admin2" + DemoEmailDomain,
+        "admin3" + DemoEmailDomain
+    };
+
+    /// <summary>Every demo account this seeder still creates. Read by <see cref="Helpers.DemoAccountPurger"/>.</summary>
+    public static readonly string[] RetainedDemoEmails =
+        DemoAdminEmails.Concat(new[] { DemoClubEmail, DemoEntityEmail }).ToArray();
+
+    /// <summary>
+    /// The organizations the two demo accounts are scoped to. Named rather than positional: which
+    /// organization a demo account sees is the whole content of a scoped screen, and it should not
+    /// change because the roster gained a name earlier in the alphabet.
+    /// </summary>
+    private const string DemoClubOrganizationNameEn = "Shabab Al Ahli Club";
+    private const string DemoEntityOrganizationNameEn = "Community Development Authority";
 
     // Configuration keys. Each is also readable as a flat environment variable, so an operator can
     // export GHARS_BOOTSTRAP_ADMIN_PASSWORD without knowing the ASP.NET "__" section convention.
@@ -416,41 +448,75 @@ public static class DbSeeder
     }
 
 
+    /// <summary>
+    /// The two organization demo accounts, and the learning programs every approved entity needs in
+    /// order for the booking catalogue to have anything in it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Two accounts, not twenty-five.</b> This used to create one account per approved organization
+    /// — 17 implementing entities, 7 clubs, plus <c>club1@ghars.local</c> — all sharing a password that
+    /// is published in this repository's git history. Twenty-five accounts named after real
+    /// organizations are also twenty-five chances to mistake one for the account that organization
+    /// actually signs in with. There are now exactly two, named for what they are, and nothing about
+    /// their addresses suggests they belong to anybody:
+    /// <c>democlub@ghars.local</c> and <c>demoentity@ghars.local</c>.
+    /// </para>
+    /// <para>
+    /// The real organization accounts are a separate thing entirely, created by
+    /// <see cref="Helpers.OrganizationAccountSeeder"/> and <see cref="Helpers.PlatformUserSeeder"/>
+    /// against a real domain. Accounts the earlier seeding left behind are removed by
+    /// <see cref="Helpers.DemoAccountPurger"/>; this method only stops making new ones.
+    /// </para>
+    /// <para>
+    /// <b>Programs are seeded for every entity regardless.</b> They used to be created inside the
+    /// per-partner account loop, so cutting the accounts would have cut the catalogue with them and
+    /// left the demo with one bookable entity out of seventeen. They are attributed to the demo entity
+    /// account — or, if no demo password is configured, to whatever account this database already has.
+    /// </para>
+    /// </remarks>
     private static async Task SeedOrgUsersAndLearningProgramsAsync(AppDbContext db, UserManager<ApplicationUser> userManager, string? demoPassword, ILogger logger)
     {
         var season = await db.Seasons.OrderByDescending(x => x.IsActive).ThenByDescending(x => x.Id).FirstAsync();
 
-        // Approved implementing entities only. A partner admin account is never created for a
-        // deactivated or legacy organization: the account would sign in to a dashboard scoped to an
-        // entity no club can book, which is worse than having no account at all.
+        // Approved organizations only. A demo account scoped to a deactivated or legacy organization
+        // signs in to a workspace no club can book from, which is worse than having no account at all.
         var partnerOrganizations = await db.Organizations.ApprovedPartners().ToListAsync();
-
-        foreach (var org in partnerOrganizations)
-        {
-            var name = org.NameEn;
-            if (org is null) continue;
-
-            var email = $"partner-{MakeSlug(name)}@ghars.local";
-            var user = await EnsureUserAsync(userManager, email, $"{name} Partner Admin", RoleNames.PartnerAdmin, org.Id, demoPassword, logger);
-            if (user is null) continue;
-            await EnsureOrgLinkAsync(db, org.Id, user.Id, OrganizationType.OtherPartner);
-            await SeedProgramsForPartnerAsync(db, season.Id, org, user.Id);
-        }
-
         var clubs = await db.Organizations.ApprovedClubs().ToListAsync();
 
-        foreach (var club in clubs)
+        // Named rather than "first in the list": which organization the demo account is scoped to
+        // decides what a developer sees on every scoped screen, and that should not silently change
+        // because the roster gained a name earlier in the alphabet.
+        var demoClubOrg = clubs.FirstOrDefault(x => x.NameEn == DemoClubOrganizationNameEn) ?? clubs.FirstOrDefault();
+        var demoEntityOrg = partnerOrganizations.FirstOrDefault(x => x.NameEn == DemoEntityOrganizationNameEn)
+                            ?? partnerOrganizations.FirstOrDefault();
+
+        if (demoClubOrg is not null)
         {
-            var email = $"club-{MakeSlug(club.NameEn)}@ghars.local";
-            var user = await EnsureUserAsync(userManager, email, $"{club.NameEn} Club Admin", RoleNames.ClubAdmin, club.Id, demoPassword, logger);
-            if (user is not null) await EnsureOrgLinkAsync(db, club.Id, user.Id, OrganizationType.Club);
+            var user = await EnsureUserAsync(userManager, DemoClubEmail, "Demo Club Admin", RoleNames.ClubAdmin, demoClubOrg.Id, demoPassword, logger);
+            if (user is not null) await EnsureOrgLinkAsync(db, demoClubOrg.Id, user.Id, OrganizationType.Club);
         }
 
-        var shabab = clubs.FirstOrDefault(x => x.NameEn == "Shabab Al Ahli Club");
-        if (shabab is not null)
+        ApplicationUser? demoEntityUser = null;
+        if (demoEntityOrg is not null)
         {
-            var user = await EnsureUserAsync(userManager, "club1@ghars.local", "Shabab Al Ahli Club Admin", RoleNames.ClubAdmin, shabab.Id, demoPassword, logger);
-            if (user is not null) await EnsureOrgLinkAsync(db, shabab.Id, user.Id, OrganizationType.Club);
+            demoEntityUser = await EnsureUserAsync(userManager, DemoEntityEmail, "Demo Entity Admin", RoleNames.PartnerAdmin, demoEntityOrg.Id, demoPassword, logger);
+            if (demoEntityUser is not null) await EnsureOrgLinkAsync(db, demoEntityOrg.Id, demoEntityUser.Id, OrganizationType.OtherPartner);
+        }
+
+        // Whoever ends up owning the seeded programs, it has to be a real user id: the activity screens
+        // resolve a creator, and "seed" resolves to nobody.
+        var programAuthorId = demoEntityUser?.Id
+                              ?? (await userManager.Users.OrderBy(x => x.Id).Select(x => x.Id).FirstOrDefaultAsync());
+
+        if (programAuthorId is not null)
+        {
+            foreach (var org in partnerOrganizations)
+                await SeedProgramsForPartnerAsync(db, season.Id, org, programAuthorId);
+        }
+        else
+        {
+            logger.LogWarning("No user exists to own the seeded learning programs, so none were created.");
         }
 
         await db.SaveChangesAsync();
@@ -512,7 +578,10 @@ public static class DbSeeder
 
         foreach (var p in programs)
         {
-            if (await db.Activities.AnyAsync(x => x.CreatedByUserId == partnerUserId && x.TitleEn == p.Item1)) continue;
+            // Keyed on the organization, not on who created the row. A program belongs to the entity
+            // offering it, and the creator changed when the per-partner demo accounts went away — an
+            // existing development database would otherwise seed the whole catalogue a second time.
+            if (await db.Activities.AnyAsync(x => x.PartnerOrganizationId == org.Id && x.TitleEn == p.Item1)) continue;
             var start = baseDate.AddDays(p.Item4);
             db.Activities.Add(new Activity
             {
@@ -586,12 +655,12 @@ public static class DbSeeder
         var adminUser = await userManager.Users.FirstOrDefaultAsync(x => x.Email == "superadmin@ghars.local");
         var adminId = adminUser?.Id ?? "seed";
 
-        // Make sure every selected partner has visible published programs.
+        // Make sure every selected partner has visible published programs. This used to look up a
+        // per-partner demo account and skip any entity that had none; programs are now seeded for
+        // every approved entity in SeedOrgUsersAndLearningProgramsAsync, which runs first, so this is
+        // a backstop for a database seeded before that change rather than the main path.
         foreach (var partner in partners)
-        {
-            var partnerUser = await userManager.Users.FirstOrDefaultAsync(x => x.PrimaryOrganizationId == partner.Id);
-            if (partnerUser != null) await SeedProgramsForPartnerAsync(db, baseline.Id, partner, partnerUser.Id);
-        }
+            await SeedProgramsForPartnerAsync(db, baseline.Id, partner, adminId);
         await db.SaveChangesAsync();
 
         // Only offerings owned by an approved implementing entity. Without this the demo bookings are
@@ -682,7 +751,13 @@ public static class DbSeeder
             if (!clubUserIds.Any()) clubUserIds = clubUsers.Take(3).Select(x => x.Id).ToList();
             foreach (var userId in clubUserIds)
             {
-                if (!await db.AttendanceRecords.AnyAsync(x => x.AttendanceSessionId == session.Id && x.UserId == userId))
+                // The change tracker as well as the database. An attendance session belongs to an
+                // activity, and two clubs can book the same activity, so one session is reached twice
+                // in this loop — and with a single demo club account both passes now nominate the same
+                // person. Checking only the database lets both inserts through and the unique index on
+                // (AttendanceSessionId, UserId) fails the whole SaveChanges.
+                var alreadyAdded = db.AttendanceRecords.Local.Any(x => x.AttendanceSessionId == session.Id && x.UserId == userId);
+                if (!alreadyAdded && !await db.AttendanceRecords.AnyAsync(x => x.AttendanceSessionId == session.Id && x.UserId == userId))
                 {
                     db.AttendanceRecords.Add(new AttendanceRecord
                     {

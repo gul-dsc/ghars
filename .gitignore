@@ -94,6 +94,13 @@ logs/
 # Word/Excel owner files, created while a document in docs/ is open.
 ~$*
 
+# --- Personal data ---------------------------------------------------------
+# Signed platform user nomination forms and the manifest built from them: real names, job titles,
+# mobile numbers and work addresses of identifiable people. This repository is public. The manifest is
+# passed to seed-platform-users with --file at run time and is never committed.
+docs/docs/
+ghars-users*.csv
+
 # --- Agent / tooling session state ----------------------------------------
 # Local assistant working memory and transcripts; machine-specific, not project source.
 .remember/

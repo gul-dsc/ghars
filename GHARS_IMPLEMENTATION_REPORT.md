@@ -4370,3 +4370,211 @@ the parameter, so bookmarked URLs carrying it return 200 rather than breaking.
 View, CSS, JavaScript and controller projection only. No new frontend dependency: Chart.js 4.4.1 is still the
 only charting library and still loads from the CDN reference already in `_AdminLayout.cshtml`. Nothing
 requires a manual production step, and the Azure pipeline is unchanged.
+
+---
+
+## 42. Demo Account Reduction and Named User Provisioning (2026-09-30)
+
+Two related changes to who can sign in. Demo seeding created one account per approved organization —
+fifty accounts on a development database, all sharing a password published in this repository's git
+history, each named after a real club or implementing entity. That set is now two. Separately, the
+organizations have returned their signed nomination forms naming the people who will actually use the
+platform, and there is now a command that provisions them.
+
+No schema change, no migration, no change to any metric, report or booking rule.
+
+### 42.1 What the demo set was, and what it is now
+
+| | Before | After |
+|---|---|---|
+| Demo administrators | 5 | 5 (unchanged) |
+| Demo club accounts | 8 | **1** — `democlub@ghars.local` |
+| Demo entity accounts | 37 | **1** — `demoentity@ghars.local` |
+| Total on `@ghars.local` | 50 | **7** |
+
+The club and entity accounts were `club-<name>@ghars.local` and `partner-<name>@ghars.local`, generated
+from the roster, plus `club1@ghars.local`. Thirty-seven entity accounts against seventeen approved
+entities is the visible part of the problem: twenty of them belonged to organizations an earlier
+reconciliation had already removed from the roster, and demo seeding had no reason to revisit them.
+
+The two that remain are named for what they are. Nothing about `democlub@ghars.local` invites anybody
+to mistake it for an account a club signs in with, which was not true of
+`club-shabab-al-ahli-club@ghars.local`. They are scoped to Shabab Al Ahli Club and to the Community
+Development Authority, named in `DbSeeder` rather than taken positionally from the roster, so that a
+new organization earlier in the alphabet cannot silently move what a developer sees.
+
+### 42.2 Two halves, because a seeder cannot remove what it has stopped creating
+
+`DbSeeder` no longer creates the per-organization accounts. That fixes every database seeded from now
+on and does nothing at all for one seeded yesterday, so the removal is a command:
+
+```
+dotnet run -- purge-demo-accounts            # prints the plan
+dotnet run -- purge-demo-accounts --commit   # applies it
+```
+
+Its scope is fixed in code, not taken from an argument: only addresses ending `@ghars.local` are ever
+considered, so a mistyped command line cannot widen its reach to a real account. Within that domain it
+excludes the five demo administrators and the two remaining demo accounts by address, and refuses any
+account holding `Super Admin` or `DSC Admin` even if it is on neither list — losing the last
+administrator locks everybody out of the admin screens and there is no self-service way back in.
+
+**What it deletes and what it keeps.** The account row and its `OrganizationAdminLink` rows go.
+Content the account authored stays. That asymmetry is deliberate in both directions: deleting a demo
+booking would change the reporting figures the demo data exists to demonstrate, while leaving the link
+behind would be worse than leaving nothing, because an orphan link still counts as "this organization
+has somebody attached" — which is exactly the condition that makes `seed-organization-accounts` skip
+creating the real account for that organization. The `Admin -> Users` delete button has this bug today
+and this command deliberately does not copy it.
+
+The counts are printed before anything is written, so the orphaning is a decision rather than a
+discovery. On the development database it was 108 rows across 45 accounts.
+
+### 42.3 Deleting the authors did not break the catalogue
+
+Every seeded learning program is authored by one of the deleted accounts, and six controllers resolve
+an activity's owning entity partly through its creator. The check before deleting was therefore not
+"does it still build" but which rows actually depend on that path:
+
+```sql
+SELECT COUNT(*) FROM Activities WHERE PartnerOrganizationId IS NULL;   -- 0
+```
+
+`ResolvePartnerOrganizationIdAsync` short-circuits on `PartnerOrganizationId.HasValue`, and every one
+of the 74 activities has it set, so the creator fallback is never reached for any of them. Confirmed
+after the delete: 74 activities, 34 bookings, 44 organizations — unchanged.
+
+### 42.4 Programs were decoupled from accounts first
+
+The catalogue used to be seeded inside the per-partner account loop, one call per account created.
+Cutting the accounts to one would have cut the catalogue to one bookable entity out of seventeen, which
+would have read as the change having broken booking. Program seeding now runs over every approved
+entity independently and is attributed to the demo entity account.
+
+That moved the ownership of existing rows, which made the idempotency check a trap: it was
+`CreatedByUserId == partnerUserId && TitleEn == ...`, so on an established development database every
+program would have failed its own existence check and been created a second time. It is now keyed on
+`PartnerOrganizationId`, which is what a program actually belongs to.
+
+### 42.5 A latent duplicate-key bug the smaller account set exposed
+
+The first run after the change failed:
+
+```
+Cannot insert duplicate key row in object 'dbo.AttendanceRecords' with unique index
+'IX_AttendanceRecords_AttendanceSessionId_UserId'
+```
+
+An attendance session belongs to an activity, and two clubs can book the same activity, so one session
+is reached twice in the seeding loop. The guard against inserting a duplicate attendance record queried
+the database but not the change tracker, so within a single unsaved batch both inserts passed the check
+and the unique index rejected the `SaveChanges`. With eight club accounts the second pass nominated
+different people and the collision never happened; with one, it happens every time.
+
+The fix checks `db.AttendanceRecords.Local` as well, which is the pattern `EnsureLink` in the same file
+already uses. The bug predates this change and would have surfaced for anyone with a sparse user table.
+
+### 42.6 Named users from the nomination forms
+
+`seed-organization-accounts` creates one generic account per organization, which is right when an
+organization has nominated nobody. The nomination forms mean several now have: a primary and a
+substitute user each, by name, with their own official work address. An account per person is also the
+only version of this with a useful audit trail — a booking approved by `club-hatta-club@` records which
+organization acted, and one approved by a named address records who.
+
+```
+dotnet run -- seed-platform-users --file ghars-users.csv
+dotnet run -- seed-platform-users --file ghars-users.csv --production --commit
+```
+
+The manifest is UTF-8 CSV with a header, tolerating a byte order mark because Excel writes one and
+organizations are matched in Arabic as well as English:
+
+```
+Organization,FullName,Email,Language
+Al Nasr Club,Example Name,first.last@example.ae,ar
+```
+
+The address above is a placeholder. Real ones appear only in the manifest, which is not in this
+repository.
+
+The role is deliberately not in the file. It follows from the organization — `Club Admin` for a club,
+`Partner Admin` for an implementing entity — because a file that could name a role could name
+`Super Admin`.
+
+**The manifest is not in this repository, and must not be.** It is real names, job titles and work
+addresses of identifiable people, and this repository is public. `.gitignore` excludes both
+`docs/docs/` (the signed forms) and `ghars-users*.csv`. The file is passed in at run time and nothing
+about the people provisioned by this command is recoverable from source control.
+
+### 42.7 The forms, and what could not be taken from them
+
+Nine files, eight distinct forms, fifteen people.
+
+| Organization | Roster name | People |
+|---|---|---|
+| نادي النصر الرياضي | Al Nasr Club | 2 |
+| نادي دبي للشطرنج والثقافة | Dubai Chess & Culture Club | 2 |
+| نادي حتا الرياضي الثقافي الاجتماعي | Hatta Club | 2 |
+| نادي شباب الأهلي | Shabab Al Ahli Club | 2 |
+| نادي الوصل الرياضي | Al Wasl Club | 1 |
+| هيئة تنمية المجتمع | Community Development Authority | 2 |
+| هيئة الصحة بدبي | Dubai Health Authority | 2 |
+| القيادة العامة لشرطة دبي | Dubai Police | 2 |
+
+Three things the forms could not settle, left as they are rather than guessed at:
+
+- **`Dubai Health دبي الصحية.pdf` is not a Dubai Health form.** It is byte-identical to
+  `Wasl club user.pdf` (md5 `991cf1dc…`) — the wrong file was saved under that name. Dubai Health is
+  also not on the approved roster, which has Dubai Health Authority as a separate entity, so there is
+  nothing to provision even if the form arrives.
+- **Al Wasl nominated one person.** Its substitute row reads "سيتم ترشيحه عند الحاجة" — to be
+  nominated when needed.
+- **One substitute address is ambiguous.** Hatta's renders with its parts out of order, the way a
+  right-to-left cell holding a left-to-right address does, and had to be reassembled. It is the one
+  address in the manifest that is a reading rather than a reproduction, and it should be confirmed
+  with the club before the account is handed over.
+
+**The four permission boxes on the form have no equivalent in the application.** Entity coordinator,
+programme management, reports and statistics, and Ghars channel are four independent checkboxes; the
+application has one role per organization type and no finer grain. Every nominee therefore receives
+their organization's full role, including the people whose forms requested a subset. That is worth
+knowing before the accounts are handed out, and it is not something a provisioning command can soften.
+
+### 42.8 Verification
+
+Against the development database, which held all fifty demo accounts.
+
+| Check | Result |
+|---|---|
+| Build | 0 errors, 1 warning — the retained `CS0108` |
+| Migration | None. No schema, model or configuration change |
+| `purge-demo-accounts` dry run | 5 keep, 45 delete, with per-account authored-row counts |
+| `purge-demo-accounts --commit` | Deleted 45, failed 0; 45 orphan links removed with them |
+| Data after the purge | activities 74, bookings 34, organizations 44 — all unchanged |
+| Re-seed | Created exactly `democlub` and `demoentity`, correct role, organization and link |
+| Catalogue after re-seed | 74 activities, all `Published`, all carrying `PartnerOrganizationId` |
+| `seed-platform-users` dry run | 15 create, correct organization and role for every row |
+| `seed-platform-users --commit` | 15 created, linked, `Preferred­Language` `ar` |
+| Idempotency | Second run: 0 create, 0 repair, 15 leave alone; purge: 0 delete |
+| Manifest validation | Unknown organization, duplicate address, malformed address, `.local` address, bad language and empty field each refused by line number, nothing written |
+| Arabic organization matching | `نادي حتا` resolves to Hatta Club |
+| Admin routes signed in | Dashboard, Users, Organizations, Bookings, Reports/Analytics, KPI all 200 |
+| Anonymous routes | `/` and `/Account/Login` 200 |
+
+### 42.9 Operational sequence
+
+Neither command runs as a side effect of anything. Against production, in this order:
+
+```
+dotnet GharsPlatform.dll purge-demo-accounts --production                    # expect: nothing to do
+dotnet GharsPlatform.dll seed-platform-users --file ghars-users.csv --production
+dotnet GharsPlatform.dll seed-platform-users --file ghars-users.csv --production --commit
+```
+
+The first should report nothing to delete. If it reports demo accounts on production, that means the
+application was once started there in Development, those accounts carry a password published in this
+repository, and removing them is urgent rather than tidy.
+
+The passwords from the committed run are printed once and stored nowhere. There is no way to recover
+one afterwards; a lost password is reset from `Admin -> Users`.

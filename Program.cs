@@ -191,6 +191,39 @@ if (args.Length > 0 && string.Equals(args[0], "seed-organization-accounts", Stri
         resetPasswords: args.Contains("--reset-passwords"));
 }
 
+// Creates the named people each organization nominated on its platform user form, from a manifest
+// file. Separate from seed-organization-accounts, which creates one generic account per organization:
+// this one is for when an organization has named who will actually use the platform. The manifest is
+// personal data and is deliberately not in this repository — see Helpers/PlatformUserSeeder.cs.
+//   dotnet run -- seed-platform-users --file ghars-users.csv
+//   dotnet run -- seed-platform-users --file ghars-users.csv --production --commit
+if (args.Length > 0 && string.Equals(args[0], "seed-platform-users", StringComparison.OrdinalIgnoreCase))
+{
+    using var peopleScope = app.Services.CreateScope();
+    return await PlatformUserSeeder.RunAsync(
+        peopleScope.ServiceProvider,
+        app.Environment,
+        file: PlatformUserSeeder.ReadFileArgument(args),
+        commit: args.Contains("--commit"),
+        allowProduction: args.Contains("--production"));
+}
+
+// Removes the per-organization demo accounts that demo seeding used to create — one per approved club
+// and entity, all sharing a password published in this repository's git history. DbSeeder no longer
+// creates them, but a database seeded before that change still holds them, and a seeder cannot remove
+// what it has stopped creating. Only ever touches @ghars.local addresses, and never the demo
+// administrators or the two remaining demo accounts. See Helpers/DemoAccountPurger.cs.
+//   dotnet run -- purge-demo-accounts [--commit]
+if (args.Length > 0 && string.Equals(args[0], "purge-demo-accounts", StringComparison.OrdinalIgnoreCase))
+{
+    using var purgeScope = app.Services.CreateScope();
+    return await DemoAccountPurger.RunAsync(
+        purgeScope.ServiceProvider,
+        app.Environment,
+        commit: args.Contains("--commit"),
+        allowProduction: args.Contains("--production"));
+}
+
 // Recovery for a forgotten administrator password, where the admin screens cannot help because nobody
 // can sign in to reach them. Only ever targets an account that already holds an administrative role,
 // and takes the password from the console or GHARS_ADMIN_PASSWORD, never from an argument.

@@ -25,17 +25,20 @@
     var supportingStories = stories.Skip(1).Take(2).ToList();
 }
 
-@* Vision, objectives, scope and mechanisms below are the approved wording from the "About the Ghars
-   Program" business document, rendered from GharsProgramContent so this page cannot drift from the
-   About and Vision pages. *@
+@* The introduction, vision, objectives, scope and mechanisms below are approved wording, rendered
+   from GharsProgramContent so this page cannot drift from the About and Vision pages. *@
 <div class="ghars-hero mb-4">
+    <h1 class="ghars-hero-title">@T("Ghars Platform", "منصة غرس")</h1>
+
     <div class="row g-4 align-items-center">
         <div class="col-lg-7">
-            <div class="chip mb-3">@T("Ghars Program", "برنامج غرس")</div>
-            <h1>@T("Ghars Platform", "منصة غرس")</h1>
-            <p class="mb-4">@GharsProgramContent.Summary.For(ar)</p>
+            <div class="chip mb-3">@GharsProgramContent.IntroductionTitle.For(ar)</div>
+            @foreach (var paragraph in GharsProgramContent.Introduction)
+            {
+                <p class="mb-3">@paragraph.For(ar)</p>
+            }
 
-            <div class="d-flex flex-wrap gap-2">
+            <div class="d-flex flex-wrap gap-2 mt-4">
                 <a class="btn btn-light fw-bold" asp-controller="Home" asp-action="About">
                     <i class="bi bi-info-circle me-1"></i> @T("About Us", "حول البرنامج")
                 </a>

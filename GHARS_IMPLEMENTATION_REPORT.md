@@ -4578,3 +4578,83 @@ repository, and removing them is urgent rather than tidy.
 
 The passwords from the committed run are printed once and stored nowhere. There is no way to recover
 one afterwards; a lost password is reset from `Admin -> Users`.
+
+---
+
+## 43. Homepage Introduction and Hero Layout Revision (2026-10-04)
+
+The Dubai Sports Council revised the programme introduction and asked for the homepage hero to be laid
+out according to a reference. No schema change, no migration, no change to any metric, report or rule.
+
+### 43.1 The introduction
+
+`GharsProgramContent.Introduction` is now the Council's two-paragraph wording, in both languages,
+replacing the three paragraphs transcribed from the business document. It gains a heading,
+`IntroductionTitle` ("“Ghars” Program" / "برنامج "غرس""), which the hero shows as its chip.
+`Summary`, which picked one paragraph of the old introduction for the hero, is removed: the hero now
+shows the whole introduction, because the new text is two halves of one statement rather than a long
+document with a quotable sentence in it.
+
+The About page renders the same list, so it changed too. That is the rule this class exists to
+enforce — one approved introduction, not a short one on the homepage and a different long one on
+About — but it does mean the old paragraphs on national identity, healthy lifestyles and social
+cohesion are no longer anywhere on the public site.
+
+The text is as supplied, including its British spelling ("behaviours", "organised"), which differs
+from the American spelling elsewhere on the page; the source comment says so, so nobody "fixes" it.
+Two typos in the heading were corrected: a stray space inside the Arabic quotation marks, and a
+misplaced closing quote in the English.
+
+### 43.2 The reference was the current page, edited
+
+The two reference images are screenshots of the existing homepage with elements cut and moved in an
+image editor. Each moved element carries a rectangle of background from where it was cut — dark
+behind the English title, green behind the Arabic, because that is the colour of the gradient where
+each title used to sit — and empty patches remain where they came from. Those rectangles are
+artefacts of the editing, not part of the design, and were not reproduced.
+
+The intent they show is one change: the platform name leaves the left column and is centred across
+the top of the hero, above both columns. The introduction, its chip and the buttons stay on the
+start side; the Vision and Scope panel stays on the end side; Arabic mirrors. New rule
+`.ghars-hero .ghars-hero-title`, with a smaller bottom margin under 992px.
+
+### 43.3 A year range that broke across lines
+
+In the Arabic hero at desktop width, "(2025–2033)" wrapped after the en-dash, leaving "(2025–" at the
+end of one line and "2033)" at the start of the next. Browsers treat an en-dash as a break
+opportunity. Each range now has a word joiner (U+2060) after the dash, which forbids the break and
+renders as nothing. It is written as an escape in the C# source rather than as the raw character, so
+it can be seen and searched for; Razor emits it as `&#x2060;`.
+
+### 43.4 Verification
+
+| Check | Result |
+|---|---|
+| Build | 0 errors, 1 warning — the retained `CS0108` |
+| Home and About, EN and AR | 200; new introduction present, old introduction absent, on all four |
+| Desktop, 1872px, EN and AR | Title centred above both columns; Arabic mirrored; range on one line |
+| Phone, true 400px viewport, EN and AR | Stacks title, introduction, buttons, panel; document width equals viewport width — no horizontal overflow |
+
+Two checking traps worth knowing. Desktop Chrome enforces a minimum window width of about 500px even
+headless, so `--window-size=400,…` captures the left 400px of a wider layout — which in Arabic
+looks exactly like the start of every line being clipped. The phone checks above set a real
+viewport through the DevTools protocol instead. And ASP.NET Core's default HTML encoder writes
+Arabic as numeric entities, so a text search of the raw response for an Arabic phrase finds nothing;
+decode first.
+
+### 43.5 Not part of this change
+
+- **The named user accounts are not yet on production.** A read-only check against the production
+  database on 2026-10-01 found 0 of the 15 nominees. Provisioning is `seed-platform-users`, §42.9,
+  and needs the production connection string.
+- **UAE PASS sign-in was assessed, not built.** It is an OAuth 2.0 authorization-code integration
+  against `id.uaepass.ae/idshub` (`stg-id.uaepass.ae` for staging), and the code is a modest change
+  to the account pages. What it needs first is a client id and secret issued to the Council as a
+  UAE PASS service provider, for staging and then production; nothing can be tested end to end
+  without them. Matching a UAE PASS identity to an existing account also needs a decision: the
+  address UAE PASS returns is the person's own and often not their work address, and the Emirates ID
+  is returned only for verified (SOP3) profiles. It should be an additional sign-in method, not a
+  replacement — administrators, and anyone without UAE PASS, still need a password.
+- **Phase two** — the Ghars Survey conducted with Digital Dubai and the September coordination-meeting
+  videos — was sequenced by the Council after account activation, and the videos have not been
+  supplied.

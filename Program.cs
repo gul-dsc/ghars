@@ -224,6 +224,20 @@ if (args.Length > 0 && string.Equals(args[0], "purge-demo-accounts", StringCompa
         allowProduction: args.Contains("--production"));
 }
 
+// Creates democlub@ghars.local and demoentity@ghars.local where demo seeding never runs, so the club
+// and entity workspaces can be tested on a deployed site. Random passwords, printed once — never the
+// shared demo password. See Helpers/DemoOrgAccountSeeder.cs.
+//   dotnet run -- seed-demo-org-accounts --production [--commit]
+if (args.Length > 0 && string.Equals(args[0], "seed-demo-org-accounts", StringComparison.OrdinalIgnoreCase))
+{
+    using var demoOrgScope = app.Services.CreateScope();
+    return await DemoOrgAccountSeeder.RunAsync(
+        demoOrgScope.ServiceProvider,
+        app.Environment,
+        commit: args.Contains("--commit"),
+        allowProduction: args.Contains("--production"));
+}
+
 // Recovery for a forgotten administrator password, where the admin screens cannot help because nobody
 // can sign in to reach them. Only ever targets an account that already holds an administrative role,
 // and takes the password from the console or GHARS_ADMIN_PASSWORD, never from an argument.

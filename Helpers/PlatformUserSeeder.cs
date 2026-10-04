@@ -544,7 +544,7 @@ public static class PlatformUserSeeder
     /// A random password that satisfies the configured Identity rules by construction: one character
     /// from each required class, the remainder from all of them, then shuffled.
     /// </summary>
-    private static string GeneratePassword()
+    internal static string GeneratePassword()
     {
         const string all = Lower + Upper + Digits + Symbols;
 

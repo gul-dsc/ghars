@@ -41,8 +41,8 @@ public static class DbSeeder
     /// organization a demo account sees is the whole content of a scoped screen, and it should not
     /// change because the roster gained a name earlier in the alphabet.
     /// </summary>
-    private const string DemoClubOrganizationNameEn = "Shabab Al Ahli Club";
-    private const string DemoEntityOrganizationNameEn = "Community Development Authority";
+    internal const string DemoClubOrganizationNameEn = "Shabab Al Ahli Club";
+    internal const string DemoEntityOrganizationNameEn = "Community Development Authority";
 
     // Configuration keys. Each is also readable as a flat environment variable, so an operator can
     // export GHARS_BOOTSTRAP_ADMIN_PASSWORD without knowing the ASP.NET "__" section convention.

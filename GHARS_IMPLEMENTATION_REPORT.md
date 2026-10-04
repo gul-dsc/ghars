@@ -4658,3 +4658,66 @@ decode first.
 - **Phase two** — the Ghars Survey conducted with Digital Dubai and the September coordination-meeting
   videos — was sequenced by the Council after account activation, and the videos have not been
   supplied.
+
+---
+
+## 44. Demo Organization Accounts on Production (2026-10-04)
+
+The Council asked for the two organization demo accounts — `democlub@ghars.local` and
+`demoentity@ghars.local` — on the live site, alongside the fifteen named users, to test the club and
+entity workspaces. Nothing could create them there. `DbSeeder` makes them only in Development; the
+`Admin -> Users` screen writes no `OrganizationAdminLink`, which every scoped screen reads; and
+`seed-platform-users` refuses `.local` addresses by design.
+
+### 44.1 The command
+
+`seed-demo-org-accounts` (`Helpers/DemoOrgAccountSeeder.cs`) creates exactly those two, on the same
+organizations as in Development: Shabab Al Ahli Club and Community Development Authority. It follows
+the other provisioning commands: dry run unless `--commit`, `--production` required against a remote
+server, and an existing account keeps its password. Each created account gets its own CSPRNG password
+from the same generator as `seed-platform-users` — never the shared demo password, which is in this
+repository's history. Unlike `DbSeeder` it does not fall back to the first organization in the list:
+if either named organization is missing it refuses.
+
+**These are real accounts on real organizations.** A booking made as `democlub` on production is a
+Shabab Al Ahli Club booking: the club's own users see it, the entity is notified, and it counts in
+the reports until it is cancelled.
+
+An `@ghars.local` account on production no longer means, by itself, that the application was once
+started there in Development. `democlub` and `demoentity` are expected; any *other* `@ghars.local`
+address is still that warning sign.
+
+### 44.2 Rehearsal
+
+Run end to end on a scratch database built from the migration chain and started once in Production,
+so that it held what a fresh production database holds: 7 roles, no organizations, no users.
+
+| Step | Result |
+| --- | --- |
+| Host start, Production | Roles seeded; **no organizations** — the roster is Development-only at startup |
+| `seed-demo-org-accounts` / `seed-platform-users` before the roster | Both refused: organization not found |
+| `reconcile-organizations --production --commit` | 25 organizations |
+| `seed-demo-org-accounts` without `--production` | Refused |
+| `seed-demo-org-accounts --production` | 2 create, nothing written |
+| … `--commit`, then again | Created 2; second run: both "already correct, password unchanged" |
+| `seed-platform-users … --production --commit`, then again | Created 15; second run: 15 already correct |
+| `purge-demo-accounts --production` | Keeps `democlub` and `demoentity`; nothing to delete |
+| Final state | 17 accounts, one role and one organization link each, all `EmailConfirmed` |
+
+The scratch database was dropped and the rehearsal's logs, which held its throwaway passwords, deleted.
+
+### 44.3 Operational sequence, revised
+
+This supersedes §42.9. Against production, in order, each dry run read before its `--commit`:
+
+```
+dotnet GharsPlatform.dll purge-demo-accounts --production                     # expect: nothing to delete
+dotnet GharsPlatform.dll reconcile-organizations --production                 # only if the roster is not loaded
+dotnet GharsPlatform.dll seed-platform-users --file ghars-users.csv --production
+dotnet GharsPlatform.dll seed-platform-users --file ghars-users.csv --production --commit
+dotnet GharsPlatform.dll seed-demo-org-accounts --production
+dotnet GharsPlatform.dll seed-demo-org-accounts --production --commit
+```
+
+The committed runs print passwords once. Send their output to a file outside the repository rather
+than to a shared screen, and hand each person only their own line.

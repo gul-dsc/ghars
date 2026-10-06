@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using GharsPlatform.Data;
+using GharsPlatform.Helpers;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
 using Microsoft.AspNetCore.Authorization;
@@ -17,11 +18,98 @@ public class UsersController : Controller
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
 
-    public UsersController(AppDbContext db, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager)
+    private readonly EmailSender _email;
+
+    public UsersController(AppDbContext db, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, EmailSender email)
     {
         _db = db;
         _userManager = userManager;
         _roleManager = roleManager;
+        _email = email;
+    }
+
+    // Passwords are stored hashed, so the current one cannot be sent. Sending credentials therefore sets a
+    // NEW random password and emails it with the username; any password handed out earlier stops working.
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SendCredentials(string id)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user == null) return NotFound();
+        var (ok, error) = await SendCredentialsToAsync(user);
+        if (ok) TempData["ToastSuccess"] = $"Login details sent to {user.Email}.";
+        else TempData["ToastWarning"] = error;
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SendCredentialsBulk(List<string> ids)
+    {
+        if (ids == null || ids.Count == 0)
+        {
+            TempData["ToastWarning"] = "Select at least one user.";
+            return RedirectToAction(nameof(Index));
+        }
+        if (!_email.IsConfigured)
+        {
+            TempData["ToastWarning"] = "Email is not configured on this server yet.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        int sent = 0;
+        var failed = new List<string>();
+        foreach (var id in ids.Distinct())
+        {
+            var user = await _userManager.FindByIdAsync(id);
+            if (user == null) continue;
+            var (ok, _) = await SendCredentialsToAsync(user);
+            if (ok) sent++; else failed.Add(user.Email ?? id);
+        }
+        TempData["ToastSuccess"] = $"Login details sent to {sent} user(s).";
+        if (failed.Count > 0) TempData["ToastWarning"] = "Not sent: " + string.Join(", ", failed);
+        return RedirectToAction(nameof(Index));
+    }
+
+    private async Task<(bool ok, string? error)> SendCredentialsToAsync(ApplicationUser user)
+    {
+        if (!_email.IsConfigured) return (false, "Email is not configured on this server yet.");
+        if (string.IsNullOrWhiteSpace(user.Email)) return (false, "This user has no email address.");
+        if (user.Email.EndsWith(".local", StringComparison.OrdinalIgnoreCase))
+            return (false, $"{user.Email} is a test address and cannot receive email.");
+        if (user.LockoutEnd.HasValue && user.LockoutEnd.Value.UtcDateTime > DateTime.UtcNow.AddYears(1))
+            return (false, $"{user.Email} is deactivated. Activate the account first.");
+
+        var password = PlatformUserSeeder.GeneratePassword();
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        var reset = await _userManager.ResetPasswordAsync(user, token, password);
+        if (!reset.Succeeded)
+            return (false, $"Could not set a password for {user.Email}: " + string.Join("; ", reset.Errors.Select(e => e.Description)));
+
+        var loginUrl = Url.Action("Login", "Account", new { area = "" }, Request.Scheme)!;
+        var forgotUrl = Url.Action("ForgotPassword", "Account", new { area = "" }, Request.Scheme)!;
+        string E(string s) => System.Net.WebUtility.HtmlEncode(s);
+        var name = E(user.FullName ?? user.Email);
+        var body = EmailSender.Bilingual(
+            $"<p>Dear {name},</p><p>Your account on the Ghars Platform is ready.</p>" +
+            $"<p><b>Username:</b> {E(user.Email)}<br><b>Password:</b> <code>{E(password)}</code></p>" +
+            $"<p>Sign in at <a href=\"{E(loginUrl)}\">{E(loginUrl)}</a>. You can choose your own password at any time with " +
+            $"<a href=\"{E(forgotUrl)}\">Forgot password</a>.</p><p>Please keep these details private.</p>",
+            $"<p>عزيزي/عزيزتي {name}،</p><p>تم تجهيز حسابك على منصة غرس.</p>" +
+            $"<p><b>اسم المستخدم:</b> <span dir=\"ltr\">{E(user.Email)}</span><br><b>كلمة المرور:</b> <code dir=\"ltr\">{E(password)}</code></p>" +
+            $"<p>يمكنك تسجيل الدخول عبر <a href=\"{E(loginUrl)}\">{E(loginUrl)}</a>، ويمكنك تغيير كلمة المرور في أي وقت من خلال " +
+            $"<a href=\"{E(forgotUrl)}\">نسيت كلمة المرور</a>.</p><p>يرجى الحفاظ على سرية هذه البيانات.</p>");
+
+        try
+        {
+            await _email.SendAsync(user.Email, "Ghars Platform - your login details | منصة غرس - بيانات الدخول", body);
+            return (true, null);
+        }
+        catch (Exception ex)
+        {
+            // The password was already changed; the user can still recover through Forgot password.
+            return (false, $"Password was reset but the email to {user.Email} failed: {ex.Message}");
+        }
     }
 
     public async Task<IActionResult> Index()

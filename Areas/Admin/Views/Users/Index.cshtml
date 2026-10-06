@@ -5,16 +5,28 @@
 }
 <div class="d-flex align-items-center justify-content-between mb-3">
     <div class="fw-semibold">Users</div>
-    @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-primary super-admin-action" asp-area="Admin" asp-controller="Users" asp-action="Create"><i class="bi bi-plus-lg"></i> Create User</a> }
+    <div class="d-flex flex-wrap gap-2">
+        @if (User.IsInRole("Super Admin"))
+        {
+            <form id="bulkSend" method="post" asp-area="Admin" asp-controller="Users" asp-action="SendCredentialsBulk" class="d-inline"
+                  onsubmit="return confirm('Send login details to the selected users? Each one gets a NEW password by email and their current password stops working.');">
+                @Html.AntiForgeryToken()
+                <button class="btn btn-sm btn-outline-success" type="submit"><i class="bi bi-envelope"></i> Email login details to selected</button>
+            </form>
+            <a class="btn btn-sm btn-primary super-admin-action" asp-area="Admin" asp-controller="Users" asp-action="Create"><i class="bi bi-plus-lg"></i> Create User</a>
+        }
+    </div>
 </div>
+<div class="small text-muted mb-2">Emailing login details sets a new random password for that user and sends it with their username. Test (.local) and deactivated accounts are skipped.</div>
 <div class="card border-0 shadow-sm rounded-4">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
-            <thead class="table-light"><tr><th>Name</th><th>Email</th><th>Roles</th><th>Status</th><th></th></tr></thead>
+            <thead class="table-light"><tr><th><input type="checkbox" class="form-check-input" aria-label="Select all" onclick="document.querySelectorAll('.user-pick').forEach(c => c.checked = this.checked)" /></th><th>Name</th><th>Email</th><th>Roles</th><th>Status</th><th></th></tr></thead>
             <tbody>
             @foreach (var u in Model)
             {
                 <tr>
+                    <td><input type="checkbox" class="form-check-input user-pick" name="ids" value="@u.Id" form="bulkSend" aria-label="Select @u.Email" /></td>
                     <td class="fw-semibold">@u.FullName</td>
                     <td>@u.Email</td>
                     <td>@u.Roles</td>
@@ -22,6 +34,11 @@
                     <td class="text-end">
                         @if (User.IsInRole("Super Admin"))
                         {
+                            <form method="post" asp-area="Admin" asp-controller="Users" asp-action="SendCredentials" asp-route-id="@u.Id" class="d-inline"
+                                  onsubmit="return confirm('Email login details to @u.Email? A new password is set and the current one stops working.');">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn-sm btn-outline-success" type="submit" title="Email login details"><i class="bi bi-envelope"></i> Send login</button>
+                            </form>
                             <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Users" asp-action="Edit" asp-route-id="@u.Id">Edit</a>
                             <form method="post" asp-area="Admin" asp-controller="Users" asp-action="Deactivate" asp-route-id="@u.Id" class="d-inline">
                                 @Html.AntiForgeryToken()

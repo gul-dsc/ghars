@@ -58,6 +58,11 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<WorkspaceContext>();
 
+// Outgoing email (account credentials, forgot password). Settings come from the Smtp section, set on the
+// server through IIS environment variables. Until then the screens that send say email is not configured.
+builder.Services.Configure<GharsPlatform.Helpers.SmtpOptions>(builder.Configuration.GetSection("Smtp"));
+builder.Services.AddScoped<GharsPlatform.Helpers.EmailSender>();
+
 // SignalR
 builder.Services.AddSignalR();
 

@@ -25,9 +25,12 @@
                         <input class="form-control" asp-for="Password" type="password" autocomplete="current-password" />
                         <span class="text-danger small" asp-validation-for="Password"></span>
                     </div>
-                    <div class="form-check mb-3">
-                        <input class="form-check-input" asp-for="RememberMe" />
-                        <label class="form-check-label">@T("Remember me", "تذكرني")</label>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" asp-for="RememberMe" />
+                            <label class="form-check-label">@T("Remember me", "تذكرني")</label>
+                        </div>
+                        <a class="small" asp-controller="Account" asp-action="ForgotPassword">@T("Forgot password?", "نسيت كلمة المرور؟")</a>
                     </div>
                     <button class="btn btn-primary w-100" type="submit">@T("Login", "دخول")</button>
                     <div class="text-danger small mt-3" asp-validation-summary="All"></div>

@@ -43,7 +43,7 @@ a { color: var(--primary); text-decoration: none; }
     border-radius: 999px;
     transition: color .2s ease, background-color .2s ease, box-shadow .2s ease;
 }
-.ghars-main-nav .nav-link::after {
+.ghars-main-nav .nav-link:not(.dropdown-toggle)::after {
     content: "";
     position: absolute;
     left: 50%;
@@ -55,14 +55,14 @@ a { color: var(--primary); text-decoration: none; }
     transform: translateX(-50%);
     transition: width .25s ease;
 }
-.ghars-main-nav .nav-link.dropdown-toggle::after { display: inline-block; position: static; width: auto; height: auto; background: none; transform: none; border-radius: 0; }
+.ghars-main-nav .nav-link.dropdown-toggle::after { margin-inline-start: .4em; vertical-align: .15em; }
 .ghars-main-nav .nav-link:hover,
 .ghars-main-nav .nav-link:focus-visible {
     color: var(--ghars-deep) !important;
     background-color: rgba(45,155,108,.09);
 }
-.ghars-main-nav .nav-link:hover::after,
-.ghars-main-nav .nav-link:focus-visible::after { width: 38%; }
+.ghars-main-nav .nav-link:not(.dropdown-toggle):hover::after,
+.ghars-main-nav .nav-link:not(.dropdown-toggle):focus-visible::after { width: 38%; }
 .ghars-main-nav .nav-link[aria-current="page"],
 .ghars-main-nav .nav-link.active,
 .ghars-main-nav .nav-link.show {
@@ -70,7 +70,7 @@ a { color: var(--primary); text-decoration: none; }
     background-color: rgba(45,155,108,.13);
     box-shadow: inset 0 0 0 1px rgba(45,155,108,.18);
 }
-.ghars-main-nav .nav-link[aria-current="page"]::after { width: 52%; }
+.ghars-main-nav .nav-link:not(.dropdown-toggle)[aria-current="page"]::after { width: 52%; }
 .ghars-main-nav .nav-link:focus-visible { outline: 2px solid var(--ghars-green); outline-offset: 2px; }
 
 @media (min-width: 1200px) {
@@ -86,7 +86,7 @@ a { color: var(--primary); text-decoration: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .ghars-main-nav .nav-link, .ghars-main-nav .nav-link::after { transition: none; }
+    .ghars-main-nav .nav-link, .ghars-main-nav .nav-link:not(.dropdown-toggle)::after { transition: none; }
 }
 
 .ghars-top-actions { flex: 0 0 auto; margin-left: auto; }
@@ -571,3 +571,51 @@ footer,
 
     .ghars-availability-slot { flex: 1 1 100%; justify-content: flex-start; border-radius: 12px; }
 }
+
+/* Header action strip (2026-10-07): language, dashboard / login, bell and account share one height,
+   radius and border so the corner reads as one set. Dashboard and Login are the filled primary. */
+.ghars-top-actions .ghars-action-btn {
+    height: 40px;
+    display: inline-flex !important;
+    align-items: center;
+    gap: .45rem;
+    padding: 0 .9rem !important;
+    border-radius: 10px !important;
+    border: 1px solid rgba(45,155,108,.28) !important;
+    background: #ffffff !important;
+    color: var(--ghars-deep) !important;
+    font-weight: 600;
+    font-size: .92rem;
+    box-shadow: 0 1px 2px rgba(27,94,50,.06);
+    transition: background-color .2s ease, border-color .2s ease, color .2s ease;
+}
+.ghars-top-actions .ghars-action-btn:hover,
+.ghars-top-actions .ghars-action-btn:focus-visible,
+.ghars-top-actions .ghars-action-btn.show {
+    background: rgba(45,155,108,.09) !important;
+    border-color: var(--ghars-green) !important;
+    color: var(--ghars-deep) !important;
+}
+.ghars-top-actions .ghars-action-primary {
+    background: var(--ghars-green) !important;
+    border-color: var(--ghars-green) !important;
+    color: #ffffff !important;
+}
+.ghars-top-actions .ghars-action-primary:hover,
+.ghars-top-actions .ghars-action-primary:focus-visible {
+    background: var(--ghars-deep) !important;
+    border-color: var(--ghars-deep) !important;
+    color: #ffffff !important;
+}
+.ghars-top-actions .ghars-icon-btn { width: 40px; padding: 0 !important; justify-content: center; font-size: 1.05rem; }
+.ghars-top-actions .ghars-user-menu { padding: 0 .7rem 0 .3rem !important; max-width: 200px; }
+html[dir="rtl"] .ghars-top-actions .ghars-user-menu { padding: 0 .3rem 0 .7rem !important; }
+.ghars-top-actions .ghars-user-menu .ghars-user-name { color: var(--ghars-deep); font-size: .92rem; max-width: 110px; }
+.ghars-avatar {
+    width: 30px; height: 30px; flex: 0 0 30px;
+    border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--ghars-deep), var(--ghars-green));
+    color: #ffffff; font-weight: 700; font-size: .85rem; line-height: 1;
+}
+.ghars-user-dropdown .dropdown-header { white-space: normal; min-width: 220px; }

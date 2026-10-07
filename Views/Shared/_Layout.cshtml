@@ -32,6 +32,14 @@
             .Take(5)
             .ToListAsync();
     }
+
+    // The account button shows an initial and first name instead of the full email address.
+    var displayName = "";
+    if (isAuthenticated && !string.IsNullOrWhiteSpace(currentUserId))
+        displayName = await LayoutDb.Users.Where(u => u.Id == currentUserId).Select(u => u.FullName).FirstOrDefaultAsync() ?? "";
+    if (string.IsNullOrWhiteSpace(displayName)) displayName = (User.Identity?.Name ?? "").Split('@')[0];
+    var firstName = displayName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+    var initial = firstName.Length > 0 ? char.ToUpperInvariant(firstName[0]).ToString() : "?";
 }
 <!doctype html>
 <html lang="@culture" dir="@dir">
@@ -119,7 +127,7 @@
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" id="gharsWorkspaceMenu" role="button"
                                    data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="bi bi-grid-1x2 me-1" aria-hidden="true"></i>@(isRtl ? "مساحة العمل" : "My Workspace")
+                                    @(isRtl ? "مساحة العمل" : "My Workspace")
                                 </a>
                                 <ul class="dropdown-menu ghars-workspace-dropdown" aria-labelledby="gharsWorkspaceMenu">
 
@@ -174,9 +182,17 @@
 
                             @* Formerly "Gallery". The section is now the programme's content channel and
                                carries partner awareness material as well as club activity media. *@
-                            <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="Gallery" asp-action="Index">@(isRtl ? "قناة غرس" : "Ghars Channel")</a></li>
-                            <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="Library" asp-action="Index">@(isRtl ? "المكتبة الرقمية" : "Digital Library")</a></li>
-                            <li class="nav-item"><a class="nav-link" asp-area="" asp-controller="Surveys" asp-action="Index">@(isRtl ? "الاستبيانات" : "Surveys")</a></li>
+                            @* 2026-10-07: grouped under one "Resources" menu (still top level, still
+                               outside My Workspace) so the signed-in bar is six or seven items. *@
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="gharsResourcesMenu" role="button"
+                                   data-bs-toggle="dropdown" aria-expanded="false">@(isRtl ? "المصادر" : "Resources")</a>
+                                <ul class="dropdown-menu ghars-workspace-dropdown" aria-labelledby="gharsResourcesMenu">
+                                    <li><a class="dropdown-item" asp-area="" asp-controller="Gallery" asp-action="Index"><i class="bi bi-camera-video me-2" aria-hidden="true"></i>@(isRtl ? "قناة غرس" : "Ghars Channel")</a></li>
+                                    <li><a class="dropdown-item" asp-area="" asp-controller="Library" asp-action="Index"><i class="bi bi-book me-2" aria-hidden="true"></i>@(isRtl ? "المكتبة الرقمية" : "Digital Library")</a></li>
+                                    <li><a class="dropdown-item" asp-area="" asp-controller="Surveys" asp-action="Index"><i class="bi bi-ui-checks me-2" aria-hidden="true"></i>@(isRtl ? "الاستبيانات" : "Surveys")</a></li>
+                                </ul>
+                            </li>
                         }
 
                         @* Contact is deliberately the last navigation item, in both languages. In RTL
@@ -193,14 +209,14 @@
                             @Html.AntiForgeryToken()
                             <input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
                             <input type="hidden" name="culture" value="@(isRtl ? "en" : "ar")" />
-                            <button class="btn btn-outline-secondary btn-sm ghars-lang-btn" type="submit">
+                            <button class="btn btn-sm ghars-lang-btn ghars-action-btn" type="submit">
                                 @(isRtl ? "English" : "العربية")
                             </button>
                         </form>
 
                         @if (!isAuthenticated)
                         {
-                            <a class="btn btn-outline-primary btn-sm ghars-auth-link"
+                            <a class="btn btn-sm ghars-auth-link ghars-action-btn ghars-action-primary"
                                asp-area=""
                                asp-controller="Account"
                                asp-action="Login"
@@ -213,19 +229,19 @@
                         {
                             @if (isAdmin)
                             {
-                                <a class="btn btn-outline-primary btn-sm" asp-area="Admin" asp-controller="Dashboard" asp-action="Index">@(isRtl ? "لوحة الإدارة" : "Dashboard")</a>
+                                <a class="btn btn-sm ghars-action-btn ghars-action-primary" asp-area="Admin" asp-controller="Dashboard" asp-action="Index">@(isRtl ? "لوحة الإدارة" : "Dashboard")</a>
                             }
                             else if (isPartner)
                             {
-                                <a class="btn btn-outline-success btn-sm" asp-area="" asp-controller="PartnerDashboard" asp-action="Index">@(isRtl ? "لوحة الشريك" : "Partner")</a>
+                                <a class="btn btn-sm ghars-action-btn ghars-action-primary" asp-area="" asp-controller="PartnerDashboard" asp-action="Index">@(isRtl ? "لوحة الشريك" : "Partner")</a>
                             }
                             else if (isClub)
                             {
-                                <a class="btn btn-outline-success btn-sm" asp-area="" asp-controller="ClubDashboard" asp-action="Index">@(isRtl ? "لوحة النادي" : "Club")</a>
+                                <a class="btn btn-sm ghars-action-btn ghars-action-primary" asp-area="" asp-controller="ClubDashboard" asp-action="Index">@(isRtl ? "لوحة النادي" : "Club")</a>
                             }
 
                             <div class="dropdown ghars-notification-menu">
-                                <button class="btn btn-outline-secondary btn-sm position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Notifications">
+                                <button class="btn btn-sm ghars-action-btn ghars-icon-btn position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Notifications" aria-label="Notifications">
                                     <i class="bi bi-bell"></i>
                                     @if (unreadCount > 0)
                                     {
@@ -261,16 +277,20 @@
                             </div>
 
                             <div class="dropdown">
-                                <button class="btn btn-outline-dark btn-sm dropdown-toggle ghars-user-menu"
+                                <button class="btn btn-sm dropdown-toggle ghars-user-menu ghars-action-btn"
                                         type="button"
                                         data-bs-toggle="dropdown"
-                                        aria-expanded="false">
-                                    <i class="bi bi-person-circle me-1"></i>
-                                    <span class="ghars-user-name">@User.Identity?.Name</span>
+                                        aria-expanded="false"
+                                        title="@User.Identity?.Name">
+                                    <span class="ghars-avatar" aria-hidden="true">@initial</span>
+                                    <span class="ghars-user-name">@firstName</span>
                                 </button>
 
                                 <ul class="dropdown-menu dropdown-menu-end ghars-user-dropdown">
-                                    <li class="dropdown-header text-muted small">@User.Identity?.Name</li>
+                                    <li class="dropdown-header">
+                                        <div class="fw-semibold text-dark">@displayName</div>
+                                        <div class="small text-muted">@User.Identity?.Name</div>
+                                    </li>
 
                                     @if (isAdmin)
                                     {

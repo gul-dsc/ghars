@@ -314,7 +314,7 @@ else
                                     </form>
 
                                     <form method="post" action="/partner/calendar/remove" class="d-inline"
-                                          onsubmit="return confirm('@T("Remove this time slot?", "هل تريد حذف هذه الفترة الزمنية؟")');">
+                                          data-confirm="@T("Remove this time slot?", "هل تريد حذف هذه الفترة الزمنية؟")">
                                         @Html.AntiForgeryToken()
                                         <input type="hidden" name="id" value="@slot.Id" />
                                         <button class="btn btn-sm btn-outline-danger" type="submit">

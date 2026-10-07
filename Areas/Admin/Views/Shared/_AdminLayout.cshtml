@@ -28,6 +28,8 @@
     }
 
     @RenderSection("Head", required: false)
+    <link rel="icon" type="image/png" href="~/img/brand/favicon.png" asp-append-version="true" />
+    <link rel="apple-touch-icon" href="~/img/brand/favicon.png" />
 </head>
 <body class="admin-shell">
 
@@ -255,5 +257,7 @@
     </script>
 
     @RenderSection("Scripts", required: false)
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.14.5/dist/sweetalert2.all.min.js"></script>
+<script src="~/js/ghars-dialogs.js" asp-append-version="true"></script>
 </body>
 </html>

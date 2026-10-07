@@ -91,7 +91,7 @@
                         @if (User.IsInRole(RoleNames.SuperAdmin))
                         {
                             <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Gallery" asp-action="EditItem" asp-route-id="@item.Id"><i class="bi bi-pencil-square"></i> Edit Item</a>
-                            <form method="post" asp-area="Admin" asp-controller="Gallery" asp-action="DeleteItem" asp-route-id="@item.Id" onsubmit="return confirm('Delete this media item?');" class="d-inline">
+                            <form method="post" asp-area="Admin" asp-controller="Gallery" asp-action="DeleteItem" asp-route-id="@item.Id" data-confirm="Delete this media item?" class="d-inline">
                                 @Html.AntiForgeryToken()
                                 <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Delete</button>
                             </form>
@@ -129,7 +129,7 @@
                 {
                     <div class="d-flex gap-2 mt-2">
                         <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Gallery" asp-action="EditItem" asp-route-id="@item.Id">Edit Item</a>
-                        <form method="post" asp-area="Admin" asp-controller="Gallery" asp-action="DeleteItem" asp-route-id="@item.Id" onsubmit="return confirm('Delete this media item?');" class="d-inline">
+                        <form method="post" asp-area="Admin" asp-controller="Gallery" asp-action="DeleteItem" asp-route-id="@item.Id" data-confirm="Delete this media item?" class="d-inline">
                             @Html.AntiForgeryToken()
                             <button class="btn btn-sm btn-outline-danger">Delete</button>
                         </form>

@@ -15,7 +15,7 @@
         @if (User.IsInRole("Super Admin"))
         {
             <form method="post" asp-area="Admin" asp-controller="ContactMessages" asp-action="Delete" asp-route-id="@Model.Id" class="d-inline"
-                  onsubmit="return confirm('Permanently delete this message? This cannot be undone.');">
+                  data-confirm="Permanently delete this message? This cannot be undone.">
                 @Html.AntiForgeryToken()
                 <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
             </form>

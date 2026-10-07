@@ -41,7 +41,7 @@
                         @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Organizations" asp-action="Edit" asp-route-id="@o.Id">Edit</a> }
                         @if (User.IsInRole("Super Admin"))
                         {
-                            <form method="post" asp-area="Admin" asp-controller="Organizations" asp-action="Delete" asp-route-id="@o.Id" class="d-inline" onsubmit="return confirm('Delete this organization?');">
+                            <form method="post" asp-area="Admin" asp-controller="Organizations" asp-action="Delete" asp-route-id="@o.Id" class="d-inline" data-confirm="Delete this organization?">
                                 @Html.AntiForgeryToken()
                                 <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
                             </form>

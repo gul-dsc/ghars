@@ -128,7 +128,7 @@
             }
 
             <hr />
-            <form method="post" asp-action="DeleteQuestion" asp-route-id="@Model.Id" asp-route-questionId="@q.Id" onsubmit="return confirm('@T("Delete this question?", "حذف هذا السؤال؟")');">
+            <form method="post" asp-action="DeleteQuestion" asp-route-id="@Model.Id" asp-route-questionId="@q.Id" data-confirm="@T("Delete this question?", "حذف هذا السؤال؟")">
                 @Html.AntiForgeryToken()
                 <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>@T("Delete question", "حذف السؤال")</button>
             </form>

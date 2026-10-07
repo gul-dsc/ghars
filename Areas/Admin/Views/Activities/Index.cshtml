@@ -184,7 +184,7 @@ else
                         }
                         @if (User.IsInRole("Super Admin"))
                         {
-                            <form method="post" action="/Admin/Activities/Delete/@a.Id" class="d-inline" onsubmit="return confirm('Delete this activity?');">
+                            <form method="post" action="/Admin/Activities/Delete/@a.Id" class="d-inline" data-confirm="Delete this activity?">
                                 @Html.AntiForgeryToken()
                                 <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
                             </form>

@@ -73,7 +73,7 @@
                         }
                         @if (User.IsInRole(RoleNames.SuperAdmin))
                         {
-                            <form method="post" asp-action="Delete" asp-route-id="@s.Id" class="d-inline" onsubmit="return confirm('@T("Delete this survey?", "حذف هذا الاستبيان؟")');">
+                            <form method="post" asp-action="Delete" asp-route-id="@s.Id" class="d-inline" data-confirm="@T("Delete this survey?", "حذف هذا الاستبيان؟")">
                                 @Html.AntiForgeryToken()
                                 <button class="btn btn-sm btn-outline-danger">@T("Delete", "حذف")</button>
                             </form>

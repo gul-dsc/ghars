@@ -9,7 +9,7 @@
         @if (User.IsInRole("Super Admin"))
         {
             <form id="bulkSend" method="post" asp-area="Admin" asp-controller="Users" asp-action="SendCredentialsBulk" class="d-inline"
-                  onsubmit="return confirm('Send login details to the selected users? Each one gets a NEW password by email and their current password stops working.');">
+                  data-confirm="Send login details to the selected users? Each one gets a NEW password by email and their current password stops working.">
                 @Html.AntiForgeryToken()
                 <button class="btn btn-sm btn-outline-success" type="submit"><i class="bi bi-envelope"></i> Email login details to selected</button>
             </form>
@@ -35,19 +35,19 @@
                         @if (User.IsInRole("Super Admin"))
                         {
                             <form method="post" asp-area="Admin" asp-controller="Users" asp-action="SendCredentials" asp-route-id="@u.Id" class="d-inline"
-                                  onsubmit="return confirm('Email login details to @u.Email? A new password is set and the current one stops working.');">
+                                  data-confirm="Email login details to @u.Email? A new password is set and the current one stops working.">
                                 @Html.AntiForgeryToken()
                                 <button class="btn btn-sm btn-outline-success" type="submit" title="Email login details"><i class="bi bi-envelope"></i> Send login</button>
                             </form>
                             <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Users" asp-action="Edit" asp-route-id="@u.Id">Edit</a>
-                            <form method="post" asp-area="Admin" asp-controller="Users" asp-action="Deactivate" asp-route-id="@u.Id" class="d-inline">
+                            <form method="post" asp-area="Admin" asp-controller="Users" asp-action="Deactivate" asp-route-id="@u.Id" class="d-inline" data-confirm="Deactivate @u.Email? They will no longer be able to sign in." data-confirm-ok="Deactivate">
                                 @Html.AntiForgeryToken()
                                 <button class="btn btn-sm btn-outline-warning" type="submit">Deactivate</button>
                             </form>
                         }
                         @if (User.IsInRole("Super Admin"))
                         {
-                            <form method="post" asp-area="Admin" asp-controller="Users" asp-action="Delete" asp-route-id="@u.Id" class="d-inline" onsubmit="return confirm('Delete this user?');">
+                            <form method="post" asp-area="Admin" asp-controller="Users" asp-action="Delete" asp-route-id="@u.Id" class="d-inline" data-confirm="Delete this user?">
                                 @Html.AntiForgeryToken()
                                 <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
                             </form>

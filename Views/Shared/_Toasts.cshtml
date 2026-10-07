@@ -11,21 +11,21 @@
 }
 @if (!string.IsNullOrWhiteSpace(success))
 {
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
+    <div class="alert alert-success alert-dismissible fade show" role="alert" data-toast="success">
         <i class="bi bi-check-circle me-1" aria-hidden="true"></i>@success
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="@dismiss"></button>
     </div>
 }
 @if (!string.IsNullOrWhiteSpace(warn))
 {
-    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+    <div class="alert alert-warning alert-dismissible fade show" role="alert" data-toast="warning">
         <i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>@warn
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="@dismiss"></button>
     </div>
 }
 @if (!string.IsNullOrWhiteSpace(info))
 {
-    <div class="alert alert-info alert-dismissible fade show" role="alert">
+    <div class="alert alert-info alert-dismissible fade show" role="alert" data-toast="info">
         <i class="bi bi-info-circle me-1" aria-hidden="true"></i>@info
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="@dismiss"></button>
     </div>

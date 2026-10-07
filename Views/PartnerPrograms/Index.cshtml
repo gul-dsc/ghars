@@ -171,7 +171,7 @@
                 @if(OfferingWorkflow.CanUnpublish(x.ApprovalStatus))
                 {
                     <form method="post" action="/partner/programs/unpublish" class="d-inline"
-                          onsubmit="return confirm('@T("Withdraw this program from the club catalogue? Clubs will no longer be able to request it.","سحب هذا البرنامج من كتالوج الأندية؟ لن تتمكن الأندية من طلبه بعد ذلك.")');">
+                          data-confirm="@T("Withdraw this program from the club catalogue? Clubs will no longer be able to request it.","سحب هذا البرنامج من كتالوج الأندية؟ لن تتمكن الأندية من طلبه بعد ذلك.")">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="id" value="@x.Id" />
                         <button class="btn btn-sm btn-outline-secondary" type="submit">@T("Unpublish","إلغاء النشر")</button>

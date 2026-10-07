@@ -47,7 +47,7 @@
                         }
                     @if (User.IsInRole(RoleNames.SuperAdmin))
                     {
-                        <form method="post" asp-action="Delete" asp-route-id="@x.Id" class="d-inline" onsubmit="return confirm('Delete this album and all media?');">
+                        <form method="post" asp-action="Delete" asp-route-id="@x.Id" class="d-inline" data-confirm="Delete this album and all media?">
                             @Html.AntiForgeryToken()
                             <button class="btn btn-sm btn-outline-danger">Delete</button>
                         </form>

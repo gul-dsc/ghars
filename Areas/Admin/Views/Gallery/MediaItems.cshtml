@@ -165,7 +165,7 @@
                                         <button class="btn btn-sm btn-outline-secondary">@(item.IsPublished ? T("Hide", "إخفاء") : T("Publish", "نشر"))</button>
                                     </form>
                                     <form method="post" asp-area="Admin" asp-controller="Gallery" asp-action="DeleteMediaItem" asp-route-id="@item.Id" class="d-inline"
-                                          onsubmit="return confirm('@T("Remove this media item from the channel?", "إزالة هذه الوسائط من القناة؟")');">
+                                          data-confirm="@T("Remove this media item from the channel?", "إزالة هذه الوسائط من القناة؟")">
                                         @Html.AntiForgeryToken()
                                         <button class="btn btn-sm btn-outline-danger">@T("Remove", "إزالة")</button>
                                     </form>

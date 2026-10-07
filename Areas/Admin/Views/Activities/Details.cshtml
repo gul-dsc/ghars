@@ -188,15 +188,15 @@
                         <div class="form-text mb-2">@T("Notes are sent to the implementing entity. Not required to approve.", "تُرسل الملاحظات إلى الجهة المنفذة، وهي غير مطلوبة عند الاعتماد.")</div>
                         <div class="d-grid gap-2">
                             <button class="btn btn-success" type="submit" formaction="/Admin/Activities/Approve"
-                                    onclick="return confirm('@T("Approve this program and make it available for club booking?", "اعتماد هذا البرنامج وإتاحته لحجز الأندية؟")');">
+                                    data-confirm="@T("Approve this program and make it available for club booking?", "اعتماد هذا البرنامج وإتاحته لحجز الأندية؟")">
                                 @T("Approve & publish", "اعتماد ونشر")
                             </button>
                             <button class="btn btn-outline-warning" type="submit" formaction="/Admin/Activities/ReturnForCorrection"
-                                    onclick="return confirm('@T("Return this program to the partner for correction?", "إعادة هذا البرنامج إلى الجهة المنفذة للتعديل؟")');">
+                                    data-confirm="@T("Return this program to the partner for correction?", "إعادة هذا البرنامج إلى الجهة المنفذة للتعديل؟")">
                                 @T("Return for correction", "إعادة للتعديل")
                             </button>
                             <button class="btn btn-outline-danger" type="submit" formaction="/Admin/Activities/Reject"
-                                    onclick="return confirm('@T("Reject this program?", "رفض هذا البرنامج؟")');">
+                                    data-confirm="@T("Reject this program?", "رفض هذا البرنامج؟")">
                                 @T("Reject", "رفض")
                             </button>
                         </div>
@@ -206,7 +206,7 @@
                 {
                     <p class="text-muted small">@T("This program is approved and visible to clubs. Unpublishing withdraws it from the catalogue; existing bookings are unaffected.", "هذا البرنامج معتمد وظاهر للأندية. إلغاء النشر يسحبه من الكتالوج، ولا يؤثر على الحجوزات القائمة.")</p>
                     <form method="post" action="/Admin/Activities/UnpublishOffering"
-                          onsubmit="return confirm('@T("Withdraw this program from the club catalogue? Clubs will no longer be able to request it.", "سحب هذا البرنامج من كتالوج الأندية؟ لن تتمكن الأندية من طلبه بعد ذلك.")');">
+                          data-confirm="@T("Withdraw this program from the club catalogue? Clubs will no longer be able to request it.", "سحب هذا البرنامج من كتالوج الأندية؟ لن تتمكن الأندية من طلبه بعد ذلك.")">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="id" value="@Model.Id" />
                         <label class="form-label" for="unpublish-notes">@T("Reason (optional)", "السبب (اختياري)")</label>

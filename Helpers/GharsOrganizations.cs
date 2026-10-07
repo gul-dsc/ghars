@@ -56,6 +56,23 @@ public static class GharsOrganizations
     public static IQueryable<Organization> ApprovedPartners(this IQueryable<Organization> source)
         => source.Where(IsApprovedPartner).OrderBy(x => x.NameEn);
 
+    /// <summary>
+    /// The implementing entities clubs can currently request: those that nominated platform users on the
+    /// official forms (docs/docs, October 2026). Every other entity stays in the roster - its history,
+    /// reports and admin screens are untouched - it just no longer appears where a club books.
+    /// To open booking to another entity, add its exact NameEn here.
+    /// </summary>
+    public static readonly string[] BookableEntityNamesEn =
+    {
+        "Community Development Authority",
+        "Dubai Health Authority",
+        "Dubai Police",
+    };
+
+    /// <summary>The approved implementing entities a club may book with, alphabetically.</summary>
+    public static IQueryable<Organization> BookablePartners(this IQueryable<Organization> source)
+        => source.ApprovedPartners().Where(x => BookableEntityNamesEn.Contains(x.NameEn));
+
     /// <summary>The approved clubs, alphabetically.</summary>
     public static IQueryable<Organization> ApprovedClubs(this IQueryable<Organization> source)
         => source.Where(IsApprovedClub).OrderBy(x => x.NameEn);
@@ -70,4 +87,8 @@ public static class GharsOrganizations
     /// </summary>
     public static IQueryable<int> ApprovedPartnerIds(this IQueryable<Organization> source)
         => source.Where(IsApprovedPartner).Select(x => x.Id);
+
+    /// <summary>Ids of the entities a club may book with (see <see cref="BookableEntityNamesEn"/>).</summary>
+    public static IQueryable<int> BookablePartnerIds(this IQueryable<Organization> source)
+        => source.Where(IsApprovedPartner).Where(x => BookableEntityNamesEn.Contains(x.NameEn)).Select(x => x.Id);
 }

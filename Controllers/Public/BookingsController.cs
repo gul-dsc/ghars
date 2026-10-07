@@ -214,7 +214,7 @@ public class BookingsController : Controller
             // definition, so a hand-posted id for a deactivated, dummy or club organization is refused
             // even though no screen offers it.
             var partner = await _db.Organizations
-                .ApprovedPartners()
+                .BookablePartners()
                 .FirstOrDefaultAsync(x => x.Id == vm.PartnerOrganizationId);
             if (partner is null)
                 ModelState.AddModelError(nameof(vm.PartnerOrganizationId), isAr ? "الجهة المنفذة غير صالحة." : "The selected implementing entity is not valid.");
@@ -580,7 +580,7 @@ public class BookingsController : Controller
     [HttpGet("/booking/partner/{partnerId:int}/calendar")]
     public async Task<IActionResult> PartnerCalendar(int partnerId, int? year = null, int? month = null, int? activityId = null)
     {
-        var partner = await _db.Organizations.ApprovedPartners().FirstOrDefaultAsync(x => x.Id == partnerId);
+        var partner = await _db.Organizations.BookablePartners().FirstOrDefaultAsync(x => x.Id == partnerId);
         if (partner is null) return NotFound();
 
         // A programme filter is only honoured if that programme really belongs to this entity and is
@@ -704,7 +704,7 @@ public class BookingsController : Controller
                         // learning-programs route, where ownership resolves from the creator's
                         // organization link; those keep working unchanged.
                         && (x.PartnerOrganizationId == null
-                            || (_db.Organizations.ApprovedPartnerIds().Contains(x.PartnerOrganizationId.Value)
+                            || (_db.Organizations.BookablePartnerIds().Contains(x.PartnerOrganizationId.Value)
                                 // DSC review gate. A partner offering reaches a club only once a
                                 // reviewer has approved it; Draft, SubmittedForApproval,
                                 // ReturnedForCorrection, Rejected and Unpublished are all excluded.
@@ -728,7 +728,7 @@ public class BookingsController : Controller
         ViewBag.Organizations = orgs;
         ViewBag.PartnerOrganization = activity is null ? null : await ResolvePartnerOrganizationAsync(activity);
         // Approved implementing entities + active seasons for direct entity-first requests.
-        ViewBag.Entities = await _db.Organizations.ApprovedPartners().ToListAsync();
+        ViewBag.Entities = await _db.Organizations.BookablePartners().ToListAsync();
         ViewBag.Seasons = await _db.Seasons.Where(x => x.IsActive).OrderByDescending(x => x.StartDate).ToListAsync();
 
         // The entity's published availability, when the entity is already known — which on the

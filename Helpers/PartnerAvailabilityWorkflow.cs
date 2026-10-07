@@ -67,7 +67,7 @@ public static class PartnerAvailabilityWorkflow
                         && x.Date <= horizon
                         && x.Season != null && x.Season.IsActive
                         && x.Date <= x.Season.EndDate
-                        && db.Organizations.ApprovedPartnerIds().Contains(x.PartnerOrganizationId)
+                        && db.Organizations.BookablePartnerIds().Contains(x.PartnerOrganizationId)
                         // A slot offered for one specific programme is only meaningful while that
                         // programme is still bookable. Withdrawing an offering therefore withdraws the
                         // times attached to it, without the partner having to remember to.

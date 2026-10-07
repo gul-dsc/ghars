@@ -90,7 +90,7 @@ public class HomeController : Controller
         if (User.IsInRole(RoleNames.PartnerAdmin) && !User.IsInRole(RoleNames.ClubAdmin))
             return RedirectToAction("Index", "PartnerDashboard");
 
-        var entities = await _db.Organizations.ApprovedPartners().ToListAsync();
+        var entities = await _db.Organizations.BookablePartners().ToListAsync();
 
         var entityIds = entities.Select(x => x.Id).ToList();
         var now = DateTime.UtcNow;

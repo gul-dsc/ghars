@@ -158,6 +158,7 @@ public class UsersController : Controller
                     && senderNames.TryGetValue(s3.Last.UserId, out var n) ? n : null
             });
         }
+        ViewBag.PlaceholderEmails = (await PlaceholderAccountsAsync()).Select(x => x.Email!).OrderBy(x => x).ToList();
         return View(rows);
     }
 
@@ -274,9 +275,47 @@ public class UsersController : Controller
     {
         var user = await _userManager.FindByIdAsync(id);
         if (user == null) return NotFound();
-        await _userManager.DeleteAsync(user);
+        await DeleteWithLinksAsync(user);
         TempData["ToastWarning"] = "User deleted.";
         return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>
+    /// The one-per-organization placeholder accounts made by seed-organization-accounts
+    /// (club-&lt;name&gt;@domain / partner-&lt;name&gt;@domain) before the real nominees were known.
+    /// Admin-role accounts are never matched.
+    /// </summary>
+    private async Task<List<ApplicationUser>> PlaceholderAccountsAsync()
+    {
+        var candidates = await _userManager.Users
+            .Where(x => x.Email != null && (x.Email.StartsWith("club-") || x.Email.StartsWith("partner-")))
+            .ToListAsync();
+        var result = new List<ApplicationUser>();
+        foreach (var u in candidates)
+        {
+            var roles = await _userManager.GetRolesAsync(u);
+            if (!roles.Contains(RoleNames.SuperAdmin) && !roles.Contains(RoleNames.DscAdmin)) result.Add(u);
+        }
+        return result;
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RemovePlaceholderAccounts()
+    {
+        int deleted = 0;
+        foreach (var user in await PlaceholderAccountsAsync())
+            if (await DeleteWithLinksAsync(user)) deleted++;
+        TempData["ToastSuccess"] = $"Removed {deleted} placeholder organization account(s).";
+        return RedirectToAction(nameof(Index));
+    }
+
+    // OrganizationAdminLinks is not an Identity FK, so remove it first or it lingers as an orphan.
+    private async Task<bool> DeleteWithLinksAsync(ApplicationUser user)
+    {
+        _db.OrganizationAdminLinks.RemoveRange(await _db.OrganizationAdminLinks.Where(x => x.UserId == user.Id).ToListAsync());
+        await _db.SaveChangesAsync();
+        return (await _userManager.DeleteAsync(user)).Succeeded;
     }
 
     private async Task LoadLookupsAsync()

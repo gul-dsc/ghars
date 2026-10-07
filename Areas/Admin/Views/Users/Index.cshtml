@@ -17,6 +17,18 @@
         }
     </div>
 </div>
+@{ var placeholders = ViewBag.PlaceholderEmails as List<string> ?? new(); }
+@if (placeholders.Count > 0 && User.IsInRole("Super Admin"))
+{
+    <div class="alert alert-warning d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div><strong>@placeholders.Count placeholder organization accounts</strong> (club-… / partner-…) were created before the real users were nominated.</div>
+        <form method="post" asp-area="Admin" asp-controller="Users" asp-action="RemovePlaceholderAccounts" class="d-inline"
+              data-confirm="Delete these @placeholders.Count placeholder accounts? @string.Join(", ", placeholders.Take(40))@(placeholders.Count > 40 ? " …" : ""). Real users, admins and democlub/demoentity are kept." data-confirm-ok="Delete them">
+            @Html.AntiForgeryToken()
+            <button class="btn btn-sm btn-danger" type="submit"><i class="bi bi-trash"></i> Remove placeholder accounts</button>
+        </form>
+    </div>
+}
 <div class="small text-muted mb-2">Emailing login details sets a new random password for that user and sends it with their username. Test (.local) and deactivated accounts are skipped.</div>
 <div class="card border-0 shadow-sm rounded-4">
     <div class="table-responsive">

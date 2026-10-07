@@ -82,14 +82,19 @@ public class AccountController : Controller
         {
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
             var link = Url.Action(nameof(ResetPassword), "Account", new { area = "", email = user.Email, token }, Request.Scheme)!;
-            string E(string s) => System.Net.WebUtility.HtmlEncode(s);
-            var body = EmailSender.Bilingual(
-                $"<p>A password reset was requested for your Ghars Platform account <b>{E(user.Email)}</b>.</p>" +
-                $"<p><a href=\"{E(link)}\">Choose a new password</a></p>" +
-                "<p>The link works once and expires in 24 hours. If you did not ask for this, ignore this email; your password has not changed.</p>",
-                $"<p>تم طلب إعادة تعيين كلمة المرور لحسابك على منصة غرس <b dir=\"ltr\">{E(user.Email)}</b>.</p>" +
-                $"<p><a href=\"{E(link)}\">اختر كلمة مرور جديدة</a></p>" +
-                "<p>يعمل الرابط مرة واحدة وتنتهي صلاحيته خلال 24 ساعة. إذا لم تطلب ذلك، تجاهل هذه الرسالة؛ لم تتغير كلمة المرور.</p>");
+            var E = EmailSender.Encode;
+            var siteUrl = $"{Request.Scheme}://{Request.Host}";
+            var body = EmailSender.Layout(siteUrl, "Reset your Ghars Platform password | إعادة تعيين كلمة المرور",
+                EmailSender.Section(false, "Reset your password",
+                    $"<p style=\"margin:0 0 10px\">We received a request to reset the password for <b dir=\"ltr\">{E(user.Email)}</b>.</p>" +
+                    "<p style=\"margin:0\">Click the button below to choose a new password. The link works once and expires in 24 hours.</p>",
+                    link, "Choose a new password") +
+                "<p style=\"font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:13px;line-height:1.6;color:#6b7280;margin:14px 0 0\">Didn't ask for this? You can safely ignore this email; your password has not changed.</p>",
+                EmailSender.Section(true, "إعادة تعيين كلمة المرور",
+                    $"<p style=\"margin:0 0 10px\">تلقينا طلباً لإعادة تعيين كلمة المرور للحساب <b dir=\"ltr\">{E(user.Email)}</b>.</p>" +
+                    "<p style=\"margin:0\">اضغط على الزر أدناه لاختيار كلمة مرور جديدة. يعمل الرابط مرة واحدة وتنتهي صلاحيته خلال 24 ساعة.</p>",
+                    link, "اختر كلمة مرور جديدة") +
+                "<p dir=\"rtl\" style=\"text-align:right;font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:13px;line-height:1.6;color:#6b7280;margin:14px 0 0\">لم تطلب ذلك؟ يمكنك تجاهل هذه الرسالة بأمان؛ لم تتغير كلمة المرور.</p>");
             try
             {
                 await email.SendAsync(user.Email, "Ghars Platform - reset your password | منصة غرس - إعادة تعيين كلمة المرور", body);

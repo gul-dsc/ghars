@@ -88,17 +88,21 @@ public class UsersController : Controller
 
         var loginUrl = Url.Action("Login", "Account", new { area = "" }, Request.Scheme)!;
         var forgotUrl = Url.Action("ForgotPassword", "Account", new { area = "" }, Request.Scheme)!;
-        string E(string s) => System.Net.WebUtility.HtmlEncode(s);
+        var E = EmailSender.Encode;
         var name = E(user.FullName ?? user.Email);
-        var body = EmailSender.Bilingual(
-            $"<p>Dear {name},</p><p>Your account on the Ghars Platform is ready.</p>" +
-            $"<p><b>Username:</b> {E(user.Email)}<br><b>Password:</b> <code>{E(password)}</code></p>" +
-            $"<p>Sign in at <a href=\"{E(loginUrl)}\">{E(loginUrl)}</a>. You can choose your own password at any time with " +
-            $"<a href=\"{E(forgotUrl)}\">Forgot password</a>.</p><p>Please keep these details private.</p>",
-            $"<p>عزيزي/عزيزتي {name}،</p><p>تم تجهيز حسابك على منصة غرس.</p>" +
-            $"<p><b>اسم المستخدم:</b> <span dir=\"ltr\">{E(user.Email)}</span><br><b>كلمة المرور:</b> <code dir=\"ltr\">{E(password)}</code></p>" +
-            $"<p>يمكنك تسجيل الدخول عبر <a href=\"{E(loginUrl)}\">{E(loginUrl)}</a>، ويمكنك تغيير كلمة المرور في أي وقت من خلال " +
-            $"<a href=\"{E(forgotUrl)}\">نسيت كلمة المرور</a>.</p><p>يرجى الحفاظ على سرية هذه البيانات.</p>");
+        var siteUrl = $"{Request.Scheme}://{Request.Host}";
+        var link = "color:#2D9B6C;font-weight:600;";
+        var body = EmailSender.Layout(siteUrl, "Your Ghars Platform login details | بيانات الدخول إلى منصة غرس",
+            EmailSender.Section(false, "Welcome to the Ghars Platform",
+                $"<p style=\"margin:0 0 10px\">Dear {name},</p><p style=\"margin:0\">Your account is ready. Use the details below to sign in.</p>",
+                loginUrl, "Sign in to Ghars",
+                new[] { ("Username", E(user.Email)), ("Password", E(password)) }) +
+            $"<p style=\"font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:13px;line-height:1.6;color:#6b7280;margin:14px 0 0\">For your security, please choose your own password after signing in using <a href=\"{E(forgotUrl)}\" style=\"{link}\">Forgot password</a>, and keep these details private.</p>",
+            EmailSender.Section(true, "مرحباً بك في منصة غرس",
+                $"<p style=\"margin:0 0 10px\">عزيزي/عزيزتي {name}،</p><p style=\"margin:0\">تم تجهيز حسابك. استخدم البيانات التالية لتسجيل الدخول.</p>",
+                loginUrl, "تسجيل الدخول إلى غرس",
+                new[] { ("اسم المستخدم", E(user.Email)), ("كلمة المرور", E(password)) }) +
+            $"<p dir=\"rtl\" style=\"text-align:right;font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:13px;line-height:1.6;color:#6b7280;margin:14px 0 0\">حفاظاً على أمان حسابك، يرجى اختيار كلمة مرور خاصة بك بعد تسجيل الدخول من خلال <a href=\"{E(forgotUrl)}\" style=\"{link}\">نسيت كلمة المرور</a>، والحفاظ على سرية هذه البيانات.</p>");
 
         try
         {

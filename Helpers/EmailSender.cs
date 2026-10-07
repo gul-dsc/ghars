@@ -18,6 +18,12 @@ public class SmtpOptions
     public string? FromAddress { get; set; }
     public string FromName { get; set; } = "Ghars Platform";
 
+    /// <summary>Email every in-app notification too. Set Smtp__NotificationsEnabled=false to stop it.</summary>
+    public bool NotificationsEnabled { get; set; } = true;
+
+    /// <summary>Base for links in notification emails; when empty, the address of the triggering request.</summary>
+    public string? SiteUrl { get; set; }
+
     public bool IsConfigured => !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(FromAddress);
 }
 

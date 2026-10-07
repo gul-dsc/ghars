@@ -17,10 +17,15 @@ builder.Services
     .AddDataAnnotationsLocalization();
 
 // EF Core + SQL Server
-builder.Services.AddDbContext<AppDbContext>(options =>
+builder.Services.AddDbContext<AppDbContext>((sp, options) =>
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+    // Every in-app notification is also emailed to its recipients (see Helpers/NotificationEmails.cs).
+    options.AddInterceptors(sp.GetRequiredService<GharsPlatform.Helpers.NotificationEmailInterceptor>());
 });
+builder.Services.AddSingleton(System.Threading.Channels.Channel.CreateUnbounded<GharsPlatform.Helpers.NotificationEmailJob>());
+builder.Services.AddSingleton<GharsPlatform.Helpers.NotificationEmailInterceptor>();
+builder.Services.AddHostedService<GharsPlatform.Helpers.NotificationEmailWorker>();
 
 // Identity
 builder.Services

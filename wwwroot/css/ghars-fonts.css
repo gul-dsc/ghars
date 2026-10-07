@@ -1,0 +1,37 @@
+/* Dubai Font for the whole portal, public site and admin, English and Arabic.
+
+   For now the faces come from the visitor's installed copy - Windows 10/11 ship Dubai Font - so
+   Windows users see it and other devices fall back to Segoe UI / the system font.
+
+   To serve it to everyone: download the official web font files from dubaifont.com (free, from the
+   Government of Dubai), put them in wwwroot/fonts/dubai/, and add a url() after each local() below,
+   e.g.  src: local("Dubai Regular"), local("Dubai-Regular"), url("../fonts/dubai/DubaiW23-Regular.woff2") format("woff2");
+   Do not copy the files out of C:\Windows\Fonts for this - those come under the Windows licence. */
+
+@font-face { font-family: "Ghars Dubai"; font-weight: 300; font-style: normal; font-display: swap;
+    src: local("Dubai Light"), local("Dubai-Light"); }
+@font-face { font-family: "Ghars Dubai"; font-weight: 400; font-style: normal; font-display: swap;
+    src: local("Dubai Regular"), local("Dubai-Regular"), local("Dubai"); }
+@font-face { font-family: "Ghars Dubai"; font-weight: 500; font-style: normal; font-display: swap;
+    src: local("Dubai Medium"), local("Dubai-Medium"); }
+/* 600 maps to Bold as well: Dubai has no semibold, and the UI uses 600 widely. */
+@font-face { font-family: "Ghars Dubai"; font-weight: 600 900; font-style: normal; font-display: swap;
+    src: local("Dubai Bold"), local("Dubai-Bold"); }
+
+:root {
+    --ghars-font: "Ghars Dubai", "Dubai", "Segoe UI", Tahoma, system-ui, -apple-system, Arial, sans-serif;
+    --bs-body-font-family: var(--ghars-font);
+    --bs-font-sans-serif: var(--ghars-font);
+}
+
+body,
+button, input, select, textarea, optgroup,
+.tooltip, .popover, .dropdown-menu,
+.swal2-popup, .swal2-title, .swal2-html-container, .swal2-confirm, .swal2-cancel {
+    font-family: var(--ghars-font) !important;
+}
+
+/* Icon fonts keep their own family. */
+.bi, [class^="bi-"], [class*=" bi-"], .bi::before, [class^="bi-"]::before, [class*=" bi-"]::before {
+    font-family: "bootstrap-icons" !important;
+}

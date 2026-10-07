@@ -71,6 +71,8 @@ public class UsersController : Controller
         return RedirectToAction(nameof(Index));
     }
 
+    private const string CredentialsSentAction = "LoginDetailsSent";
+
     private async Task<(bool ok, string? error)> SendCredentialsToAsync(ApplicationUser user)
     {
         if (!_email.IsConfigured) return (false, "Email is not configured on this server yet.");
@@ -107,6 +109,17 @@ public class UsersController : Controller
         try
         {
             await _email.SendAsync(user.Email, "Ghars Platform - your login details | منصة غرس - بيانات الدخول", body);
+            // Recorded so the users list can show when (and by whom) login details were last sent.
+            _db.SystemAuditLogs.Add(new SystemAuditLog
+            {
+                UserId = _userManager.GetUserId(User),
+                Action = CredentialsSentAction,
+                EntityName = "User",
+                EntityId = user.Id,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                NewValuesJson = System.Text.Json.JsonSerializer.Serialize(new { user.Email })
+            });
+            await _db.SaveChangesAsync();
             return (true, null);
         }
         catch (Exception ex)
@@ -119,6 +132,15 @@ public class UsersController : Controller
     public async Task<IActionResult> Index()
     {
         var users = await _userManager.Users.OrderBy(x => x.Email).ToListAsync();
+        var sends = (await _db.SystemAuditLogs.AsNoTracking()
+                .Where(x => x.Action == CredentialsSentAction && x.EntityName == "User" && x.EntityId != null)
+                .Select(x => new { x.EntityId, x.AtUtc, x.UserId })
+                .ToListAsync())
+            .GroupBy(x => x.EntityId!)
+            .ToDictionary(g => g.Key, g => (Last: g.OrderByDescending(x => x.AtUtc).First(), Count: g.Count()));
+        var senderIds = sends.Values.Select(v => v.Last.UserId).Where(x => x != null).Distinct().ToList();
+        var senderNames = await _userManager.Users.Where(x => senderIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, x => x.FullName ?? x.Email ?? "");
         var rows = new List<UserRowVm>();
         foreach (var u in users)
         {
@@ -129,7 +151,11 @@ public class UsersController : Controller
                 FullName = u.FullName ?? "",
                 PrimaryOrganizationId = u.PrimaryOrganizationId,
                 IsLocked = u.LockoutEnd.HasValue && u.LockoutEnd.Value.UtcDateTime > DateTime.UtcNow,
-                Roles = string.Join(", ", await _userManager.GetRolesAsync(u))
+                Roles = string.Join(", ", await _userManager.GetRolesAsync(u)),
+                LoginSentAtUtc = sends.TryGetValue(u.Id, out var s) ? s.Last.AtUtc : null,
+                LoginSentCount = sends.TryGetValue(u.Id, out var s2) ? s2.Count : 0,
+                LoginSentBy = sends.TryGetValue(u.Id, out var s3) && s3.Last.UserId != null
+                    && senderNames.TryGetValue(s3.Last.UserId, out var n) ? n : null
             });
         }
         return View(rows);
@@ -267,6 +293,9 @@ public class UsersController : Controller
         public string Roles { get; set; } = "";
         public int? PrimaryOrganizationId { get; set; }
         public bool IsLocked { get; set; }
+        public DateTime? LoginSentAtUtc { get; set; }
+        public int LoginSentCount { get; set; }
+        public string? LoginSentBy { get; set; }
     }
 
     public class UserEditVm

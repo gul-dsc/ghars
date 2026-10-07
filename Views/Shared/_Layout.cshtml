@@ -341,5 +341,22 @@
     @RenderSection("Scripts", required: false)
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.14.5/dist/sweetalert2.all.min.js"></script>
 <script src="~/js/ghars-dialogs.js" asp-append-version="true"></script>
+<script>
+    // Highlight the main-nav link for the page being viewed (and its dropdown, if it lives in one).
+    (function () {
+        var here = location.pathname.replace(/\/+$/, '').toLowerCase() || '/';
+        document.querySelectorAll('.ghars-main-nav a[href]').forEach(function (a) {
+            var path = new URL(a.getAttribute('href'), location.origin).pathname.replace(/\/+$/, '').toLowerCase() || '/';
+            if (a.getAttribute('href') === '#') return;
+            var match = path === '/' || path === '/home' || path === '/home/index'
+                ? (here === '/' || here === '/home' || here === '/home/index')
+                : (here === path || here.indexOf(path + '/') === 0);
+            if (!match) return;
+            a.setAttribute('aria-current', 'page');
+            var dd = a.closest('.dropdown');
+            if (dd) { var toggle = dd.querySelector('.dropdown-toggle'); if (toggle) toggle.classList.add('active'); a.classList.add('active'); }
+        });
+    })();
+</script>
 </body>
 </html>

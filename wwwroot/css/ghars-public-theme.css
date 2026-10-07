@@ -36,6 +36,59 @@ a { color: var(--primary); text-decoration: none; }
 
         .ghars-main-nav .nav-link:hover { color: var(--dark) !important; }
 
+/* Styled navigation: pill links with a sprout-green underline that grows from the centre on hover,
+   and the current page (marked aria-current by the script in _Layout) held in that state. */
+.ghars-main-nav .nav-link {
+    position: relative;
+    border-radius: 999px;
+    transition: color .2s ease, background-color .2s ease, box-shadow .2s ease;
+}
+.ghars-main-nav .nav-link::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 3px;
+    width: 0;
+    height: 3px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--ghars-deep), var(--ghars-green), var(--ghars-sprout));
+    transform: translateX(-50%);
+    transition: width .25s ease;
+}
+.ghars-main-nav .nav-link.dropdown-toggle::after { display: inline-block; position: static; width: auto; height: auto; background: none; transform: none; border-radius: 0; }
+.ghars-main-nav .nav-link:hover,
+.ghars-main-nav .nav-link:focus-visible {
+    color: var(--ghars-deep) !important;
+    background-color: rgba(45,155,108,.09);
+}
+.ghars-main-nav .nav-link:hover::after,
+.ghars-main-nav .nav-link:focus-visible::after { width: 38%; }
+.ghars-main-nav .nav-link[aria-current="page"],
+.ghars-main-nav .nav-link.active,
+.ghars-main-nav .nav-link.show {
+    color: var(--ghars-deep) !important;
+    background-color: rgba(45,155,108,.13);
+    box-shadow: inset 0 0 0 1px rgba(45,155,108,.18);
+}
+.ghars-main-nav .nav-link[aria-current="page"]::after { width: 52%; }
+.ghars-main-nav .nav-link:focus-visible { outline: 2px solid var(--ghars-green); outline-offset: 2px; }
+
+@media (min-width: 1200px) {
+    .ghars-main-nav {
+        background: linear-gradient(180deg, #f7faf8, #eef6f1);
+        border: 1px solid rgba(45,155,108,.14);
+        border-radius: 999px;
+        padding: 5px 6px;
+        gap: 4px;
+        box-shadow: 0 4px 14px rgba(27,94,50,.06);
+    }
+    .ghars-main-nav .nav-link { padding: .5rem 1rem !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ghars-main-nav .nav-link, .ghars-main-nav .nav-link::after { transition: none; }
+}
+
 .ghars-top-actions { flex: 0 0 auto; margin-left: auto; }
 
 .ghars-logo-right { display: flex; align-items: center; justify-content: center; margin-inline-start: 6px; }
@@ -180,7 +233,7 @@ html[dir="rtl"] .booking-section-head { text-align: right; }
 
     .ghars-main-nav { margin-top: 1rem; margin-bottom: 1rem; align-items: flex-start; }
 
-        .ghars-main-nav .nav-link { white-space: normal; padding: .55rem .25rem !important; font-size: 1rem; }
+        .ghars-main-nav .nav-link { white-space: normal; padding: .55rem .9rem !important; font-size: 1rem; }
 
     .ghars-dsc-brand img { height: 88px; }
 

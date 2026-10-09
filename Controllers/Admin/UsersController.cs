@@ -3,6 +3,7 @@ using GharsPlatform.Data;
 using GharsPlatform.Helpers;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
+using GharsPlatform.Models.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -14,6 +15,8 @@ namespace GharsPlatform.Controllers.Admin;
 [Authorize(Roles = RoleNames.SuperAdmin)]
 public class UsersController : Controller
 {
+    private static bool IsAr() => System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+
     private readonly AppDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
@@ -37,7 +40,7 @@ public class UsersController : Controller
         var user = await _userManager.FindByIdAsync(id);
         if (user == null) return NotFound();
         var (ok, error) = await SendCredentialsToAsync(user);
-        if (ok) TempData["ToastSuccess"] = $"Login details sent to {user.Email}.";
+        if (ok) TempData["ToastSuccess"] = IsAr() ? $"تم إرسال بيانات الدخول إلى {user.Email}." : $"Login details sent to {user.Email}.";
         else TempData["ToastWarning"] = error;
         return RedirectToAction(nameof(Index));
     }
@@ -48,12 +51,12 @@ public class UsersController : Controller
     {
         if (ids == null || ids.Count == 0)
         {
-            TempData["ToastWarning"] = "Select at least one user.";
+            TempData["ToastWarning"] = IsAr() ? "اختاروا مستخدماً واحداً على الأقل." : "Select at least one user.";
             return RedirectToAction(nameof(Index));
         }
         if (!_email.IsConfigured)
         {
-            TempData["ToastWarning"] = "Email is not configured on this server yet.";
+            TempData["ToastWarning"] = IsAr() ? "لا يمكن إرسال بيانات الدخول بالبريد حالياً لأن إرسال البريد الإلكتروني غير مُعدّ على الخادم." : "Login details can't be emailed yet because email sending isn't set up on this server.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -66,8 +69,8 @@ public class UsersController : Controller
             var (ok, _) = await SendCredentialsToAsync(user);
             if (ok) sent++; else failed.Add(user.Email ?? id);
         }
-        TempData["ToastSuccess"] = $"Login details sent to {sent} user(s).";
-        if (failed.Count > 0) TempData["ToastWarning"] = "Not sent: " + string.Join(", ", failed);
+        TempData["ToastSuccess"] = IsAr() ? $"تم إرسال بيانات الدخول إلى {sent} من المستخدمين." : $"Login details sent to {sent} user(s).";
+        if (failed.Count > 0) TempData["ToastWarning"] = (IsAr() ? "لم تُرسل إلى: " : "Not sent: ") + string.Join(", ", failed);
         return RedirectToAction(nameof(Index));
     }
 
@@ -75,18 +78,18 @@ public class UsersController : Controller
 
     private async Task<(bool ok, string? error)> SendCredentialsToAsync(ApplicationUser user)
     {
-        if (!_email.IsConfigured) return (false, "Email is not configured on this server yet.");
-        if (string.IsNullOrWhiteSpace(user.Email)) return (false, "This user has no email address.");
+        if (!_email.IsConfigured) return (false, IsAr() ? "لا يمكن إرسال بيانات الدخول بالبريد حالياً لأن إرسال البريد الإلكتروني غير مُعدّ على الخادم." : "Login details can't be emailed yet because email sending isn't set up on this server.");
+        if (string.IsNullOrWhiteSpace(user.Email)) return (false, IsAr() ? "لا يوجد بريد إلكتروني لهذا المستخدم." : "This user has no email address.");
         if (user.Email.EndsWith(".local", StringComparison.OrdinalIgnoreCase))
-            return (false, $"{user.Email} is a test address and cannot receive email.");
+            return (false, IsAr() ? $"{user.Email} عنوان اختباري ولا يمكنه استقبال البريد." : $"{user.Email} is a test address and cannot receive email.");
         if (user.LockoutEnd.HasValue && user.LockoutEnd.Value.UtcDateTime > DateTime.UtcNow.AddYears(1))
-            return (false, $"{user.Email} is deactivated. Activate the account first.");
+            return (false, IsAr() ? $"الحساب {user.Email} معطّل. فعّلوا الحساب أولاً." : $"{user.Email} is deactivated. Activate the account first.");
 
         var password = PlatformUserSeeder.GeneratePassword();
         var token = await _userManager.GeneratePasswordResetTokenAsync(user);
         var reset = await _userManager.ResetPasswordAsync(user, token, password);
         if (!reset.Succeeded)
-            return (false, $"Could not set a password for {user.Email}: " + string.Join("; ", reset.Errors.Select(e => e.Description)));
+            return (false, (IsAr() ? $"تعذّر تعيين كلمة مرور لـ {user.Email}: " : $"Could not set a password for {user.Email}: ") + string.Join("; ", reset.Errors.Select(e => e.Description)));
 
         var loginUrl = Url.Action("Login", "Account", new { area = "" }, Request.Scheme)!;
         var forgotUrl = Url.Action("ForgotPassword", "Account", new { area = "" }, Request.Scheme)!;
@@ -125,7 +128,7 @@ public class UsersController : Controller
         catch (Exception ex)
         {
             // The password was already changed; the user can still recover through Forgot password.
-            return (false, $"Password was reset but the email to {user.Email} failed: {ex.Message}");
+            return (false, IsAr() ? $"تمت إعادة تعيين كلمة المرور، لكن تعذّر إرسال البريد إلى {user.Email}: {ex.Message}" : $"Password was reset but the email to {user.Email} failed: {ex.Message}");
         }
     }
 
@@ -178,7 +181,7 @@ public class UsersController : Controller
         if (!ModelState.IsValid) return View(vm);
         if (!await _roleManager.RoleExistsAsync(vm.RoleName))
         {
-            ModelState.AddModelError(nameof(vm.RoleName), "Selected role does not exist.");
+            ModelState.AddModelError(nameof(vm.RoleName), IsAr() ? "الدور المحدد غير موجود." : "Selected role does not exist.");
             return View(vm);
         }
         var user = new ApplicationUser
@@ -198,7 +201,7 @@ public class UsersController : Controller
             return View(vm);
         }
         await _userManager.AddToRoleAsync(user, vm.RoleName);
-        TempData["ToastSuccess"] = "User created.";
+        TempData["ToastSuccess"] = IsAr() ? "تم إنشاء المستخدم." : "User created.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -251,7 +254,7 @@ public class UsersController : Controller
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
             await _userManager.ResetPasswordAsync(user, token, vm.Password);
         }
-        TempData["ToastSuccess"] = "User updated.";
+        TempData["ToastSuccess"] = IsAr() ? "تم تحديث المستخدم." : "User updated.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -264,7 +267,7 @@ public class UsersController : Controller
         if (user == null) return NotFound();
         user.LockoutEnd = DateTimeOffset.UtcNow.AddYears(100);
         await _userManager.UpdateAsync(user);
-        TempData["ToastWarning"] = "User deactivated.";
+        TempData["ToastWarning"] = IsAr() ? "تم تعطيل المستخدم." : "User deactivated.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -275,8 +278,11 @@ public class UsersController : Controller
     {
         var user = await _userManager.FindByIdAsync(id);
         if (user == null) return NotFound();
-        await DeleteWithLinksAsync(user);
-        TempData["ToastWarning"] = "User deleted.";
+        var email = user.Email;
+        if (await DeleteWithLinksAsync(user))
+            TempData["ToastWarning"] = IsAr() ? $"تم حذف المستخدم {email}." : $"User {email} deleted.";
+        else
+            TempData["ToastWarning"] = IsAr() ? $"تعذّر حذف المستخدم {email}." : $"User {email} could not be deleted.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -306,7 +312,7 @@ public class UsersController : Controller
         int deleted = 0;
         foreach (var user in await PlaceholderAccountsAsync())
             if (await DeleteWithLinksAsync(user)) deleted++;
-        TempData["ToastSuccess"] = $"Removed {deleted} placeholder organization account(s).";
+        TempData["ToastSuccess"] = IsAr() ? $"تم حذف {deleted} من حسابات الإعداد غير المستخدمة." : $"Removed {deleted} unused setup account(s).";
         return RedirectToAction(nameof(Index));
     }
 
@@ -340,8 +346,8 @@ public class UsersController : Controller
     public class UserEditVm
     {
         public string? Id { get; set; }
-        [Required, MaxLength(200)] public string FullName { get; set; } = "";
-        [Required, EmailAddress, MaxLength(256)] public string Email { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "Enter the full name.", Ar = "أدخلوا الاسم الكامل."), MaxLength(200)] public string FullName { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "Enter the email address.", Ar = "أدخلوا البريد الإلكتروني."), BilingualEmailAddress(ErrorMessage = "Enter a valid email address.", Ar = "أدخلوا بريداً إلكترونياً صالحاً."), MaxLength(256)] public string Email { get; set; } = "";
         [DataType(DataType.Password)] public string? Password { get; set; }
         [Required] public string RoleName { get; set; } = RoleNames.Viewer;
         public int? PrimaryOrganizationId { get; set; }

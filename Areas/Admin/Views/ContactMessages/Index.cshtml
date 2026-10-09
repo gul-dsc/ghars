@@ -1,33 +1,34 @@
 @model List<GharsPlatform.Models.Core.ContactMessage>
 @using System.Globalization
 @{
-    ViewData["Title"] = "Contact Messages";
-    ViewData["PageTitle"] = "Contact Messages";
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Contact messages", "رسائل التواصل");
+    ViewData["PageTitle"] = T("Contact messages", "رسائل التواصل");
     var current = ViewBag.Status as string;
     var newCount = ViewBag.NewCount as int? ?? 0;
 }
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
     <div class="fw-semibold">
-        Contact Messages
+        @T("Contact messages", "رسائل التواصل")
         @if (newCount > 0)
         {
-            <span class="badge text-bg-danger rounded-pill ms-1">@newCount new</span>
+            <span class="badge text-bg-danger rounded-pill ms-1">@T($"{newCount} new", $"{newCount} جديدة")</span>
         }
     </div>
     <div class="d-flex gap-2">
-        <a class="btn btn-sm @(current == "New" ? "btn-secondary" : "btn-outline-secondary")" href="/Admin/ContactMessages?status=New">New</a>
-        <a class="btn btn-sm @(current == "InProgress" ? "btn-secondary" : "btn-outline-secondary")" href="/Admin/ContactMessages?status=InProgress">In progress</a>
-        <a class="btn btn-sm @(current == "Resolved" ? "btn-secondary" : "btn-outline-secondary")" href="/Admin/ContactMessages?status=Resolved">Resolved</a>
-        <a class="btn btn-sm @(current == "Spam" ? "btn-secondary" : "btn-outline-secondary")" href="/Admin/ContactMessages?status=Spam">Spam</a>
-        <a class="btn btn-sm @(string.IsNullOrEmpty(current) ? "btn-secondary" : "btn-outline-secondary")" href="/Admin/ContactMessages">All</a>
+        <a class="btn btn-sm @(current == "New" ? "btn-secondary" : "btn-outline-secondary")" href="/Admin/ContactMessages?status=New">@ContactLabels.Status(ContactMessageStatus.New, ar)</a>
+        <a class="btn btn-sm @(current == "InProgress" ? "btn-secondary" : "btn-outline-secondary")" href="/Admin/ContactMessages?status=InProgress">@ContactLabels.Status(ContactMessageStatus.InProgress, ar)</a>
+        <a class="btn btn-sm @(current == "Resolved" ? "btn-secondary" : "btn-outline-secondary")" href="/Admin/ContactMessages?status=Resolved">@ContactLabels.Status(ContactMessageStatus.Resolved, ar)</a>
+        <a class="btn btn-sm @(current == "Spam" ? "btn-secondary" : "btn-outline-secondary")" href="/Admin/ContactMessages?status=Spam">@ContactLabels.Status(ContactMessageStatus.Spam, ar)</a>
+        <a class="btn btn-sm @(string.IsNullOrEmpty(current) ? "btn-secondary" : "btn-outline-secondary")" href="/Admin/ContactMessages">@T("All", "الكل")</a>
     </div>
 </div>
 
 @if (Model.Count == 0)
 {
     <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4 text-muted">
-        No contact messages@(string.IsNullOrEmpty(current) ? "" : " with this status") yet.
+        @(string.IsNullOrEmpty(current) ? T("No contact messages yet.", "لا توجد رسائل تواصل بعد.") : T("No contact messages with this status.", "لا توجد رسائل تواصل بهذه الحالة."))
     </div></div>
 }
 else
@@ -37,13 +38,13 @@ else
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                 <tr>
-                    <th>ID</th>
-                    <th>Received</th>
-                    <th>From</th>
-                    <th>Topic</th>
-                    <th>Subject</th>
-                    <th>Status</th>
-                    <th></th>
+                    <th>@T("ID", "الرقم")</th>
+                    <th>@T("Received", "تاريخ الاستلام")</th>
+                    <th>@T("From", "المرسل")</th>
+                    <th>@T("Topic", "الموضوع")</th>
+                    <th>@T("Subject", "العنوان")</th>
+                    <th>@T("Status", "الحالة")</th>
+                    <th><span class="visually-hidden">@T("Actions", "الإجراءات")</span></th>
                 </tr>
                 </thead>
                 <tbody>
@@ -51,16 +52,16 @@ else
                 {
                     <tr class="@(m.Status == ContactMessageStatus.New ? "fw-semibold" : "")">
                         <td>@m.Id</td>
-                        <td class="text-nowrap">@m.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td class="text-nowrap" dir="ltr">@m.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)</td>
                         <td>
                             <div>@m.FullName</div>
-                            <div class="text-muted small">@m.Email</div>
+                            <div class="text-muted small" dir="ltr">@m.Email</div>
                         </td>
                         <td>@ContactLabels.Topic(m.Topic, ar)</td>
-                        <td>@m.Subject</td>
+                        <td dir="auto">@m.Subject</td>
                         <td><span class="badge text-bg-@ContactLabels.StatusBadge(m.Status)">@ContactLabels.Status(m.Status, ar)</span></td>
                         <td class="text-end">
-                            <a class="btn btn-sm btn-primary" href="/Admin/ContactMessages/Details/@m.Id">Open</a>
+                            <a class="btn btn-sm btn-primary" href="/Admin/ContactMessages/Details/@m.Id">@T("Open", "فتح")</a>
                         </td>
                     </tr>
                 }

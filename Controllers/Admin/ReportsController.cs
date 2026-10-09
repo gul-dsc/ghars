@@ -50,6 +50,10 @@ public class ReportsController : Controller
     {
         var list = await _db.Certificates.Include(x => x.Activity)
             .OrderByDescending(x => x.IssuedAtUtc).Take(300).ToListAsync();
+        // Recipient name and email for display; certificates and attendance store only the user id.
+        var recipientIds = list.Select(x => x.UserId).Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
+        ViewBag.Recipients = await _db.Users.Where(u => recipientIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => new[] { u.FullName ?? "", u.Email ?? "" });
         return View(list);
     }
 
@@ -242,7 +246,8 @@ public class ReportsController : Controller
             })
             .OrderByDescending(x => x.Activities)
             .ToList();
-        ViewBag.SummarySeasonTitle = allSeasons.FirstOrDefault(x => x.Id == summarySeasonId)?.TitleEn;
+        var summarySeason = allSeasons.FirstOrDefault(x => x.Id == summarySeasonId);
+        ViewBag.SummarySeasonTitle = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" && !string.IsNullOrWhiteSpace(summarySeason?.TitleAr) ? summarySeason!.TitleAr : summarySeason?.TitleEn;
 
         ViewBag.Bookings = bookings;
         ViewBag.Agenda = agenda;

@@ -104,7 +104,7 @@ public class PartnerDashboardController : Controller
         }
         if (valid.Count == 0)
         {
-            TempData["ToastWarning"] = "Add at least one valid proposed start and end time.";
+            TempData["ToastWarning"] = T("Add at least one valid proposed start and end time.", "أضيفوا وقتاً مقترحاً واحداً صالحاً على الأقل (بداية ونهاية).");
             return RedirectToAction("Details", "Bookings", new { area = "", id = bookingId });
         }
 
@@ -113,7 +113,7 @@ public class PartnerDashboardController : Controller
         // entity knows its wording did not reach the club intact.
         if (proposedSubject?.Trim().Length > 250 || partnerComments?.Length > 2000 || valid.Any(x => x.Note?.Length > 1000))
         {
-            TempData["ToastWarning"] = "One of the values you entered is too long. | إحدى القيم المدخلة طويلة جداً.";
+            TempData["ToastWarning"] = T("One of the values you entered is too long.", "إحدى القيم المدخلة طويلة جداً.");
             return RedirectToAction("Details", "Bookings", new { area = "", id = bookingId });
         }
 
@@ -159,13 +159,13 @@ public class PartnerDashboardController : Controller
         // workflow, which is unchanged.
         await PartnerAvailabilityWorkflow.ReleaseForBookingAsync(_db, booking, userId);
 
-        await CreateAndDispatchNotificationAsync("Partner Proposed New Time", "اقترح الشريك أوقاتاً جديدة",
-            $"New time options were proposed for booking {booking.ReferenceNumber}. Your response is required.",
-            $"تم اقتراح أوقات جديدة لطلب الحجز {booking.ReferenceNumber}. مطلوب ردكم.",
+        await CreateAndDispatchNotificationAsync("New times proposed", "أوقات جديدة مقترحة",
+            $"The implementing entity proposed new times for booking {booking.ReferenceNumber}. Please respond.",
+            $"اقترحت الجهة المنفذة أوقاتاً جديدة لطلب الحجز {booking.ReferenceNumber}. يرجى الرد على الطلب.",
             NotificationType.Warning, NotificationTargetType.Organization, booking.OrganizationId,
             Url.Action("Details", "Bookings", new { area = "", id = booking.Id }));
 
-        TempData["ToastSuccess"] = "Proposed time options sent to the club.";
+        TempData["ToastSuccess"] = T("Proposed times sent to the club.", "تم إرسال الأوقات المقترحة إلى النادي.");
         return RedirectToAction("Details", "Bookings", new { area = "", id = bookingId });
     }
 
@@ -185,13 +185,13 @@ public class PartnerDashboardController : Controller
         // exactly the operational detail an existing-program booking is.
         if (string.IsNullOrWhiteSpace(lecturerName))
         {
-            TempData["ToastWarning"] = "Lecturer name is required to confirm the booking. | اسم المحاضر مطلوب لتأكيد الحجز.";
+            TempData["ToastWarning"] = T("Lecturer name is required to confirm the booking.", "اسم المحاضر مطلوب لتأكيد الحجز.");
             return RedirectToAction("Details", "Bookings", new { area = "", id });
         }
 
         if (lecturerName.Trim().Length > 200 || lecturerContact?.Trim().Length > 200 || logistics?.Length > 2000)
         {
-            TempData["ToastWarning"] = "One of the values you entered is too long. | إحدى القيم المدخلة طويلة جداً.";
+            TempData["ToastWarning"] = T("One of the values you entered is too long.", "إحدى القيم المدخلة طويلة جداً.");
             return RedirectToAction("Details", "Bookings", new { area = "", id });
         }
 
@@ -221,6 +221,7 @@ public class PartnerDashboardController : Controller
             $"Your booking request {booking.ReferenceNumber} was confirmed. Lecturer: {booking.LecturerName}{(string.IsNullOrWhiteSpace(booking.LecturerContact) ? "" : $" ({booking.LecturerContact})")}.",
             $"تم تأكيد طلب الحجز {booking.ReferenceNumber}. المحاضر: {booking.LecturerName}{(string.IsNullOrWhiteSpace(booking.LecturerContact) ? "" : $" ({booking.LecturerContact})")}.",
             NotificationType.Success, NotificationTargetType.Organization, booking.OrganizationId, Url.Action("Details", "Bookings", new { area = "", id = booking.Id }));
+        TempData["ToastSuccess"] = T("Booking confirmed. The club has been notified.", "تم تأكيد الحجز وإبلاغ النادي.");
         return RedirectToAction("Details", "Bookings", new { area = "", id });
     }
 
@@ -246,10 +247,22 @@ public class PartnerDashboardController : Controller
         // entity has since blocked or cancelled is not silently re-opened, and a booked one is
         // never released by an unrelated decision.
         await PartnerAvailabilityWorkflow.ReleaseForBookingAsync(_db, booking, userId);
-        await CreateAndDispatchNotificationAsync("Booking Rejected", "تم رفض الحجز", $"Your booking request {booking.ReferenceNumber} was rejected.", $"تم رفض طلب الحجز {booking.ReferenceNumber}.", NotificationType.Danger, NotificationTargetType.Organization, booking.OrganizationId, Url.Action("Details", "Bookings", new { area = "", id = booking.Id }));
+        // The reason is still stored only in Notes (decision D3: no new field); here it is simply
+        // repeated in the notification so the club does not have to open the booking to see it.
+        // Shortened so a long reason can never push the message past its 2000-character column.
+        var reasonText = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        if (reasonText?.Length > 500) reasonText = reasonText[..500] + "…";
+        await CreateAndDispatchNotificationAsync("Booking request rejected", "تم رفض طلب الحجز",
+            $"Your booking request {booking.ReferenceNumber} was rejected by the implementing entity.{(reasonText is null ? "" : $" Reason for rejection: {reasonText}")}",
+            $"رفضت الجهة المنفذة طلب الحجز {booking.ReferenceNumber}.{(reasonText is null ? "" : $" سبب الرفض: {reasonText}")}",
+            NotificationType.Danger, NotificationTargetType.Organization, booking.OrganizationId, Url.Action("Details", "Bookings", new { area = "", id = booking.Id }));
+        TempData["ToastSuccess"] = T("Booking request rejected. The club has been notified.", "تم رفض طلب الحجز وإبلاغ النادي.");
         return RedirectToAction("Details", "Bookings", new { area = "", id });
     }
 
+
+    private static string T(string en, string ar) =>
+        System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? ar : en;
 
     private async Task<List<string>> PartnerUserIds(List<int> partnerOrgIds)
         => await _db.OrganizationAdminLinks.Where(x => partnerOrgIds.Contains(x.OrganizationId)).Select(x => x.UserId).ToListAsync();

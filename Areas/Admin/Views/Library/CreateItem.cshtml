@@ -1,7 +1,18 @@
 @model GharsPlatform.Controllers.Admin.LibraryController.ItemVm
+@using System.Globalization
 @{
-    ViewData["Title"] = "Create Library Item";
-    ViewData["PageTitle"] = "Create Library Item";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    string L(string? en, string? arText) => ar ? (string.IsNullOrWhiteSpace(arText) ? en ?? "" : arText) : (en ?? arText ?? "");
+    string ContentTypeText(GharsPlatform.Models.Core.LibraryContentType t) => t switch
+    {
+        GharsPlatform.Models.Core.LibraryContentType.Lecture => T("Lecture", "محاضرة"),
+        GharsPlatform.Models.Core.LibraryContentType.AwarenessVideo => T("Awareness video", "فيديو توعوي"),
+        GharsPlatform.Models.Core.LibraryContentType.EducationalBooklet => T("Educational booklet", "كتيب تعليمي"),
+        _ => T("Other", "أخرى")
+    };
+    ViewData["Title"] = T("Add Digital Library item", "إضافة إصدار إلى المكتبة الرقمية");
+    ViewData["PageTitle"] = ViewData["Title"];
     var categories = ViewBag.Categories as List<GharsPlatform.Models.Core.LibraryCategory> ?? new();
 }
 <div class="card border-0 shadow-sm rounded-4">
@@ -10,78 +21,76 @@
             @Html.AntiForgeryToken()
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">Category</label>
+                    <label class="form-label">@T("Category", "التصنيف")</label>
                     <select class="form-select" asp-for="LibraryCategoryId">
                         @foreach (var c in categories)
                         {
-                            <option value="@c.Id">@c.NameEn</option>
+                            <option value="@c.Id">@L(c.NameEn, c.NameAr)</option>
                         }
                     </select>
                 </div>
+                @* Rewards are disabled: the points field is hidden but still posts its existing value. *@
+                <input type="hidden" asp-for="PointsCost" />
                 <div class="col-md-3">
-                    <label class="form-label">Points Cost</label>
-                    <input class="form-control" asp-for="PointsCost" />
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Content Type</label>
+                    <label class="form-label">@T("Content type", "نوع المحتوى")</label>
                     <select class="form-select" asp-for="ContentType">
-                        @foreach (GharsPlatform.Models.Core.LibraryContentType t in Enum.GetValues(typeof(GharsPlatform.Models.Core.LibraryContentType))) { <option value="@t">@t</option> }
+                        @foreach (GharsPlatform.Models.Core.LibraryContentType t in Enum.GetValues(typeof(GharsPlatform.Models.Core.LibraryContentType))) { <option value="@t">@ContentTypeText(t)</option> }
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Publishing Entity EN</label>
+                    <label class="form-label">@T("Publishing entity (English)", "الجهة الناشرة بالإنجليزية")</label>
                     <input class="form-control" asp-for="PublishingEntityEn" />
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Publication Date</label>
+                    <label class="form-label">@T("Publication date", "تاريخ النشر")</label>
                     <input class="form-control" type="date" asp-for="PublicationDate" />
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Visibility</label>
-                    <div class="form-check mt-2"><input class="form-check-input" asp-for="IsPublic" /><label class="form-check-label">Public</label></div>
-                    <div class="form-check"><input class="form-check-input" asp-for="IsPublished" /><label class="form-check-label">Published</label></div>
+                    <label class="form-label">@T("Visibility", "الظهور")</label>
+                    <div class="form-check mt-2"><input class="form-check-input" asp-for="IsPublic" /><label class="form-check-label">@T("Visible without sign-in", "متاح دون تسجيل الدخول")</label></div>
+                    <div class="form-check"><input class="form-check-input" asp-for="IsPublished" /><label class="form-check-label">@T("Published", "منشور")</label></div>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Publishing Entity AR</label>
+                    <label class="form-label">@T("Publishing entity (Arabic)", "الجهة الناشرة بالعربية")</label>
                     <input class="form-control" asp-for="PublishingEntityAr" />
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">External Publication / Video Link</label>
-                    <input class="form-control" asp-for="ExternalUrl" />
+                    <label class="form-label">@T("External publication or video link", "رابط الإصدار أو الفيديو الخارجي")</label>
+                    <input class="form-control" asp-for="ExternalUrl" dir="ltr" />
                 </div>
 
                 <div class="col-md-6">
-                    <label class="form-label">Title (EN)</label>
+                    <label class="form-label">@T("Title (English)", "العنوان بالإنجليزية")</label>
                     <input class="form-control" asp-for="TitleEn" />
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Title (AR)</label>
+                    <label class="form-label">@T("Title (Arabic)", "العنوان بالعربية")</label>
                     <input class="form-control" asp-for="TitleAr" />
                 </div>
 
                 <div class="col-12">
-                    <label class="form-label">Description (EN)</label>
+                    <label class="form-label">@T("Description (English)", "الوصف بالإنجليزية")</label>
                     <textarea class="form-control" asp-for="DescriptionEn" rows="3"></textarea>
                 </div>
                 <div class="col-12">
-                    <label class="form-label">Description (AR)</label>
+                    <label class="form-label">@T("Description (Arabic)", "الوصف بالعربية")</label>
                     <textarea class="form-control" asp-for="DescriptionAr" rows="3"></textarea>
                 </div>
 
                 <div class="col-12">
-                    <label class="form-label">PDF File (preferred)</label>
+                    <label class="form-label">@T("PDF file (preferred)", "ملف PDF (الخيار المفضل)")</label>
                     <input class="form-control" type="file" asp-for="File" accept=".pdf,.mp4,.webm" />
                     <span class="text-danger small" asp-validation-for="File"></span>
                 </div>
                 <div class="col-12">
-                    <label class="form-label">Cover Image (required if PDF is not available)</label>
+                    <label class="form-label">@T("Cover image (required if no PDF file is available)", "صورة الغلاف (مطلوبة عند عدم توفر ملف PDF)")</label>
                     <input class="form-control" type="file" asp-for="CoverImage" accept="image/*" />
                 </div>
             </div>
 
             <div class="d-flex justify-content-end gap-2 mt-4">
-                <a class="btn btn-outline-secondary" href="/Admin/Library/Items">Back</a>
-                <button class="btn btn-primary" type="submit">Create</button>
+                <a class="btn btn-outline-secondary" href="/Admin/Library/Items">@T("Back", "رجوع")</a>
+                <button class="btn btn-primary" type="submit">@T("Add item", "إضافة الإصدار")</button>
             </div>
 
             <div class="text-danger small mt-2" asp-validation-summary="All"></div>

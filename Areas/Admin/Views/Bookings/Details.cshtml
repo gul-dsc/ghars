@@ -1,47 +1,91 @@
 @model GharsPlatform.Models.Core.BookingRequest
 @using GharsPlatform.Helpers
+@using System.Globalization
 @{
-    ViewData["Title"] = "Booking Details";
-    ViewData["PageTitle"] = "Booking Details";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Booking request details", "تفاصيل طلب الحجز");
+    ViewData["PageTitle"] = T("Booking request details", "تفاصيل طلب الحجز");
     var isCustom = BookingSource.IsCustom(Model);
+    string OrgName(Organization? o) => o is null ? "-" : (ar && !string.IsNullOrWhiteSpace(o.NameAr) ? o.NameAr : o.NameEn);
+    string TypeText(ActivityType t) => t switch
+    {
+        ActivityType.Lecture => T("Lecture", "محاضرة"),
+        ActivityType.Event => T("Event", "فعالية"),
+        ActivityType.Workshop => T("Workshop", "ورشة عمل"),
+        ActivityType.TrainingProgram => T("Training", "تدريب"),
+        ActivityType.Course => T("Course", "دورة"),
+        ActivityType.Activity => T("Activity", "نشاط"),
+        _ => t.ToString()
+    };
+    string AudienceText(string a) => a switch
+    {
+        "Players" => T("Players", "لاعبون"),
+        "Coaches" => T("Coaches", "مدربون"),
+        "Staff" => T("Staff", "موظفون"),
+        "Administrators" => T("Administrators", "إداريون"),
+        "Parents" => T("Parents", "أولياء أمور"),
+        "Others" => T("Others", "فئات أخرى"),
+        _ => a
+    };
+    string Audience() => string.IsNullOrWhiteSpace(Model.TargetAudienceCsv)
+        ? "-"
+        : string.Join(ar ? "، " : ", ", Model.TargetAudienceCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(AudienceText));
+    // Audit actions are stored as fixed English keys; only their display is translated here.
+    string AuditText(string? action) => action switch
+    {
+        "ClubSubmitted" => T("Club submitted the booking request", "أرسل النادي طلب الحجز"),
+        "PartnerApproved" => T("Implementing entity confirmed the booking", "أكدت الجهة المنفذة الحجز"),
+        "PartnerRejected" => T("Implementing entity rejected the request", "رفضت الجهة المنفذة الطلب"),
+        "PartnerProposedNewTime" => T("Implementing entity proposed new times", "اقترحت الجهة المنفذة أوقاتاً جديدة"),
+        "ClubAcceptedProposedTime" => T("Club accepted a proposed time", "قبل النادي أحد الأوقات المقترحة"),
+        "ClubRejectedProposedTimes" => T("Club declined the proposed times", "اعتذر النادي عن الأوقات المقترحة"),
+        "Approved" => T("DSC approved the booking", "اعتمد المجلس الحجز"),
+        "Rejected" => T("DSC rejected the request", "رفض المجلس الطلب"),
+        _ => action ?? "-"
+    };
 }
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Bookings"><i class="bi bi-arrow-left"></i> Back</a>
+    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Bookings"><i class="bi bi-arrow-left"></i> @T("Back", "رجوع")</a>
     @if (User.IsInRole("Super Admin") && Model.Status == BookingStatus.Pending)
     {
         <div class="d-flex gap-2">
-            <form method="post" action="/Admin/Bookings/Approve/@Model.Id">@Html.AntiForgeryToken()<button class="btn btn-sm btn-success" type="submit"><i class="bi bi-check2"></i> Approve</button></form>
-            <form method="post" action="/Admin/Bookings/Reject/@Model.Id" class="d-flex gap-2">@Html.AntiForgeryToken()<input class="form-control form-control-sm" name="reason" placeholder="Rejection reason (optional)" /><button class="btn btn-sm btn-danger" type="submit"><i class="bi bi-x"></i> Reject</button></form>
+            <form method="post" action="/Admin/Bookings/Approve/@Model.Id"
+                  data-confirm="@T("Approve this booking request on behalf of DSC? The club will be notified, and the request will no longer wait for the implementing entity's response.", "اعتماد طلب الحجز هذا باسم المجلس؟ سيتم إبلاغ النادي، ولن ينتظر الطلب رد الجهة المنفذة بعد ذلك.")"
+                  data-confirm-ok="@T("Approve", "اعتماد")">@Html.AntiForgeryToken()<button class="btn btn-sm btn-success" type="submit"><i class="bi bi-check2"></i> @T("Approve", "اعتماد")</button></form>
+            <form method="post" action="/Admin/Bookings/Reject/@Model.Id" class="d-flex gap-2"
+                  data-confirm="@T("Reject this booking request? The club will be notified and any time held for it is released.", "رفض طلب الحجز هذا؟ سيتم إبلاغ النادي وتحرير أي وقت محجوز له.")"
+                  data-confirm-ok="@T("Reject", "رفض")">@Html.AntiForgeryToken()<input class="form-control form-control-sm" name="reason" placeholder="@T("Reason for rejection (optional)", "سبب الرفض (اختياري)")" aria-label="@T("Reason for rejection (optional)", "سبب الرفض (اختياري)")" /><button class="btn btn-sm btn-danger" type="submit"><i class="bi bi-x"></i> @T("Reject", "رفض")</button></form>
         </div>
     }
 </div>
 <div class="row g-3">
     <div class="col-lg-7">
         <div class="card border-0 shadow-sm rounded-4 mb-3"><div class="card-body">
-            <div class="d-flex align-items-center justify-content-between"><div><div class="fw-semibold">@Model.Organization?.NameEn</div><div class="text-muted small">@BookingSource.Title(Model)</div></div><span class="badge text-bg-@(Model.Status==BookingStatus.Approved||Model.Status==BookingStatus.Confirmed?"success":Model.Status==BookingStatus.Pending||Model.Status==BookingStatus.PartnerProposedNewTime?"warning":"danger")">@Model.Status</span></div>
+            <div class="d-flex align-items-center justify-content-between"><div><div class="fw-semibold">@OrgName(Model.Organization)</div><div class="text-muted small">@BookingSource.Title(Model)</div></div><span class="badge @BookingStatusText.BadgeClass(Model.Status)">@BookingStatusText.Label(Model.Status)</span></div>
             <hr />
             <div class="row small g-2">
-                <div class="col-md-6"><strong>Club:</strong> @Model.Organization?.NameEn</div>
-                <div class="col-md-6"><strong>Implementing entity:</strong> @(Model.PartnerOrganization?.NameEn ?? "-")</div>
+                <div class="col-md-6"><strong>@T("Club:", "النادي:")</strong> @OrgName(Model.Organization)</div>
+                <div class="col-md-6"><strong>@T("Implementing entity:", "الجهة المنفذة:")</strong> @OrgName(Model.PartnerOrganization)</div>
                 @* Falls back to the requested program name, so a custom request is never a blank row. *@
-                <div class="col-md-6"><strong>Program:</strong> @BookingSource.Title(Model)</div>
+                <div class="col-md-6"><strong>@T("Program:", "البرنامج:")</strong> @BookingSource.Title(Model)</div>
                 <div class="col-md-6">
-                    <strong>Booking source:</strong>
+                    <strong>@T("Booking source:", "مصدر الحجز:")</strong>
                     <span class="badge rounded-pill @BookingSource.BadgeClass(Model)"><i class="bi @BookingSource.Icon(Model) me-1" aria-hidden="true"></i>@BookingSource.Label(Model)</span>
                 </div>
-                <div class="col-md-6"><strong>Requested type:</strong> @Model.RequestedActivityType</div>
-                <div class="col-md-6"><strong>Requested Seats:</strong> @Model.RequestedSeats</div>
-                <div class="col-md-6"><strong>Requested Time:</strong> @(Model.ProposedStartDateTime.HasValue ? $"{Model.ProposedStartDateTime:g} - {Model.ProposedEndDateTime:g}" : "-")</div>
-                <div class="col-md-6"><strong>Original Program Time:</strong> @(isCustom ? "Not applicable — custom request" : $"{Model.Activity?.StartDateTime:g} - {Model.Activity?.EndDateTime:g}")</div>
-                <div class="col-md-6"><strong>Target group:</strong> @(string.IsNullOrWhiteSpace(Model.TargetAudienceCsv) ? "-" : Model.TargetAudienceCsv)</div>
-                <div class="col-md-6"><strong>Confirmed Time:</strong> @(Model.ConfirmedStartUtc.HasValue ? $"{Model.ConfirmedStartUtc:g} - {Model.ConfirmedEndUtc:g}" : "-")</div>
-                <div class="col-md-6"><strong>Created:</strong> @Model.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</div>
-                <div class="col-md-6"><strong>Decision:</strong> @(Model.DecisionAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "-")</div>
-                <div class="col-12"><strong>Club Notes:</strong> @(Model.Notes ?? "-")</div>
-                <div class="col-12"><strong>Partner Comments:</strong> @(Model.PartnerResponseNotes ?? "-")</div>
+                <div class="col-md-6"><strong>@T("Requested type:", "النوع المطلوب:")</strong> @TypeText(Model.RequestedActivityType)</div>
+                <div class="col-md-6"><strong>@T("Requested seats:", "المقاعد المطلوبة:")</strong> @Model.RequestedSeats</div>
+                <div class="col-md-6"><strong>@T("Requested time:", "الوقت المطلوب:")</strong> <span dir="ltr">@(Model.ProposedStartDateTime.HasValue ? $"{Model.ProposedStartDateTime:g} - {Model.ProposedEndDateTime:g}" : "-")</span></div>
+                <div class="col-md-6"><strong>@T("Original program time:", "الوقت الأصلي للبرنامج:")</strong> @if (isCustom) { @T("Not applicable (custom request)", "لا ينطبق (طلب مخصص)") } else { <span dir="ltr">@($"{Model.Activity?.StartDateTime:g} - {Model.Activity?.EndDateTime:g}")</span> }</div>
+                <div class="col-md-6"><strong>@T("Target group:", "الفئة المستهدفة:")</strong> @Audience()</div>
+                <div class="col-md-6"><strong>@T("Confirmed time:", "الوقت المؤكد:")</strong> <span dir="ltr">@(Model.ConfirmedStartUtc.HasValue ? $"{Model.ConfirmedStartUtc:g} - {Model.ConfirmedEndUtc:g}" : "-")</span></div>
+                <div class="col-md-6"><strong>@T("Created:", "تاريخ الإنشاء:")</strong> <span dir="ltr">@Model.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</span></div>
+                <div class="col-md-6"><strong>@T("Decided:", "تاريخ القرار:")</strong> <span dir="ltr">@(Model.DecisionAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "-")</span></div>
+                <div class="col-12"><strong>@T("Club notes:", "ملاحظات النادي:")</strong> @(Model.Notes ?? "-")</div>
+                <div class="col-12"><strong>@T("Implementing entity comments:", "تعليقات الجهة المنفذة:")</strong> @(Model.PartnerResponseNotes ?? "-")</div>
             </div>
         </div></div>
-        <div class="card border-0 shadow-sm rounded-4"><div class="card-body"><h6 class="fw-semibold">Proposed Time Options</h6>@if(!Model.ProposedTimeOptions.Any()){<div class="text-muted">No proposed time options.</div>}else{foreach(var o in Model.ProposedTimeOptions.OrderBy(x=>x.ProposedStartUtc)){<div class="border rounded-3 p-2 mb-2"><div class="fw-semibold">@o.ProposedStartUtc.ToString("g") - @o.ProposedEndUtc.ToString("g")</div><div class="small text-muted">@(o.Note ?? "No note")</div><span class="badge text-bg-@(o.IsSelected?"success":o.IsActive?"warning":"secondary")">@(o.IsSelected?"Selected":o.IsActive?"Active":"Inactive")</span></div>}}</div></div>
+        <div class="card border-0 shadow-sm rounded-4"><div class="card-body"><h6 class="fw-semibold">@T("Proposed time options", "الأوقات المقترحة")</h6>@if(!Model.ProposedTimeOptions.Any()){<div class="text-muted">@T("No time options have been proposed.", "لم تُقترح أي أوقات.")</div>}else{foreach(var o in Model.ProposedTimeOptions.OrderBy(x=>x.ProposedStartUtc)){<div class="border rounded-3 p-2 mb-2"><div class="fw-semibold" dir="ltr">@o.ProposedStartUtc.ToString("g") - @o.ProposedEndUtc.ToString("g")</div><div class="small text-muted">@(o.Note ?? T("No note", "لا توجد ملاحظة"))</div><span class="badge text-bg-@(o.IsSelected?"success":o.IsActive?"warning":"secondary")">@(o.IsSelected?T("Selected", "تم اختياره"):o.IsActive?T("Active", "قائم"):T("Inactive", "غير قائم"))</span></div>}}</div></div>
     </div>
-    <div class="col-lg-5"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><h6 class="fw-semibold">Audit Trail</h6>@if (Model.AuditTrail == null || !Model.AuditTrail.Any()){<div class="text-muted">No audit entries.</div>}else{<ul class="list-group list-group-flush">@foreach (var t in Model.AuditTrail.OrderByDescending(x => x.AtUtc)){<li class="list-group-item"><div class="fw-semibold">@t.Action</div><div class="small text-muted">@t.AtUtc.ToString("yyyy-MM-dd HH:mm") • @t.ByUserId</div></li>}</ul>}</div></div></div>
+    <div class="col-lg-5"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><h6 class="fw-semibold">@T("Request history", "سجل الطلب")</h6>@if (Model.AuditTrail == null || !Model.AuditTrail.Any()){<div class="text-muted">@T("No history recorded yet.", "لا يوجد سجل حتى الآن.")</div>}else{<ul class="list-group list-group-flush">@foreach (var t in Model.AuditTrail.OrderByDescending(x => x.AtUtc)){<li class="list-group-item"><div class="fw-semibold">@AuditText(t.Action)</div><div class="small text-muted"><span dir="ltr">@t.AtUtc.ToString("yyyy-MM-dd HH:mm")</span> • <bdi>@t.ByUserId</bdi></div></li>}</ul>}</div></div></div>
 </div>

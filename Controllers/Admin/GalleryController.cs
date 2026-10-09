@@ -84,7 +84,7 @@ public class GalleryController : Controller
         };
         _db.MediaAlbums.Add(album);
         await _db.SaveChangesAsync();
-        TempData["ToastSuccess"]="Gallery album created.";
+        TempData["ToastSuccess"]=IsAr() ? "تم إنشاء الألبوم." : "Gallery album created.";
         return RedirectToAction(nameof(Details), new { id = album.Id });
     }
 
@@ -130,7 +130,7 @@ public class GalleryController : Controller
         album.UpdatedAtUtc=DateTime.UtcNow;
         album.UpdatedByUserId=User.FindFirstValue(ClaimTypes.NameIdentifier);
         await _db.SaveChangesAsync();
-        TempData["ToastSuccess"]="Gallery album updated.";
+        TempData["ToastSuccess"]=IsAr() ? "تم تحديث الألبوم." : "Gallery album updated.";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -165,7 +165,7 @@ public class GalleryController : Controller
             CreatedByUserId=User.FindFirstValue(ClaimTypes.NameIdentifier)
         });
         await _db.SaveChangesAsync();
-        TempData["ToastSuccess"]="Media item added.";
+        TempData["ToastSuccess"]=IsAr() ? "تمت إضافة عنصر الوسائط." : "Media item added.";
         return RedirectToAction(nameof(Details), new { id = vm.AlbumId });
     }
 
@@ -204,7 +204,7 @@ public class GalleryController : Controller
         item.UpdatedAtUtc=DateTime.UtcNow;
         item.UpdatedByUserId=User.FindFirstValue(ClaimTypes.NameIdentifier);
         await _db.SaveChangesAsync();
-        TempData["ToastSuccess"]="Media item updated.";
+        TempData["ToastSuccess"]=IsAr() ? "تم تحديث عنصر الوسائط." : "Media item updated.";
         return RedirectToAction(nameof(Details), new { id = item.AlbumId });
     }
 
@@ -218,7 +218,7 @@ public class GalleryController : Controller
         var albumId = item.AlbumId;
         _db.MediaItems.Remove(item);
         await _db.SaveChangesAsync();
-        TempData["ToastWarning"]="Media item deleted.";
+        TempData["ToastWarning"]=IsAr() ? "تم حذف عنصر الوسائط." : "Media item deleted.";
         return RedirectToAction(nameof(Details), new { id = albumId });
     }
 
@@ -232,7 +232,7 @@ public class GalleryController : Controller
         _db.MediaItems.RemoveRange(album.Items);
         _db.MediaAlbums.Remove(album);
         await _db.SaveChangesAsync();
-        TempData["ToastWarning"]="Gallery album deleted.";
+        TempData["ToastWarning"]=IsAr() ? "تم حذف الألبوم وجميع عناصره." : "Gallery album deleted.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -520,12 +520,12 @@ public class GalleryController : Controller
             item.IsPublished = false;
             item.UpdatedAtUtc = DateTime.UtcNow;
             item.UpdatedByUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            TempData["ToastWarning"] = "Agenda media hidden from the gallery (the club's agenda record is preserved).";
+            TempData["ToastWarning"] = IsAr() ? "تم إخفاء وسائط الأجندة من معرض الصور، مع الاحتفاظ بسجل النشاط في أجندة النادي." : "Agenda media hidden from the gallery (the club's agenda record is preserved).";
         }
         else
         {
             _db.GalleryItems.Remove(item);
-            TempData["ToastWarning"] = "Media item deleted.";
+            TempData["ToastWarning"] = IsAr() ? "تم حذف عنصر الوسائط." : "Media item deleted.";
         }
         await _db.SaveChangesAsync();
         return RedirectToAction(nameof(MediaItems));

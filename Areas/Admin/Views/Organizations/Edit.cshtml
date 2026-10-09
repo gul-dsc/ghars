@@ -1,8 +1,13 @@
 @model GharsPlatform.Controllers.Admin.OrganizationsController.OrganizationVm
+@using System.Globalization
 @using GharsPlatform.Models.Core
+@using Microsoft.AspNetCore.Mvc.Rendering
+@using OrgText = GharsPlatform.Controllers.Admin.OrganizationText
 @{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
     var isEdit = Model.Id > 0;
-    ViewData["Title"] = isEdit ? "Edit Organization" : "Create Organization";
+    ViewData["Title"] = isEdit ? T("Edit organization", "تعديل الجهة") : T("Add organization", "إضافة جهة");
     ViewData["PageTitle"] = ViewData["Title"];
 }
 <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
@@ -11,19 +16,19 @@
     <input type="hidden" asp-for="Id" />
     <div asp-validation-summary="All" class="text-danger small"></div>
     <div class="row g-3">
-        <div class="col-md-4"><label class="form-label">Type</label><select class="form-select" asp-for="OrganizationType" asp-items="Html.GetEnumSelectList<OrganizationType>()"></select></div>
-        <div class="col-md-4"><label class="form-label">Status</label><select class="form-select" asp-for="Status" asp-items="Html.GetEnumSelectList<ApprovalStatus>()"></select></div>
-        <div class="col-md-4"><label class="form-label">Logo Path</label><input class="form-control" asp-for="LogoPath" placeholder="/img/partners/default-partner.svg" /></div>
-        <div class="col-md-6"><label class="form-label">Name English</label><input class="form-control" asp-for="NameEn" /></div>
-        <div class="col-md-6"><label class="form-label">Name Arabic</label><input class="form-control" asp-for="NameAr" /></div>
-        <div class="col-md-6"><label class="form-label">Email</label><input class="form-control" asp-for="Email" /></div>
-        <div class="col-md-6"><label class="form-label">Phone</label><input class="form-control" asp-for="Phone" /></div>
-        <div class="col-md-6"><label class="form-label">Address English</label><input class="form-control" asp-for="AddressEn" /></div>
-        <div class="col-md-6"><label class="form-label">Address Arabic</label><input class="form-control" asp-for="AddressAr" /></div>
-        <div class="col-md-6"><label class="form-label">Website</label><input class="form-control" asp-for="WebsiteUrl" /></div>
-        <div class="col-12"><label class="form-label">Notes / Description</label><textarea class="form-control" asp-for="Notes" rows="4"></textarea></div>
+        <div class="col-md-4"><label class="form-label">@T("Type", "النوع")</label><select class="form-select" asp-for="OrganizationType" asp-items="@(OrgText.Types.Select(t => new SelectListItem(OrgText.TypeLabel(t), ((byte)t).ToString())))"></select></div>
+        <div class="col-md-4"><label class="form-label">@T("Status", "الحالة")</label><select class="form-select" asp-for="Status" asp-items="@(OrgText.Statuses.Select(s => new SelectListItem(OrgText.StatusLabel(s), ((byte)s).ToString())))"></select></div>
+        <div class="col-md-4"><label class="form-label">@T("Logo image address (optional)", "عنوان صورة الشعار (اختياري)")</label><input class="form-control" asp-for="LogoPath" dir="ltr" placeholder="/img/partners/default-partner.svg" /></div>
+        <div class="col-md-6"><label class="form-label">@T("Name (English)", "الاسم (بالإنجليزية)")</label><input class="form-control" asp-for="NameEn" dir="ltr" /></div>
+        <div class="col-md-6"><label class="form-label">@T("Name (Arabic)", "الاسم (بالعربية)")</label><input class="form-control" asp-for="NameAr" dir="rtl" /></div>
+        <div class="col-md-6"><label class="form-label">@T("Email", "البريد الإلكتروني")</label><input class="form-control" asp-for="Email" dir="ltr" /></div>
+        <div class="col-md-6"><label class="form-label">@T("Phone", "الهاتف")</label><input class="form-control" asp-for="Phone" dir="ltr" /></div>
+        <div class="col-md-6"><label class="form-label">@T("Address (English)", "العنوان (بالإنجليزية)")</label><input class="form-control" asp-for="AddressEn" dir="ltr" /></div>
+        <div class="col-md-6"><label class="form-label">@T("Address (Arabic)", "العنوان (بالعربية)")</label><input class="form-control" asp-for="AddressAr" dir="rtl" /></div>
+        <div class="col-md-6"><label class="form-label">@T("Website", "الموقع الإلكتروني")</label><input class="form-control" asp-for="WebsiteUrl" dir="ltr" /></div>
+        <div class="col-12"><label class="form-label">@T("Notes / description", "ملاحظات / وصف")</label><textarea class="form-control" asp-for="Notes" rows="4"></textarea></div>
     </div>
-    <div class="mt-4"><button class="btn btn-primary" type="submit">@(isEdit ? "Save" : "Create")</button><a class="btn btn-outline-secondary" asp-action="Index">Cancel</a></div>
+    <div class="mt-4"><button class="btn btn-primary" type="submit">@(isEdit ? T("Save", "حفظ") : T("Add organization", "إضافة الجهة"))</button><a class="btn btn-outline-secondary" asp-action="Index">@T("Cancel", "إلغاء")</a></div>
 </form>
 </div></div>
 @section Scripts{<partial name="_ValidationScriptsPartial" />}

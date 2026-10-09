@@ -1,23 +1,24 @@
 @model GharsPlatform.Models.Core.ContactMessage
 @using System.Globalization
 @{
-    ViewData["Title"] = "Contact Message";
-    ViewData["PageTitle"] = "Contact Message";
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Contact message", "رسالة تواصل");
+    ViewData["PageTitle"] = T("Contact message", "رسالة تواصل");
     var replySubject = Uri.EscapeDataString("Re: " + Model.Subject);
 }
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-    <a class="btn btn-sm btn-outline-secondary" href="/Admin/ContactMessages"><i class="bi bi-arrow-left"></i> Back to messages</a>
+    <a class="btn btn-sm btn-outline-secondary" href="/Admin/ContactMessages"><i class="bi @(ar ? "bi-arrow-right" : "bi-arrow-left")"></i> @T("Back to messages", "العودة إلى الرسائل")</a>
     <div class="d-flex gap-2">
         <a class="btn btn-sm btn-success" href="mailto:@Model.Email?subject=@replySubject">
-            <i class="bi bi-reply"></i> Reply by email
+            <i class="bi bi-reply"></i> @T("Reply by email", "الرد بالبريد الإلكتروني")
         </a>
         @if (User.IsInRole("Super Admin"))
         {
             <form method="post" asp-area="Admin" asp-controller="ContactMessages" asp-action="Delete" asp-route-id="@Model.Id" class="d-inline"
-                  data-confirm="Permanently delete this message? This cannot be undone.">
+                  data-confirm="@T("Permanently delete this message and the sender's details? This can't be undone.", "حذف هذه الرسالة وبيانات المرسل نهائياً؟ لا يمكن التراجع عن ذلك.")" data-confirm-ok="@T("Delete message", "حذف الرسالة")">
                 @Html.AntiForgeryToken()
-                <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                <button class="btn btn-sm btn-outline-danger" type="submit">@T("Delete", "حذف")</button>
             </form>
         }
     </div>
@@ -27,24 +28,24 @@
     <div class="col-lg-7">
         <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
             <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
-                <h2 class="h5 fw-bold mb-0">@Model.Subject</h2>
+                <h2 class="h5 fw-bold mb-0" dir="auto">@Model.Subject</h2>
                 <span class="badge text-bg-@ContactLabels.StatusBadge(Model.Status)">@ContactLabels.Status(Model.Status, ar)</span>
             </div>
             <div class="text-muted small mb-3">
                 @ContactLabels.Topic(Model.Topic, ar)
                 <span class="mx-2">•</span>
-                @Model.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC
+                <span dir="ltr">@Model.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) UTC</span>
             </div>
             @* The sender wrote plain text; render it as plain text with line breaks preserved. *@
-            <div style="white-space: pre-wrap;">@Model.Message</div>
+            <div style="white-space: pre-wrap;" dir="auto">@Model.Message</div>
         </div></div>
 
         <div class="card border-0 shadow-sm rounded-4 mt-4"><div class="card-body p-4">
-            <h3 class="h6 fw-bold mb-3">Handling</h3>
+            <h3 class="h6 fw-bold mb-3">@T("Handling", "المعالجة")</h3>
             <form method="post" asp-area="Admin" asp-controller="ContactMessages" asp-action="SetStatus" asp-route-id="@Model.Id">
                 @Html.AntiForgeryToken()
                 <div class="mb-3">
-                    <label class="form-label">Status</label>
+                    <label class="form-label">@T("Status", "الحالة")</label>
                     <select class="form-select" name="status">
                         @foreach (var status in Enum.GetValues<ContactMessageStatus>())
                         {
@@ -53,63 +54,68 @@
                     </select>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">Internal notes</label>
+                    <label class="form-label">@T("Internal notes", "ملاحظات داخلية")</label>
                     <textarea class="form-control" name="adminNotes" rows="4" maxlength="2000"
-                              placeholder="Not visible to the sender.">@Model.AdminNotes</textarea>
+                              placeholder="@T("Not visible to the sender.", "لا تظهر للمرسل.")">@Model.AdminNotes</textarea>
                 </div>
-                <button class="btn btn-primary" type="submit">Save</button>
+                <button class="btn btn-primary" type="submit">@T("Save", "حفظ")</button>
             </form>
         </div></div>
     </div>
 
     <div class="col-lg-5">
         <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
-            <h3 class="h6 fw-bold mb-3">Sender</h3>
+            <h3 class="h6 fw-bold mb-3">@T("Sender", "المرسل")</h3>
             <dl class="row mb-0 small">
-                <dt class="col-5 text-muted fw-normal">Name</dt>
+                <dt class="col-5 text-muted fw-normal">@T("Name", "الاسم")</dt>
                 <dd class="col-7">@Model.FullName</dd>
 
-                <dt class="col-5 text-muted fw-normal">Email</dt>
-                <dd class="col-7"><a href="mailto:@Model.Email">@Model.Email</a></dd>
+                <dt class="col-5 text-muted fw-normal">@T("Email", "البريد الإلكتروني")</dt>
+                <dd class="col-7"><a href="mailto:@Model.Email" dir="ltr">@Model.Email</a></dd>
 
                 @if (!string.IsNullOrWhiteSpace(Model.Phone))
                 {
-                    <dt class="col-5 text-muted fw-normal">Phone</dt>
+                    <dt class="col-5 text-muted fw-normal">@T("Phone", "الهاتف")</dt>
                     <dd class="col-7" dir="ltr">@Model.Phone</dd>
                 }
 
                 @if (!string.IsNullOrWhiteSpace(Model.OrganizationName))
                 {
-                    <dt class="col-5 text-muted fw-normal">Organization</dt>
+                    <dt class="col-5 text-muted fw-normal">@T("Organization", "الجهة")</dt>
                     <dd class="col-7">@Model.OrganizationName</dd>
                 }
 
-                <dt class="col-5 text-muted fw-normal">Language</dt>
-                <dd class="col-7">@(Model.SubmittedCulture == "ar" ? "Arabic" : "English")</dd>
+                <dt class="col-5 text-muted fw-normal">@T("Language", "اللغة")</dt>
+                <dd class="col-7">@(Model.SubmittedCulture == "ar" ? T("Arabic", "العربية") : T("English", "الإنجليزية"))</dd>
 
-                <dt class="col-5 text-muted fw-normal">Signed in</dt>
-                <dd class="col-7">@(string.IsNullOrWhiteSpace(Model.SubmittedByUserId) ? "No (anonymous visitor)" : "Yes")</dd>
+                <dt class="col-5 text-muted fw-normal">@T("Signed in", "مسجّل الدخول")</dt>
+                <dd class="col-7">@(string.IsNullOrWhiteSpace(Model.SubmittedByUserId) ? T("No (visitor not signed in)", "لا (زائر غير مسجّل الدخول)") : T("Yes", "نعم"))</dd>
 
                 @if (!string.IsNullOrWhiteSpace(Model.SubmittedFromIp))
                 {
-                    <dt class="col-5 text-muted fw-normal">IP address</dt>
+                    <dt class="col-5 text-muted fw-normal">@T("IP address", "عنوان IP")</dt>
                     <dd class="col-7" dir="ltr">@Model.SubmittedFromIp</dd>
                 }
 
                 @if (Model.HandledAtUtc is { } handledAt)
                 {
-                    <dt class="col-5 text-muted fw-normal">Closed</dt>
-                    <dd class="col-7">@handledAt.ToString("yyyy-MM-dd HH:mm") UTC</dd>
+                    <dt class="col-5 text-muted fw-normal">@T("Closed", "تاريخ الإغلاق")</dt>
+                    <dd class="col-7"><span dir="ltr">@handledAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) UTC</span></dd>
                 }
             </dl>
         </div></div>
 
         <div class="card border-0 shadow-sm rounded-4 mt-4"><div class="card-body p-4">
-            <h3 class="h6 fw-bold mb-2">Replying</h3>
+            <h3 class="h6 fw-bold mb-2">@T("Replying", "الرد")</h3>
             <p class="text-muted small mb-0">
-                This platform does not send email, so replies are not recorded here. Reply from your own
-                mailbox using the button above, then set the status to <strong>Resolved</strong> so the
-                queue reflects what has actually been answered.
+                @if (ar)
+                {
+                    <text>لا تُرسل الردود على هذه الرسائل من المنصة ولا تُسجَّل فيها. ردّوا من بريدكم الإلكتروني باستخدام الزر أعلاه، ثم غيّروا الحالة إلى <strong>@ContactLabels.Status(ContactMessageStatus.Resolved, ar)</strong> لتعكس القائمة ما تم الرد عليه فعلاً.</text>
+                }
+                else
+                {
+                    <text>Replies to these messages are not sent or recorded by the platform. Reply from your own mailbox using the button above, then set the status to <strong>@ContactLabels.Status(ContactMessageStatus.Resolved, ar)</strong> so the queue reflects what has actually been answered.</text>
+                }
             </p>
         </div></div>
     </div>

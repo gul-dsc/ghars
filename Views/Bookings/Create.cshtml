@@ -58,10 +58,10 @@
         <h1 class="h3 mb-2">@pageTitle</h1>
         <p class="mb-0 opacity-75">
             @(isDirectRequest
-                ? T("Describe the program your club needs and send it to an implementing entity for review. No published program is involved — the entity may confirm it, reject it, or propose changes.",
-                    "صِف البرنامج الذي يحتاجه ناديك وأرسله إلى إحدى الجهات المنفذة للمراجعة. لا يرتبط الطلب ببرنامج منشور — ويمكن للجهة تأكيده أو رفضه أو اقتراح تعديلات.")
+                ? T("Describe what your club needs. The implementing entity will confirm, decline, or suggest changes.",
+                    "صِفوا ما يحتاجه ناديكم، وستقوم الجهة المنفذة بتأكيد الطلب أو الاعتذار عنه أو اقتراح تعديلات.")
                 : T("Provide the requested session details so the implementing entity can review, confirm, reject, or propose another time.",
-                    "أدخل تفاصيل الجلسة المطلوبة ليتمكن الجهة المنفذة من المراجعة والتأكيد أو الرفض أو اقتراح وقت آخر."))
+                    "أدخلوا تفاصيل الجلسة المطلوبة لتتمكن الجهة المنفذة من المراجعة والتأكيد أو الرفض أو اقتراح وقت آخر."))
         </p>
     </div>
 
@@ -280,7 +280,7 @@
                         <div class="ghars-availability">
                             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
                                 <div>
-                                    <span class="fw-semibold"><i class="bi bi-calendar2-check me-1" aria-hidden="true"></i>@T("Partner Available Times", "الأوقات المتاحة لدى الجهة المنفذة")</span>
+                                    <span class="fw-semibold"><i class="bi bi-calendar2-check me-1" aria-hidden="true"></i>@T("Implementing entity available times", "الأوقات المتاحة لدى الجهة المنفذة")</span>
                                     <div class="text-muted small">@T("These times have been marked as available by the implementing entity. Choosing one is optional.",
                                                                     "هذه الأوقات حددتها الجهة المنفذة كأوقات متاحة، واختيار أحدها اختياري.")</div>
                                 </div>
@@ -324,7 +324,7 @@
                             @* The empty state, worded as a fact. Shown on the custom path once an
                                entity with no calendar is chosen. *@
                             <div class="text-muted small d-none" id="availabilityEmpty">
-                                @T("This partner has not published availability. You can still suggest your preferred date and time.",
+                                @T("This implementing entity has not published available times. You can still suggest your preferred date and time.",
                                    "لم تنشر هذه الجهة أي أوقات متاحة. بإمكانكم اقتراح التاريخ والوقت المناسبين لكم.")
                             </div>
                             <span asp-validation-for="PartnerAvailabilitySlotId" class="text-danger d-block"></span>
@@ -398,7 +398,7 @@
                 <div class="booking-section-head">
                     <div>
                         <h2 class="h5 mb-1">@T("Contact & Notes", "التواصل والملاحظات")</h2>
-                        <div class="text-muted small">@T("Add the club contact person, logistics, and any guidance the partner should review.", "أدخل بيانات مسؤول التواصل والمتطلبات اللوجستية وأي ملاحظات يجب أن يراجعها الشريك.")</div>
+                        <div class="text-muted small">@T("Add the club contact person, logistics, and anything the implementing entity should know.", "أدخلوا بيانات مسؤول التواصل والمتطلبات اللوجستية وأي ملاحظات يجب أن تطّلع عليها الجهة المنفذة.")</div>
                     </div>
                 </div>
 

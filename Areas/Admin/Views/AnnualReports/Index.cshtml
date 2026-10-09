@@ -5,7 +5,7 @@
 @{
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string e, string a) => ar ? a : e;
-    ViewData["Title"] = T("Ghars Annual Reports", "التقارير السنوية لغرس");
+    ViewData["Title"] = T("Ghars annual reports", "التقارير السنوية لغرس");
     ViewData["PageTitle"] = ViewData["Title"];
     var seasons = ViewBag.Seasons as List<Season> ?? new();
     var clubs = ViewBag.Clubs as List<Organization> ?? new();
@@ -27,7 +27,7 @@
 @if (pending > 0)
 {
     <div class="alert alert-warning rounded-4 border-0">
-        <i class="bi bi-hourglass-split me-1" aria-hidden="true"></i>@T($"{pending} report(s) awaiting review.", $"{pending} تقرير بانتظار المراجعة.")
+        <i class="bi bi-hourglass-split me-1" aria-hidden="true"></i>@T($"{pending} report(s) awaiting review.", $"عدد التقارير بانتظار المراجعة: {pending}.")
     </div>
 }
 
@@ -81,7 +81,7 @@
                     <th scope="col">@T("Activities", "الأنشطة")</th>
                     <th scope="col">@T("Participants", "المشاركون")</th>
                     <th scope="col">@T("Status", "الحالة")</th>
-                    <th scope="col">@T("Reviewer", "المراجع")</th>
+                    <th scope="col">@T("Reviewed", "تاريخ المراجعة")</th>
                     <th scope="col"><span class="visually-hidden">@T("Actions", "إجراءات")</span></th>
                 </tr>
             </thead>

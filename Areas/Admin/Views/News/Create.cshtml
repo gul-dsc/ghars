@@ -1,7 +1,9 @@
 @model GharsPlatform.Controllers.Admin.NewsController.NewsVm
 @{
-    ViewData["Title"] = "Create News Item";
-    ViewData["PageTitle"] = "Create News Item";
+    var ar = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Add news item", "إضافة خبر");
+    ViewData["PageTitle"] = ViewData["Title"];
 }
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
@@ -9,33 +11,33 @@
             @Html.AntiForgeryToken()
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">Title (EN)</label>
-                    <input class="form-control" asp-for="TitleEn" />
+                    <label class="form-label">@T("Title (English)", "العنوان (بالإنجليزية)")</label>
+                    <input class="form-control" asp-for="TitleEn" dir="ltr" />
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Title (AR)</label>
-                    <input class="form-control" asp-for="TitleAr" />
+                    <label class="form-label">@T("Title (Arabic)", "العنوان (بالعربية)")</label>
+                    <input class="form-control" asp-for="TitleAr" dir="rtl" />
                 </div>
                 <div class="col-md-8">
-                    <label class="form-label">URL (optional)</label>
-                    <input class="form-control" asp-for="Url" placeholder="https://..." />
+                    <label class="form-label">@T("Link (optional)", "الرابط (اختياري)")</label>
+                    <input class="form-control" asp-for="Url" placeholder="https://..." dir="ltr" />
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label">Priority</label>
+                    <label class="form-label">@T("Priority", "الأولوية")</label>
                     <input class="form-control" asp-for="Priority" />
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label">Active</label>
+                    <label class="form-label">@T("Status", "الحالة")</label>
                     <div class="form-check mt-2">
                         <input class="form-check-input" asp-for="IsActive" />
-                        <label class="form-check-label">Enabled</label>
+                        <label class="form-check-label" asp-for="IsActive">@T("Active", "نشط")</label>
                     </div>
                 </div>
             </div>
 
             <div class="d-flex justify-content-end gap-2 mt-4">
-                <a class="btn btn-outline-secondary" href="/Admin/News">Back</a>
-                <button class="btn btn-primary" type="submit">Create</button>
+                <a class="btn btn-outline-secondary" href="/Admin/News">@T("Back", "رجوع")</a>
+                <button class="btn btn-primary" type="submit">@T("Add news item", "إضافة الخبر")</button>
             </div>
 
             <div class="text-danger small mt-2" asp-validation-summary="All"></div>

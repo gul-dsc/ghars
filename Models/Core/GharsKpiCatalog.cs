@@ -30,18 +30,40 @@ public sealed record KpiDefinition(
     string NameAr,
     string Unit,
     decimal? Target,
-    string TargetText,
+    string TargetTextEn,
     // true  => actual must be >= target to be achieved
     // false => actual must be <= target to be achieved
     bool HigherIsBetter,
     KpiSource Source,
     string CalculationEn,
-    string CalculationAr);
+    string CalculationAr)
+{
+    /// <summary>
+    /// The target as shown to a reader, in the current UI language. Only the wording around the
+    /// number is translated; <see cref="Target"/> and the comparison logic are unaffected.
+    /// </summary>
+    public string TargetText =>
+        System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar"
+            ? GharsKpiCatalog.TargetTextAr(Key, TargetTextEn)
+            : TargetTextEn;
+}
 
 public static class GharsKpiCatalog
 {
     public const int BaselineYear = 2026;
     public const int TargetYear = 2033;
+
+    // Arabic wording for the targets whose English text carries more than a bare figure.
+    // A target that is only a figure ("≥ 80%") reads the same in both languages.
+    private static readonly Dictionary<string, string> TargetTextsAr = new()
+    {
+        ["ViolationsReduction"] = "خفض سنوي ≥ 15%",
+        ["PhysicalActivity"] = "≥ 90% من اللاعبين",
+        ["CommunityEvents"] = "5–10 فعاليات لكل نادٍ سنوياً"
+    };
+
+    internal static string TargetTextAr(string key, string english) =>
+        TargetTextsAr.TryGetValue(key, out var ar) ? ar : english;
 
     public static readonly KpiDefinition ProgramCoverage = new(
         "ProgramCoverage", "Program Coverage", "تغطية البرنامج", "%", 80m, "≥ 80%", true,

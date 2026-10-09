@@ -12,7 +12,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 // MVC + Localization (Views + DataAnnotations)
 builder.Services
-    .AddControllersWithViews()
+    // Bilingual text for the framework's own validation and model-binding messages.
+    .AddControllersWithViews(GharsPlatform.Models.Validation.FrameworkValidationMessages.Apply)
     .AddViewLocalization()
     .AddDataAnnotationsLocalization();
 

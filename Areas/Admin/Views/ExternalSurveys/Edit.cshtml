@@ -5,7 +5,7 @@
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string e, string a) => ar ? a : e;
     var isEdit = Model.Id > 0;
-    ViewData["Title"] = isEdit ? T("Edit Official Survey", "تعديل الاستبيان الرسمي") : T("Add Official Survey", "إضافة استبيان رسمي");
+    ViewData["Title"] = isEdit ? T("Edit official survey", "تعديل الاستبيان الرسمي") : T("Add official survey", "إضافة استبيان رسمي");
     ViewData["PageTitle"] = ViewData["Title"];
     var seasons = ViewBag.Seasons as List<Season> ?? new();
     var existingReport = ViewBag.ExistingReport as string;

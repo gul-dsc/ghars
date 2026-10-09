@@ -1,8 +1,30 @@
 @model GharsPlatform.Controllers.Admin.NotificationsController.NotificationVm
+@using Microsoft.AspNetCore.Mvc.Rendering
 @{
-    ViewData["Title"] = "Create Notification";
-    ViewData["PageTitle"] = "Create Notification";
     var orgs = ViewBag.Organizations as List<GharsPlatform.Models.Core.Organization> ?? new();
+    var roles = ViewBag.Roles as List<string> ?? new();
+    var users = ViewBag.Users as List<string[]> ?? new();
+    var ar = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Send notification", "إرسال إشعار");
+    ViewData["PageTitle"] = T("Send notification", "إرسال إشعار");
+    string TypeLabel(NotificationType t) => t switch
+    {
+        NotificationType.Info => T("Information", "معلومات"),
+        NotificationType.Success => T("Success", "نجاح"),
+        NotificationType.Warning => T("Warning", "تنبيه"),
+        NotificationType.Danger => T("Urgent", "عاجل"),
+        NotificationType.System => T("System", "النظام"),
+        _ => t.ToString()
+    };
+    string TargetLabel(NotificationTargetType t) => t switch
+    {
+        NotificationTargetType.All => T("All users", "جميع المستخدمين"),
+        NotificationTargetType.Role => T("Role", "دور"),
+        NotificationTargetType.Organization => T("Organization", "جهة"),
+        NotificationTargetType.User => T("User", "مستخدم"),
+        _ => t.ToString()
+    };
 }
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
@@ -10,58 +32,71 @@
             @Html.AntiForgeryToken()
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">Title (EN)</label>
-                    <input class="form-control" asp-for="TitleEn" />
+                    <label class="form-label">@T("Title (English)", "العنوان (بالإنجليزية)")</label>
+                    <input class="form-control" asp-for="TitleEn" dir="ltr" />
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Title (AR)</label>
-                    <input class="form-control" asp-for="TitleAr" />
+                    <label class="form-label">@T("Title (Arabic)", "العنوان (بالعربية)")</label>
+                    <input class="form-control" asp-for="TitleAr" dir="rtl" />
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Message (EN)</label>
-                    <textarea class="form-control" asp-for="MessageEn" rows="3"></textarea>
+                    <label class="form-label">@T("Message (English)", "الرسالة (بالإنجليزية)")</label>
+                    <textarea class="form-control" asp-for="MessageEn" rows="3" dir="ltr"></textarea>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Message (AR)</label>
-                    <textarea class="form-control" asp-for="MessageAr" rows="3"></textarea>
+                    <label class="form-label">@T("Message (Arabic)", "الرسالة (بالعربية)")</label>
+                    <textarea class="form-control" asp-for="MessageAr" rows="3" dir="rtl"></textarea>
                 </div>
 
                 <div class="col-md-3">
-                    <label class="form-label">Type</label>
-                    <select class="form-select" asp-for="Type" asp-items="Html.GetEnumSelectList<NotificationType>()"></select>
+                    <label class="form-label">@T("Type", "النوع")</label>
+                    <select class="form-select" asp-for="Type" asp-items="@(Enum.GetValues<NotificationType>().Select(t => new SelectListItem(TypeLabel(t), ((byte)t).ToString())))"></select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Target</label>
-                    <select class="form-select" asp-for="TargetType" asp-items="Html.GetEnumSelectList<NotificationTargetType>()"></select>
+                    <label class="form-label">@T("Send to", "إرسال إلى")</label>
+                    <select class="form-select" asp-for="TargetType" asp-items="@(Enum.GetValues<NotificationTargetType>().Select(t => new SelectListItem(TargetLabel(t), ((byte)t).ToString())))"></select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Link (optional)</label>
-                    <input class="form-control" asp-for="LinkUrl" placeholder="/Admin/..." />
+                    <label class="form-label">@T("Link (optional)", "الرابط (اختياري)")</label>
+                    <input class="form-control" asp-for="LinkUrl" placeholder="/Admin/..." dir="ltr" />
                 </div>
 
                 <div class="col-md-6">
-                    <label class="form-label">Target Organization (if Organization target)</label>
+                    <label class="form-label">@T("Organization (when sending to an organization)", "الجهة (عند الإرسال إلى جهة)")</label>
                     <select class="form-select" asp-for="TargetOrganizationId">
-                        <option value="">-- select --</option>
+                        <option value="">@T("-- select an organization --", "-- اختاروا الجهة --")</option>
                         @foreach (var o in orgs)
                         {
-                            <option value="@o.Id">@o.NameEn</option>
+                            <option value="@o.Id">@(ar && !string.IsNullOrWhiteSpace(o.NameAr) ? o.NameAr : o.NameEn)</option>
                         }
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Target Role (if Role target)</label>
-                    <input class="form-control" asp-for="TargetRoleName" placeholder="DscAdmin / OrgAdmin" />
+                <div class="col-md-6">
+                    <label class="form-label" for="TargetRoleName">@T("Role (when sending to a role)", "الدور (عند الإرسال إلى دور)")</label>
+                    <select class="form-select" asp-for="TargetRoleName">
+                        <option value="">@T("-- select a role --", "-- اختاروا الدور --")</option>
+                        @foreach (var r in roles)
+                        {
+                            <option value="@r">@GharsPlatform.Controllers.Admin.OrganizationText.RoleLabel(r)</option>
+                        }
+                    </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Target UserId (if User target)</label>
-                    <input class="form-control" asp-for="TargetUserId" />
+                <div class="col-md-6">
+                    <label class="form-label" for="TargetUserId">@T("User (when sending to a user)", "المستخدم (عند الإرسال إلى مستخدم)")</label>
+                    <select class="form-select" asp-for="TargetUserId">
+                        <option value="">@T("-- select a user --", "-- اختاروا المستخدم --")</option>
+                        @foreach (var u in users)
+                        {
+                            <option value="@u[0]">@(string.IsNullOrWhiteSpace(u[1]) ? u[2] : $"{u[1]} — {u[2]}")</option>
+                        }
+                    </select>
+                    <div class="form-text">@T("Listed by name with email. With the list open, type to jump to a name.", "مرتبة حسب الاسم مع البريد الإلكتروني. اكتبوا أثناء فتح القائمة للانتقال إلى اسم.")</div>
                 </div>
             </div>
 
             <div class="d-flex justify-content-end gap-2 mt-4">
-                <a class="btn btn-outline-secondary" href="/Admin/Notifications">Back</a>
-                <button class="btn btn-primary" type="submit">Send</button>
+                <a class="btn btn-outline-secondary" href="/Admin/Notifications">@T("Back", "رجوع")</a>
+                <button class="btn btn-primary" type="submit">@T("Send", "إرسال")</button>
             </div>
 
             <div class="text-danger small mt-2" asp-validation-summary="All"></div>

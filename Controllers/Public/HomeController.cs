@@ -270,7 +270,9 @@ public class HomeController : Controller
         if (!string.IsNullOrWhiteSpace(vm.Website))
         {
             // Honeypot tripped. Behave exactly as success, but persist nothing and notify nobody.
-            TempData["ToastSuccess"] = "Thank you. Your message has been received.";
+            TempData["ToastSuccess"] = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar"
+                ? "شكراً لك. تم إرسال رسالتك إلى فريق غرس."
+                : "Thank you. Your message has been sent to the Ghars team.";
             return RedirectToAction(nameof(Contact));
         }
 
@@ -299,7 +301,9 @@ public class HomeController : Controller
 
         await NotifyReviewersAsync(entity);
 
-        TempData["ToastSuccess"] = "Thank you. Your message has been received and the Ghars team has been notified.";
+        TempData["ToastSuccess"] = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar"
+                ? "شكراً لك. تم إرسال رسالتك إلى فريق غرس."
+                : "Thank you. Your message has been sent to the Ghars team.";
         return RedirectToAction(nameof(Contact));
     }
 

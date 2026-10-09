@@ -3,6 +3,7 @@ using GharsPlatform.Data;
 using GharsPlatform.Hubs;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
+using GharsPlatform.Models.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -21,15 +22,27 @@ public class NotificationsController : Controllers.BaseController
         _hub = hub;
     }
 
+    private static bool IsAr() => System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+
     public async Task<IActionResult> Index()
     {
         var list = await Db.Notifications.OrderByDescending(x => x.CreatedAtUtc).Take(200).ToListAsync();
         return View(list);
     }
 
-    public async Task<IActionResult> Create()
+    // Lookups for the target pickers. They post the same values the form always did: the role NAME
+    // (matched against AspNetRoles.Name) and the user ID.
+    private async Task LoadTargetsAsync()
     {
         ViewBag.Organizations = await Db.Organizations.OrderBy(x => x.NameEn).ToListAsync();
+        ViewBag.Roles = await Db.Roles.Where(r => r.Name != null).OrderBy(r => r.Name).Select(r => r.Name!).ToListAsync();
+        ViewBag.Users = await Db.Users.OrderBy(u => u.FullName ?? u.Email)
+            .Select(u => new[] { u.Id, u.FullName ?? "", u.Email ?? "" }).ToListAsync();
+    }
+
+    public async Task<IActionResult> Create()
+    {
+        await LoadTargetsAsync();
         return View(new NotificationVm());
     }
 
@@ -37,7 +50,7 @@ public class NotificationsController : Controllers.BaseController
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(NotificationVm vm)
     {
-        ViewBag.Organizations = await Db.Organizations.OrderBy(x => x.NameEn).ToListAsync();
+        await LoadTargetsAsync();
 
         if (!ModelState.IsValid) return View(vm);
 
@@ -112,22 +125,22 @@ public class NotificationsController : Controllers.BaseController
             createdAtUtc = n.CreatedAtUtc
         });
 
-        TempData["ToastSuccess"] = $"Notification sent to {userIds.Count} users.";
+        TempData["ToastSuccess"] = IsAr() ? $"تم إرسال الإشعار إلى {userIds.Count} من المستخدمين." : $"Notification sent to {userIds.Count} user(s).";
         return RedirectToAction(nameof(Index));
     }
 
     public class NotificationVm
     {
-        [Required, MaxLength(150)]
+        [BilingualRequired(ErrorMessage = "Enter the title in English.", Ar = "أدخلوا العنوان بالإنجليزية."), MaxLength(150)]
         public string TitleEn { get; set; } = "";
 
-        [Required, MaxLength(150)]
+        [BilingualRequired(ErrorMessage = "Enter the title in Arabic.", Ar = "أدخلوا العنوان بالعربية."), MaxLength(150)]
         public string TitleAr { get; set; } = "";
 
-        [Required, MaxLength(2000)]
+        [BilingualRequired(ErrorMessage = "Enter the message in English.", Ar = "أدخلوا الرسالة بالإنجليزية."), MaxLength(2000)]
         public string MessageEn { get; set; } = "";
 
-        [Required, MaxLength(2000)]
+        [BilingualRequired(ErrorMessage = "Enter the message in Arabic.", Ar = "أدخلوا الرسالة بالعربية."), MaxLength(2000)]
         public string MessageAr { get; set; } = "";
 
         public NotificationType Type { get; set; } = NotificationType.Info;

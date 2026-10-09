@@ -1,6 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using GharsPlatform.Helpers;
 using GharsPlatform.Models.Identity;
+using GharsPlatform.Models.Validation;
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -31,7 +33,7 @@ public class AccountController : Controller
         ViewBag.ReturnUrl = returnUrl;
         if (!ModelState.IsValid) return View(vm);
 
-        var result = await _signInManager.PasswordSignInAsync(vm.Email, vm.Password, vm.RememberMe, lockoutOnFailure: true);
+        var result = await _signInManager.PasswordSignInAsync(vm.Email!, vm.Password!, vm.RememberMe, lockoutOnFailure: true);
         if (result.Succeeded)
         {
             if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
@@ -40,7 +42,10 @@ public class AccountController : Controller
             return RedirectToAction("Index", "Home", new { area = "" });
         }
 
-        ModelState.AddModelError("", "Invalid login attempt.");
+        ModelState.AddModelError("", result.IsLockedOut
+            ? T("Too many failed attempts. Try again in a few minutes or reset your password.",
+                "محاولات فاشلة كثيرة. حاول مرة أخرى بعد بضع دقائق أو أعد تعيين كلمة المرور.")
+            : T("The email or password is incorrect.", "البريد الإلكتروني أو كلمة المرور غير صحيحة."));
         return View(vm);
     }
 
@@ -73,11 +78,12 @@ public class AccountController : Controller
         if (!ModelState.IsValid) return View(vm);
         if (!email.IsConfigured)
         {
-            ModelState.AddModelError("", "Password reset by email is not available yet. Please contact the system administrator.");
+            ModelState.AddModelError("", T("Password reset by email is not available yet. Please contact the system administrator.",
+                "إعادة تعيين كلمة المرور عبر البريد الإلكتروني غير متاحة حالياً. يرجى التواصل مع مسؤول النظام."));
             return View(vm);
         }
 
-        var user = await _userManager.FindByEmailAsync(vm.Email.Trim());
+        var user = await _userManager.FindByEmailAsync(vm.Email!.Trim());
         if (user != null && !string.IsNullOrWhiteSpace(user.Email) && !IsDeactivated(user))
         {
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
@@ -120,17 +126,25 @@ public class AccountController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ResetPassword(ResetPasswordVm vm)
     {
+        if (!string.IsNullOrEmpty(vm.ConfirmPassword) && vm.ConfirmPassword != vm.Password)
+            ModelState.AddModelError(nameof(vm.ConfirmPassword), T("The passwords don't match.", "كلمتا المرور غير متطابقتين."));
         if (!ModelState.IsValid) return View(vm);
-        var user = await _userManager.FindByEmailAsync(vm.Email);
+        var user = await _userManager.FindByEmailAsync(vm.Email!);
         if (user != null && !IsDeactivated(user))
         {
-            var result = await _userManager.ResetPasswordAsync(user, vm.Token, vm.Password);
+            var result = await _userManager.ResetPasswordAsync(user, vm.Token!, vm.Password!);
             if (!result.Succeeded)
             {
-                foreach (var e in result.Errors)
-                    ModelState.AddModelError("", e.Code == "InvalidToken"
-                        ? "This link is invalid or has expired. Request a new one."
-                        : e.Description);
+                // Identity's own password-rule errors are English only; show the same rule sentence as the page.
+                var messages = result.Errors
+                    .Select(e => e.Code == "InvalidToken"
+                        ? T("This link is invalid or has expired. Request a new one.", "هذا الرابط غير صالح أو انتهت صلاحيته. اطلب رابطاً جديداً.")
+                        : e.Code.StartsWith("Password", StringComparison.Ordinal)
+                            ? PasswordRule
+                            : e.Description)
+                    .Distinct();
+                foreach (var m in messages)
+                    ModelState.AddModelError("", m);
                 return View(vm);
             }
             // A successful reset also clears a failed-login lockout.
@@ -138,9 +152,17 @@ public class AccountController : Controller
             if (user.LockoutEnd.HasValue)
                 await _userManager.SetLockoutEndDateAsync(user, null);
         }
-        TempData["ToastSuccess"] = "Your password has been changed. Please sign in.";
+        TempData["ToastSuccess"] = T("Your password has been changed. Please sign in.", "تم تغيير كلمة المرور. يرجى تسجيل الدخول.");
         return RedirectToAction(nameof(Login));
     }
+
+    private static bool IsArabic => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    private static string T(string en, string ar) => IsArabic ? ar : en;
+
+    // Same sentence as Views/Account/ResetPassword.cshtml; matches the Identity options in Program.cs.
+    private static string PasswordRule => T(
+        "At least 10 characters, with an uppercase letter, a lowercase letter, a digit and a symbol.",
+        "10 أحرف على الأقل، تتضمن حرفاً كبيراً وحرفاً صغيراً ورقماً ورمزاً.");
 
     // Admin -> Users "Deactivate" locks an account out for 100 years; a failed-login lockout lasts minutes.
     // Only the first means the account is switched off, and a password reset must not switch it back on.
@@ -149,32 +171,39 @@ public class AccountController : Controller
 
     public class ForgotPasswordVm
     {
-        [Required, EmailAddress]
-        public string Email { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "Enter your email address.", Ar = "أدخل بريدك الإلكتروني.")]
+        [BilingualEmailAddress(ErrorMessage = "Enter a valid email address.", Ar = "يرجى إدخال بريد إلكتروني صحيح.")]
+        public string? Email { get; set; }
     }
 
     public class ResetPasswordVm
     {
-        [Required, EmailAddress]
-        public string Email { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "Enter your email address.", Ar = "أدخل بريدك الإلكتروني.")]
+        [BilingualEmailAddress(ErrorMessage = "Enter a valid email address.", Ar = "يرجى إدخال بريد إلكتروني صحيح.")]
+        public string? Email { get; set; }
 
-        [Required]
-        public string Token { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "This link is invalid or has expired. Request a new one.", Ar = "هذا الرابط غير صالح أو انتهت صلاحيته. اطلب رابطاً جديداً.")]
+        public string? Token { get; set; }
 
-        [Required, DataType(DataType.Password), MinLength(10)]
-        public string Password { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "Enter a new password.", Ar = "أدخل كلمة المرور الجديدة.")]
+        [BilingualMinLength(10, ErrorMessage = "At least 10 characters, with an uppercase letter, a lowercase letter, a digit and a symbol.", Ar = "10 أحرف على الأقل، تتضمن حرفاً كبيراً وحرفاً صغيراً ورقماً ورمزاً.")]
+        [DataType(DataType.Password)]
+        public string? Password { get; set; }
 
-        [Required, DataType(DataType.Password), Compare(nameof(Password))]
-        public string ConfirmPassword { get; set; } = "";
+        // Match check is done in the POST action so the message can be bilingual.
+        [BilingualRequired(ErrorMessage = "Confirm your new password.", Ar = "أكّد كلمة المرور الجديدة.")]
+        [DataType(DataType.Password)]
+        public string? ConfirmPassword { get; set; }
     }
 
     public class LoginVm
     {
-        [Required, EmailAddress]
-        public string Email { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "Enter your email address.", Ar = "أدخل بريدك الإلكتروني.")]
+        [BilingualEmailAddress(ErrorMessage = "Enter a valid email address.", Ar = "يرجى إدخال بريد إلكتروني صحيح.")]
+        public string? Email { get; set; }
 
-        [Required]
-        public string Password { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "Enter your password.", Ar = "أدخل كلمة المرور.")]
+        public string? Password { get; set; }
 
         public bool RememberMe { get; set; }
     }
@@ -184,7 +213,8 @@ public class AccountController : Controller
         [Required, MaxLength(200)]
         public string FullName { get; set; } = "";
 
-        [Required, EmailAddress]
+        [BilingualRequired(ErrorMessage = "Enter your email address.", Ar = "أدخل بريدك الإلكتروني.")]
+        [BilingualEmailAddress(ErrorMessage = "Enter a valid email address.", Ar = "يرجى إدخال بريد إلكتروني صحيح.")]
         public string Email { get; set; } = "";
 
         [Required]

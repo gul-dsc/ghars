@@ -149,7 +149,14 @@
 
                 <hr class="my-4" />
                 <p class="text-muted small mb-0">
-                    @T("Your answers are anonymous and are stored inside the Ghars platform. Dubai Sports Council uses them to measure participant satisfaction with the Ghars Program.", "إجاباتك مجهولة الهوية وتُحفظ داخل منصة غرس. يستخدمها مجلس دبي الرياضي لقياس رضا المشاركين عن برنامج غرس.")
+                    @if (User.Identity?.IsAuthenticated == true)
+                    {
+                        @T("You're signed in, so this response is linked to your account. Your answers are stored inside the Ghars platform, and Dubai Sports Council uses them to measure participant satisfaction with the Ghars Program. Your club sees totals for each question, not your name or your written comments.", "أنت مسجّل الدخول، لذا ترتبط هذه الإجابة بحسابك. تُحفظ إجاباتك داخل منصة غرس، ويستخدمها مجلس دبي الرياضي لقياس رضا المشاركين عن برنامج غرس. يطّلع ناديك على مجاميع الإجابات لكل سؤال، دون اسمك أو ملاحظاتك المكتوبة.")
+                    }
+                    else
+                    {
+                        @T("We don't ask for your name or contact details, and this response isn't linked to any account. Your answers are stored inside the Ghars platform, and Dubai Sports Council uses them to measure participant satisfaction with the Ghars Program. Your club sees totals for each question, not your written comments.", "لا نطلب اسمك أو بيانات التواصل، ولا ترتبط هذه الإجابة بأي حساب. تُحفظ إجاباتك داخل منصة غرس، ويستخدمها مجلس دبي الرياضي لقياس رضا المشاركين عن برنامج غرس. يطّلع ناديك على مجاميع الإجابات لكل سؤال، دون ملاحظاتك المكتوبة.")
+                    }
                 </p>
             </div>
         </div>

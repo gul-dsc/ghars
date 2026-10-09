@@ -20,8 +20,8 @@
                 {
                     <tr>
                         <td>@item.NameEn</td>
-                        <td>@item.OrganizationType</td>
-                        <td>@item.Status</td>
+                        <td>@GharsPlatform.Controllers.Admin.OrganizationText.TypeLabel(item.OrganizationType)</td>
+                        <td>@GharsPlatform.Controllers.Admin.OrganizationText.StatusLabel(item.Status)</td>
                         <td>@item.Email</td>
                     </tr>
                 }

@@ -6,7 +6,7 @@
     Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
     var isAr = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string en, string ar) => isAr ? ar : en;
-    ViewData["Title"] = T("Partner Calendars", "تقويم الجهات المنفذة");
+    ViewData["Title"] = T("Entity calendars", "تقويم الجهات المنفذة");
 
     var partners = ViewBag.Partners as List<Organization> ?? [];
     var seasons = ViewBag.Seasons as List<Season> ?? [];
@@ -24,10 +24,10 @@
 
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
     <div>
-        <h1 class="h4 mb-1">@T("Partner Calendars", "تقويم الجهات المنفذة")</h1>
+        <h1 class="h4 mb-1">@T("Entity calendars", "تقويم الجهات المنفذة")</h1>
         <p class="text-muted mb-0 small">
-            @T("Availability published by implementing entities. Read-only — entities maintain their own calendars, and these slots are not counted as bookings, agenda entries or KPI data.",
-               "الأوقات التي تنشرها الجهات المنفذة. للاطلاع فقط — كل جهة تدير تقويمها بنفسها، ولا تُحتسب هذه الفترات كحجوزات أو أجندة أو بيانات مؤشرات أداء.")
+            @T("Availability published by implementing entities. Read-only — entities maintain their own calendars, and these slots are not counted as bookings, activities or KPI data.",
+               "الأوقات التي تنشرها الجهات المنفذة. للاطلاع فقط — كل جهة تدير تقويمها بنفسها، ولا تُحتسب هذه الفترات حجوزاتٍ أو أنشطةً أو بياناتِ مؤشرات أداء.")
         </p>
     </div>
 </div>
@@ -102,7 +102,7 @@ else
 {
     <div class="table-responsive">
         <table class="table table-sm align-middle">
-            <caption class="visually-hidden">@T("Partner availability slots", "فترات إتاحة الجهات المنفذة")</caption>
+            <caption class="visually-hidden">@T("Implementing entity availability slots", "فترات إتاحة الجهات المنفذة")</caption>
             <thead>
                 <tr>
                     <th scope="col">@T("Date", "التاريخ")</th>

@@ -108,15 +108,15 @@ public class KpiController : Controllers.BaseController
         var (titleEn, titleAr, messageEn, messageAr) = status switch
         {
             KpiSubmissionStatus.Approved => (
-                "KPI data approved", "تم اعتماد بيانات المؤشرات",
+                "KPI data approved", "تم اعتماد بيانات مؤشرات الأداء",
                 "Your KPI submission was approved and now appears in the Ghars KPI table.",
                 "تم اعتماد بيانات مؤشرات الأداء وتظهر الآن في جدول مؤشرات غرس."),
             KpiSubmissionStatus.MoreInfoRequired => (
-                "KPI data returned for correction", "إعادة بيانات المؤشرات للتصحيح",
+                "KPI data returned for correction", "إعادة بيانات مؤشرات الأداء للتصحيح",
                 "Your KPI submission was returned for correction. Please review the notes and resubmit.",
                 "تمت إعادة بيانات مؤشرات الأداء للتصحيح. يرجى مراجعة الملاحظات وإعادة الإرسال."),
             _ => (
-                "KPI data rejected", "تم رفض بيانات المؤشرات",
+                "KPI data rejected", "تم رفض بيانات مؤشرات الأداء",
                 "Your KPI submission was rejected. Please review the notes.",
                 "تم رفض بيانات مؤشرات الأداء. يرجى مراجعة الملاحظات.")
         };

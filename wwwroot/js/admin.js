@@ -20,10 +20,14 @@
       const div = document.createElement('div');
       div.className = "alert alert-info alert-dismissible fade show";
       div.setAttribute("role","alert");
+      // The layouts set <html dir="rtl"> for Arabic; prefer the Arabic fields there, falling back to English.
+      const isAr = document.documentElement.dir === 'rtl';
+      const title = (isAr ? (payload.titleAr || payload.titleEn) : payload.titleEn) || (isAr ? "إشعار" : "Notification");
+      const message = (isAr ? (payload.messageAr || payload.messageEn) : payload.messageEn) || "";
       div.innerHTML = `
-        <div class="fw-semibold">${payload.titleEn ?? "Notification"}</div>
-        <div class="small">${payload.messageEn ?? ""}</div>
-        ${payload.linkUrl ? `<div class="mt-2"><a class="small" href="${payload.linkUrl}">Open</a></div>` : ""}
+        <div class="fw-semibold">${title}</div>
+        <div class="small">${message}</div>
+        ${payload.linkUrl ? `<div class="mt-2"><a class="small" href="${payload.linkUrl}">${isAr ? "عرض" : "View"}</a></div>` : ""}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
       `;
       host.prepend(div);

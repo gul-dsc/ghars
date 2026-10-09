@@ -3,8 +3,8 @@
 @using System.Globalization
 @using System.Text.Json
 @{
-    ViewData["Title"] = "Ghars Dashboard";
-    ViewData["PageTitle"] = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? "لوحة غرس" : "Ghars Dashboard";
+    ViewData["Title"] = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? "لوحة غرس" : "Ghars dashboard";
+    ViewData["PageTitle"] = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? "لوحة غرس" : "Ghars dashboard";
     var isRtl = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string en, string ar) => isRtl ? ar : en;
     var seasons = ViewBag.Seasons as List<SelectListItem> ?? new();
@@ -25,7 +25,8 @@
         : (isRtl && !string.IsNullOrWhiteSpace(headerSeason.TitleAr) ? headerSeason.TitleAr : headerSeason.TitleEn);
 
     // Missing measurements render as "No Data" - never as 0% (approved KPI rule).
-    string NoData() => T("No Data", "لا توجد بيانات");
+    string NoData() => T("No data", "لا توجد بيانات");
+    string TypeText(ActivityType t) => t switch { ActivityType.Lecture => T("Lecture", "محاضرة"), ActivityType.Event => T("Event", "فعالية"), ActivityType.Workshop => T("Workshop", "ورشة عمل"), ActivityType.TrainingProgram => T("Training", "تدريب"), ActivityType.Course => T("Course", "دورة"), ActivityType.Activity => T("Activity", "نشاط"), _ => t.ToString() };
     string Pct(object? value) => value is decimal d ? $"{d:0.#}%" : NoData();
     var satisfactionScore = ViewBag.SatisfactionScore as decimal?;
     var complianceScore = ViewBag.ComplianceScore as decimal?;
@@ -180,8 +181,8 @@
     <header class="dash-head">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
             <div>
-                <h1>@T("Ghars Dashboard", "لوحة غرس")</h1>
-                <p>@T("Overview of Ghars programme activity, participation and performance.", "نظرة عامة على نشاط برنامج غرس والمشاركة والأداء.")</p>
+                <h1>@T("Ghars dashboard", "لوحة غرس")</h1>
+                <p>@T("Overview of Ghars program activity, participation and performance.", "نظرة عامة على نشاط برنامج غرس والمشاركة والأداء.")</p>
             </div>
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <span class="dash-season"><i class="bi bi-calendar3" aria-hidden="true"></i>@seasonName</span>
@@ -206,7 +207,7 @@
                 <div class="col-6 col-md-4 col-lg-2"><label class="form-label" for="f-dash-seasonId">@T("Season", "الموسم")</label><select id="f-dash-seasonId" name="seasonId" class="form-select form-select-sm"><option value="">@T("All", "الكل")</option>@foreach (var s in seasons){<option value="@s.Value" selected="@s.Selected">@s.Text</option>}</select></div>
                 <div class="col-6 col-md-4 col-lg-2"><label class="form-label" for="f-dash-clubId">@T("Club", "النادي")</label><select id="f-dash-clubId" name="clubId" class="form-select form-select-sm"><option value="">@T("All clubs", "كل الأندية")</option>@foreach (var c in clubs){<option value="@c.Value" selected="@c.Selected">@c.Text</option>}</select></div>
                 <div class="col-6 col-md-4 col-lg-2"><label class="form-label" for="f-dash-partnerId">@T("Entity", "الجهة")</label><select id="f-dash-partnerId" name="partnerId" class="form-select form-select-sm"><option value="">@T("All entities", "كل الجهات")</option>@foreach (var p in partners){<option value="@p.Value" selected="@p.Selected">@p.Text</option>}</select></div>
-                <div class="col-6 col-md-4 col-lg-2"><label class="form-label" for="f-dash-activityType">@T("Activity type", "نوع النشاط")</label><select id="f-dash-activityType" name="activityType" class="form-select form-select-sm"><option value="">@T("All types", "كل الأنواع")</option>@foreach (ActivityType item in Enum.GetValues(typeof(ActivityType))){<option value="@item" selected="@(filters.activityType == item)">@item</option>}</select></div>
+                <div class="col-6 col-md-4 col-lg-2"><label class="form-label" for="f-dash-activityType">@T("Activity type", "نوع النشاط")</label><select id="f-dash-activityType" name="activityType" class="form-select form-select-sm"><option value="">@T("All types", "كل الأنواع")</option>@foreach (ActivityType item in Enum.GetValues(typeof(ActivityType))){<option value="@item" selected="@(filters.activityType == item)">@TypeText(item)</option>}</select></div>
                 <div class="col-6 col-md-4 col-lg-1"><label class="form-label" for="f-dash-from">@T("From", "من")</label><input id="f-dash-from" class="form-control form-control-sm" type="date" name="from" value="@(filters.from == null ? "" : ((DateTime)filters.from).ToString("yyyy-MM-dd"))" /></div>
                 <div class="col-6 col-md-4 col-lg-1"><label class="form-label" for="f-dash-to">@T("To", "إلى")</label><input id="f-dash-to" class="form-control form-control-sm" type="date" name="to" value="@(filters.to == null ? "" : ((DateTime)filters.to).ToString("yyyy-MM-dd"))" /></div>
                 <div class="col-12 col-lg-2 d-flex gap-2">
@@ -221,12 +222,12 @@
     <h2 class="visually-hidden">@T("Headline figures", "الأرقام الرئيسية")</h2>
     <div class="row g-2 g-md-3 mb-3">
         @foreach (var card in new[] {
-            new { Icon="bi-buildings", Label=T("Active Clubs", "الأندية النشطة"), Value=(object)ViewBag.TotalClubs, Href="/Admin/Organizations" },
-            new { Icon="bi-diagram-3", Label=T("Implementing Entities", "الجهات المنفذة"), Value=(object)ViewBag.TotalPartners, Href="/Admin/Organizations" },
-            new { Icon="bi-calendar-event", Label=T("Programmes", "البرامج"), Value=(object)ViewBag.TotalPrograms, Href="/Admin/Activities" },
-            new { Icon="bi-people", Label=T("Participants Reached", "المشاركون"), Value=(object)ViewBag.TotalParticipants, Href="/Admin/Reports/Analytics" },
-            new { Icon="bi-journal-check", Label=T("Booking Requests", "طلبات الحجز"), Value=(object)ViewBag.TotalBookings, Href="/Admin/Bookings" },
-            new { Icon="bi-emoji-smile", Label=T("Overall Satisfaction", "الرضا العام"), Value=(object)Pct(satisfactionScore), Href="/Admin/Surveys" }
+            new { Icon="bi-buildings", Label=T("Active clubs", "الأندية النشطة"), Value=(object)ViewBag.TotalClubs, Href="/Admin/Organizations" },
+            new { Icon="bi-diagram-3", Label=T("Implementing entities", "الجهات المنفذة"), Value=(object)ViewBag.TotalPartners, Href="/Admin/Organizations" },
+            new { Icon="bi-calendar-event", Label=T("Programs", "البرامج"), Value=(object)ViewBag.TotalPrograms, Href="/Admin/Activities" },
+            new { Icon="bi-people", Label=T("Participants reached", "المشاركون"), Value=(object)ViewBag.TotalParticipants, Href="/Admin/Reports/Analytics" },
+            new { Icon="bi-journal-check", Label=T("Booking requests", "طلبات الحجز"), Value=(object)ViewBag.TotalBookings, Href="/Admin/Bookings" },
+            new { Icon="bi-emoji-smile", Label=T("Overall satisfaction", "الرضا العام"), Value=(object)Pct(satisfactionScore), Href="/Admin/Surveys" }
         })
         {
             <div class="col-6 col-sm-4 col-xl-2">
@@ -241,10 +242,10 @@
 
     @* ---------- Performance strip: context percentages, one short row ---------- *@
     <div class="perf-strip">
-        <div class="perf-item"><div class="k">@T("Programme coverage", "تغطية البرنامج")</div><div class="v">@ViewBag.ProgramCoverage%</div></div>
-        <div class="perf-item"><div class="k">@T("Compliance score", "درجة الامتثال")</div><div class="v">@Pct(complianceScore)</div></div>
-        <div class="perf-item"><div class="k">@(avgAttendance.HasValue ? T("Attendance (approved KPI)", "الحضور (مؤشر معتمد)") : T("Attendance (check-ins)", "الحضور (تسجيل الدخول)"))</div><div class="v">@(avgAttendance.HasValue ? Pct(avgAttendance) : Pct(ViewBag.AttendanceRate))</div></div>
-        <div class="perf-item"><div class="k">@T("Growth vs 2026 baseline", "النمو مقابل أساس 2026")</div><div class="v">@ViewBag.ParticipationGrowth%</div></div>
+        <div class="perf-item"><div class="k">@T("Program coverage", "تغطية البرنامج")</div><div class="v">@ViewBag.ProgramCoverage%</div></div>
+        <div class="perf-item"><div class="k">@T("KPI compliance score", "درجة الامتثال لمؤشرات الأداء")</div><div class="v">@Pct(complianceScore)</div></div>
+        <div class="perf-item"><div class="k">@(avgAttendance.HasValue ? T("Attendance (reported by clubs, approved)", "الحضور (وفق بيانات الأندية المعتمدة)") : T("Attendance (QR check-ins)", "الحضور (تسجيل الحضور برمز QR)"))</div><div class="v">@(avgAttendance.HasValue ? Pct(avgAttendance) : Pct(ViewBag.AttendanceRate))</div></div>
+        <div class="perf-item"><div class="k">@T("Participation growth vs 2026 baseline", "نمو المشاركة مقارنة بخط أساس 2026")</div><div class="v">@ViewBag.ParticipationGrowth%</div></div>
         <div class="perf-item"><div class="k">@T("Upcoming activities", "الأنشطة القادمة")</div><div class="v">@ViewBag.UpcomingEvents</div></div>
         <div class="perf-item"><div class="k">@T("Active users", "المستخدمون النشطون")</div><div class="v">@ViewBag.ActiveUsers</div></div>
     </div>
@@ -260,9 +261,9 @@
         };
         var attentionLabels = new Dictionary<string, string>
         {
-            ["Booking approvals"] = T("Booking approvals", "موافقات الحجز"),
-            ["Proposed-time responses"] = T("Proposed-time responses", "الردود على الأوقات المقترحة"),
-            ["KPI submissions"] = T("KPI submissions", "تقارير المؤشرات"),
+            ["Booking approvals"] = T("Bookings awaiting entity response", "حجوزات بانتظار رد الجهة المنفذة"),
+            ["Proposed-time responses"] = T("Bookings awaiting reply to a new proposed time", "حجوزات بانتظار الرد على وقت جديد مقترح"),
+            ["KPI submissions"] = T("KPI submissions", "تقارير مؤشرات الأداء"),
             ["Agenda submissions"] = T("Agenda submissions", "تقارير الأجندة")
         };
         var totalWaiting = (int)(ViewBag.PendingApprovals ?? 0) + arAwaiting + chAwaiting;
@@ -308,7 +309,7 @@
             <div class="chart-card">
                 <div class="chart-head">
                     <div>
-                        <h3>@T("Bookings & attendance trend", "اتجاه الحجوزات والحضور")</h3>
+                        <h3>@T("Bookings and attendance trend", "اتجاه الحجوزات والحضور")</h3>
                         <p class="chart-sub">@T("Last 12 months, current filters", "آخر 12 شهراً وفق الفلاتر الحالية")</p>
                     </div>
                 </div>
@@ -337,7 +338,7 @@
                         <h3>@T("Booking status", "حالات الحجز")</h3>
                         <p class="chart-sub">@T("Share of requests by status", "توزيع الطلبات حسب الحالة")</p>
                     </div>
-                    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Bookings">@T("Open", "فتح")</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Bookings">@T("View details", "عرض التفاصيل")</a>
                 </div>
                 <div class="chart-frame">
                     <canvas id="bookingStatusChart" role="img"
@@ -357,10 +358,10 @@
             <div class="chart-card">
                 <div class="chart-head">
                     <div>
-                        <h3>@T("KPI target vs actual", "المستهدف مقابل الفعلي")</h3>
+                        <h3>@T("KPI target vs actual", "مؤشرات الأداء: المستهدف مقابل الفعلي")</h3>
                         <p class="chart-sub">@T("Ghars indicators against their targets", "مؤشرات غرس مقارنة بالمستهدفات")</p>
                     </div>
-                    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Kpi">@T("Open", "فتح")</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Kpi">@T("View details", "عرض التفاصيل")</a>
                 </div>
                 <div class="chart-frame">
                     <canvas id="kpiChart" role="img"
@@ -384,18 +385,18 @@
             <div class="chart-card">
                 <div class="chart-head">
                     <div>
-                        <h3>@T("Top 7 clubs by KPI score", "أفضل 7 أندية حسب المؤشرات")</h3>
+                        <h3>@T("Top 7 clubs by KPI score", "أفضل 7 أندية حسب درجة مؤشرات الأداء")</h3>
                         <p class="chart-sub">@T("Dashboard shows the leaders; the full list is in reports", "تعرض اللوحة المتصدرين، والقائمة الكاملة في التقارير")</p>
                     </div>
                     <a class="btn btn-sm btn-outline-secondary" href="/Admin/Reports/Analytics">@T("View all clubs", "كل الأندية")</a>
                 </div>
                 <div class="chart-frame">
                     <canvas id="clubChart" role="img"
-                            aria-label="@T("Horizontal bar chart of the seven highest scoring clubs by KPI score", "رسم شريطي أفقي لأعلى سبعة أندية حسب درجة المؤشرات")"></canvas>
+                            aria-label="@T("Horizontal bar chart of the seven highest scoring clubs by KPI score", "رسم شريطي أفقي لأعلى سبعة أندية حسب درجة مؤشرات الأداء")"></canvas>
                 </div>
                 <div class="visually-hidden"><table>
-                    <caption>@T("Top clubs by KPI score", "أفضل الأندية حسب درجة المؤشرات")</caption>
-                    <thead><tr><th scope="col">@T("Club", "النادي")</th><th scope="col">@T("KPI score", "درجة المؤشر")</th></tr></thead>
+                    <caption>@T("Top clubs by KPI score", "أفضل الأندية حسب درجة مؤشرات الأداء")</caption>
+                    <thead><tr><th scope="col">@T("Club", "النادي")</th><th scope="col">@T("KPI score", "درجة مؤشرات الأداء")</th></tr></thead>
                     <tbody>@foreach (var row in Pairs(ViewBag.ClubComparisonJson, "Club", "Score")) { <tr><th scope="row">@row.Label</th><td>@row.Value</td></tr> }</tbody>
                 </table></div>
             </div>
@@ -407,18 +408,18 @@
             <div class="chart-card">
                 <div class="chart-head">
                     <div>
-                        <h3>@T("Programme type mix", "توزيع أنواع البرامج")</h3>
+                        <h3>@T("Program type mix", "توزيع أنواع البرامج")</h3>
                         <p class="chart-sub">@T("Lectures, workshops, courses and training", "محاضرات وورش ودورات وتدريب")</p>
                     </div>
-                    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Activities">@T("Open", "فتح")</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Activities">@T("View details", "عرض التفاصيل")</a>
                 </div>
                 <div class="chart-frame">
                     <canvas id="programTypeChart" role="img"
-                            aria-label="@T("Doughnut chart of programmes by type", "رسم دائري للبرامج حسب النوع")"></canvas>
+                            aria-label="@T("Doughnut chart of programs by type", "رسم دائري للبرامج حسب النوع")"></canvas>
                 </div>
                 <div class="visually-hidden"><table>
-                    <caption>@T("Programmes by type", "البرامج حسب النوع")</caption>
-                    <thead><tr><th scope="col">@T("Type", "النوع")</th><th scope="col">@T("Programmes", "البرامج")</th></tr></thead>
+                    <caption>@T("Programs by type", "البرامج حسب النوع")</caption>
+                    <thead><tr><th scope="col">@T("Type", "النوع")</th><th scope="col">@T("Programs", "البرامج")</th></tr></thead>
                     <tbody>@foreach (var row in Pairs(ViewBag.ProgramTypeJson, "Label", "Value")) { <tr><th scope="row">@row.Label</th><td>@row.Value</td></tr> }</tbody>
                 </table></div>
             </div>
@@ -430,7 +431,7 @@
                         <h3>@T("Participants by category", "المشاركون حسب الفئة")</h3>
                         <p class="chart-sub">@T("Players, coaches, administrators, parents and others", "لاعبون ومدربون وإداريون وأولياء أمور وغيرهم")</p>
                     </div>
-                    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Reports/Analytics">@T("Open", "فتح")</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Reports/Analytics">@T("View details", "عرض التفاصيل")</a>
                 </div>
                 <div class="chart-frame">
                     <canvas id="categoryChart" role="img"
@@ -449,7 +450,7 @@
     <div class="row g-3 mb-3">
         <div class="col-12 col-lg-4">
             <div class="panel">
-                <h3><i class="bi bi-lightbulb me-1" aria-hidden="true"></i>@T("Smart insights", "رؤى ذكية")</h3>
+                <h3><i class="bi bi-lightbulb me-1" aria-hidden="true"></i>@T("Key observations", "ملاحظات رئيسية")</h3>
                 @foreach (var insight in insights)
                 {
                     <div class="insight-row"><i class="bi bi-dot" aria-hidden="true"></i><span>@insight</span></div>
@@ -488,13 +489,13 @@
     <div class="panel mb-3">
         <h3><i class="bi bi-clipboard-data me-1" aria-hidden="true"></i>@T("Operational snapshot", "ملخص تشغيلي")</h3>
         <div class="snapshot">
-            <div class="snapshot-item"><div class="k">@T("Violations reduction (vs last season)", "خفض المخالفات (مقارنة بالموسم السابق)")</div><div class="v">@Pct(violationsReduction)</div></div>
+            <div class="snapshot-item"><div class="k">@T("Reduction in disciplinary violations vs last season", "خفض المخالفات الانضباطية مقارنة بالموسم السابق")</div><div class="v">@Pct(violationsReduction)</div></div>
             <div class="snapshot-item"><div class="k">@T("Physical activity ≥150 min/week", "النشاط البدني ≥150 دقيقة أسبوعياً")</div><div class="v">@Pct(avgPhysicalActivity)</div></div>
             <div class="snapshot-item"><div class="k">@T("Certificates issued", "الشهادات الصادرة")</div><div class="v">@ViewBag.CertificatesIssued</div></div>
             <div class="snapshot-item"><div class="k">@T("Library items", "مواد المكتبة")</div><div class="v">@ViewBag.LibraryCount</div></div>
             <div class="snapshot-item"><div class="k">@T("Gallery uploads", "مرفوعات المعرض")</div><div class="v">@ViewBag.GalleryUploadCount</div></div>
             @* Internal Ghars survey - kept visibly separate from the official satisfaction score above. *@
-            <div class="snapshot-item"><div class="k">@T("Ghars internal survey score", "مؤشر استبيان غرس الداخلي")</div><div class="v">@Pct(internalStarScore)</div></div>
+            <div class="snapshot-item"><div class="k">@T("Ghars survey satisfaction score", "درجة الرضا في استبيان غرس")</div><div class="v">@Pct(internalStarScore)</div></div>
         </div>
     </div>
 
@@ -513,11 +514,11 @@
         <div class="row g-3 mb-3">
             <div class="col-12 col-lg-6">
                 <div class="chart-card">
-                    <div class="chart-head"><div><h3>@T("Entity contribution", "مساهمة الجهات")</h3><p class="chart-sub">@T("Programmes and capacity by implementing entity", "البرامج والسعة حسب الجهة المنفذة")</p></div></div>
-                    <div class="chart-frame"><canvas id="partnerChart" role="img" aria-label="@T("Horizontal bar chart of programmes and capacity by implementing entity", "رسم شريطي أفقي للبرامج والسعة حسب الجهة المنفذة")"></canvas></div>
+                    <div class="chart-head"><div><h3>@T("Entity contribution", "مساهمة الجهات")</h3><p class="chart-sub">@T("Programs and capacity by implementing entity", "البرامج والسعة حسب الجهة المنفذة")</p></div></div>
+                    <div class="chart-frame"><canvas id="partnerChart" role="img" aria-label="@T("Horizontal bar chart of programs and capacity by implementing entity", "رسم شريطي أفقي للبرامج والسعة حسب الجهة المنفذة")"></canvas></div>
                     <div class="visually-hidden"><table>
-                        <caption>@T("Programmes by implementing entity", "البرامج حسب الجهة المنفذة")</caption>
-                        <thead><tr><th scope="col">@T("Entity", "الجهة")</th><th scope="col">@T("Programmes", "البرامج")</th><th scope="col">@T("Capacity", "السعة")</th></tr></thead>
+                        <caption>@T("Programs by implementing entity", "البرامج حسب الجهة المنفذة")</caption>
+                        <thead><tr><th scope="col">@T("Entity", "الجهة")</th><th scope="col">@T("Programs", "البرامج")</th><th scope="col">@T("Capacity", "السعة")</th></tr></thead>
                         <tbody>
                             @{ var partnerPrograms = Pairs(ViewBag.PartnerContributionJson, "Partner", "Programs");
                                var partnerCapacity = Pairs(ViewBag.PartnerContributionJson, "Partner", "Capacity"); }
@@ -531,7 +532,7 @@
             </div>
             <div class="col-12 col-lg-6">
                 <div class="chart-card">
-                    <div class="chart-head"><div><h3>@T("Upload momentum", "زخم الرفع")</h3><p class="chart-sub">@T("Gallery album uploads per month", "رفع ألبومات المعرض شهرياً")</p></div></div>
+                    <div class="chart-head"><div><h3>@T("Album uploads per month", "رفع الألبومات شهرياً")</h3><p class="chart-sub">@T("Gallery albums, last 12 months", "ألبومات المعرض خلال آخر 12 شهراً")</p></div></div>
                     <div class="chart-frame"><canvas id="uploadChart" role="img" aria-label="@T("Line chart of gallery album uploads per month", "رسم خطي لرفع ألبومات المعرض شهرياً")"></canvas></div>
                     <div class="visually-hidden"><table>
                         <caption>@T("Album uploads by month", "رفع الألبومات حسب الشهر")</caption>
@@ -542,7 +543,7 @@
             </div>
             <div class="col-12 col-lg-6">
                 <div class="chart-card">
-                    <div class="chart-head"><div><h3>@T("Digital library", "المكتبة الرقمية")</h3><p class="chart-sub">@T("Published content by type", "المحتوى المنشور حسب النوع")</p></div><a class="btn btn-sm btn-outline-secondary" href="/Admin/Library/Categories">@T("Open", "فتح")</a></div>
+                    <div class="chart-head"><div><h3>@T("Digital library", "المكتبة الرقمية")</h3><p class="chart-sub">@T("Published content by type", "المحتوى المنشور حسب النوع")</p></div><a class="btn btn-sm btn-outline-secondary" href="/Admin/Library/Categories">@T("View details", "عرض التفاصيل")</a></div>
                     <div class="chart-frame"><canvas id="libraryChart" role="img" aria-label="@T("Doughnut chart of published library content by type", "رسم دائري لمحتوى المكتبة المنشور حسب النوع")"></canvas></div>
                     <div class="visually-hidden"><table>
                         <caption>@T("Library content by type", "محتوى المكتبة حسب النوع")</caption>
@@ -553,7 +554,7 @@
             </div>
             <div class="col-12 col-lg-6">
                 <div class="chart-card">
-                    <div class="chart-head"><div><h3>@T("Gallery & media", "المعرض والوسائط")</h3><p class="chart-sub">@T("Media type distribution", "توزيع أنواع الوسائط")</p></div><a class="btn btn-sm btn-outline-secondary" href="/Admin/Gallery">@T("Open", "فتح")</a></div>
+                    <div class="chart-head"><div><h3>@T("Gallery and media", "المعرض والوسائط")</h3><p class="chart-sub">@T("Media type distribution", "توزيع أنواع الوسائط")</p></div><a class="btn btn-sm btn-outline-secondary" href="/Admin/Gallery">@T("View details", "عرض التفاصيل")</a></div>
                     <div class="chart-frame"><canvas id="mediaChart" role="img" aria-label="@T("Doughnut chart of gallery media by type", "رسم دائري لوسائط المعرض حسب النوع")"></canvas></div>
                     <div class="visually-hidden"><table>
                         <caption>@T("Gallery media by type", "وسائط المعرض حسب النوع")</caption>
@@ -565,7 +566,7 @@
         </div>
 
         <div class="panel mb-4">
-            <h3><i class="bi bi-grid-3x3-gap me-1" aria-hidden="true"></i>@T("Activity concentration", "تركيز الأنشطة")</h3>
+            <h3><i class="bi bi-grid-3x3-gap me-1" aria-hidden="true"></i>@T("Busiest clubs by program type", "أكثر الأندية نشاطاً حسب نوع البرنامج")</h3>
             <p class="chart-sub mb-2">@T("The twelve densest club and activity-type pairs. The full breakdown is in reports.", "أكثر اثني عشر اقتراناً بين النادي ونوع النشاط. التفصيل الكامل في التقارير.")</p>
             @if (!heatmap.Any())
             {
@@ -735,7 +736,7 @@
 
     render('clubChart', clubComparison.map(x => Number(x.Score ?? 0)),
         horizontalBar([
-            { label: @Html.Raw(JsonSerializer.Serialize(T("KPI score", "درجة المؤشر"))), data: clubComparison.map(x => Math.round((x.Score ?? 0) * 10) / 10), backgroundColor: GREEN, borderRadius: 3 }
+            { label: @Html.Raw(JsonSerializer.Serialize(T("KPI score", "درجة مؤشرات الأداء"))), data: clubComparison.map(x => Math.round((x.Score ?? 0) * 10) / 10), backgroundColor: GREEN, borderRadius: 3 }
         ], pickLabels(clubComparison), 24));
 
     render('programTypeChart', pickValues(programType), doughnut(pickLabels(programType), pickValues(programType)));
@@ -752,7 +753,7 @@
 
         render('partnerChart', partnerContribution.map(x => Number(x.Programs ?? 0)),
             horizontalBar([
-                { label: @Html.Raw(JsonSerializer.Serialize(T("Programmes", "البرامج"))), data: partnerContribution.map(x => Number(x.Programs ?? 0)), backgroundColor: GREEN, borderRadius: 3 },
+                { label: @Html.Raw(JsonSerializer.Serialize(T("Programs", "البرامج"))), data: partnerContribution.map(x => Number(x.Programs ?? 0)), backgroundColor: GREEN, borderRadius: 3 },
                 { label: @Html.Raw(JsonSerializer.Serialize(T("Capacity", "السعة"))), data: partnerContribution.map(x => Number(x.Capacity ?? 0)), backgroundColor: SAND, borderRadius: 3 }
             ], pickLabels(partnerContribution), 22));
 

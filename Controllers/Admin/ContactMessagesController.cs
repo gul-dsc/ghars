@@ -17,6 +17,8 @@ public class ContactMessagesController : Controllers.BaseController
 {
     public ContactMessagesController(AppDbContext db) : base(db) { }
 
+    private static bool IsAr() => System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+
     public async Task<IActionResult> Index(string? status = null)
     {
         IQueryable<ContactMessage> q = Db.ContactMessages;
@@ -69,7 +71,7 @@ public class ContactMessagesController : Controllers.BaseController
         await AuditAsync("ContactMessage.SetStatus", nameof(ContactMessage), id.ToString(),
             before, new { message.Status, message.AdminNotes });
 
-        TempData["ToastSuccess"] = "Message updated.";
+        TempData["ToastSuccess"] = IsAr() ? "تم تحديث الرسالة." : "Message updated.";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -89,7 +91,7 @@ public class ContactMessagesController : Controllers.BaseController
         Db.ContactMessages.Remove(message);
         await Db.SaveChangesAsync();
 
-        TempData["ToastSuccess"] = "Message deleted.";
+        TempData["ToastSuccess"] = IsAr() ? "تم حذف الرسالة." : "Message deleted.";
         return RedirectToAction(nameof(Index));
     }
 }

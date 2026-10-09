@@ -1,10 +1,13 @@
+@using System.Globalization
 @{
-    ViewData["Title"] = "Error";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("We couldn't complete your request", "تعذّر إكمال طلبك");
 }
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4 p-md-5">
-        <h3 class="mb-2 text-danger"><i class="bi bi-bug me-2"></i>Something went wrong</h3>
-        <p class="text-muted">Please try again or contact the administrator.</p>
-        <a class="btn btn-primary" href="/">Back to Home</a>
+        <h3 class="mb-2 text-danger"><i class="bi bi-exclamation-circle me-2"></i>@T("We couldn't complete your request", "تعذّر إكمال طلبك")</h3>
+        <p class="text-muted">@T("Please try again in a few minutes. If it keeps happening, contact the Ghars team through the Contact page.", "يرجى المحاولة مرة أخرى بعد بضع دقائق. إذا تكرر ذلك، تواصل مع فريق غرس عبر صفحة تواصل معنا.")</p>
+        <a class="btn btn-primary" href="/">@T("Back to home", "العودة إلى الرئيسية")</a>
     </div>
 </div>

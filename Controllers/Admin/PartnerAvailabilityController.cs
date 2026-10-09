@@ -28,6 +28,8 @@ namespace GharsPlatform.Controllers.Admin;
 [Authorize(Roles = $"{RoleNames.SuperAdmin},{RoleNames.DscAdmin}")]
 public class PartnerAvailabilityController : Controllers.BaseController
 {
+    private static bool IsAr() => System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+
     public PartnerAvailabilityController(AppDbContext db) : base(db) { }
 
     public async Task<IActionResult> Index(
@@ -75,9 +77,10 @@ public class PartnerAvailabilityController : Controllers.BaseController
             ? new Dictionary<int, string>()
             : (await Db.BookingRequests
                     .Where(x => heldIds.Contains(x.Id))
-                    .Select(x => new { x.Id, Club = x.Organization!.NameEn })
+                    .Select(x => new { x.Id, ClubEn = x.Organization!.NameEn, ClubAr = x.Organization!.NameAr })
                     .ToListAsync())
-                .ToDictionary(x => x.Id, x => x.Club);
+                // Display only: the club's Arabic name in the Arabic interface, English otherwise.
+                .ToDictionary(x => x.Id, x => IsAr() && !string.IsNullOrWhiteSpace(x.ClubAr) ? x.ClubAr! : x.ClubEn);
 
         ViewBag.Partners = await Db.Organizations.ApprovedPartners().ToListAsync();
         ViewBag.Seasons = await Db.Seasons.OrderByDescending(x => x.StartDate).ToListAsync();

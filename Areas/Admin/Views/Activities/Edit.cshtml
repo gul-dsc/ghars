@@ -1,8 +1,33 @@
 @model GharsPlatform.Controllers.Admin.ActivitiesController.ActivityVm
+@using System.Globalization
 @{
-    ViewData["Title"] = "Edit Activity";
-    ViewData["PageTitle"] = "Edit Activity";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Edit program", "تعديل البرنامج");
+    ViewData["PageTitle"] = T("Edit program", "تعديل البرنامج");
     var seasons = ViewBag.Seasons as List<GharsPlatform.Models.Core.Season> ?? new();
+    // Display labels only; the option values stay the enum's numeric values, as GetEnumSelectList produced.
+    string TypeText(ActivityType t) => t switch
+    {
+        ActivityType.Lecture => T("Lecture", "محاضرة"),
+        ActivityType.Event => T("Event", "فعالية"),
+        ActivityType.Workshop => T("Workshop", "ورشة عمل"),
+        ActivityType.TrainingProgram => T("Training", "تدريب"),
+        ActivityType.Course => T("Course", "دورة"),
+        ActivityType.Activity => T("Activity", "نشاط"),
+        _ => t.ToString()
+    };
+    string StatusText(ActivityStatus s) => s switch
+    {
+        ActivityStatus.Draft => T("Draft", "مسودة"),
+        ActivityStatus.Published => T("Published", "منشور"),
+        ActivityStatus.Closed => T("Closed", "مغلق"),
+        ActivityStatus.Cancelled => T("Cancelled", "ملغى"),
+        _ => s.ToString()
+    };
+    var seasonItems = new SelectList(seasons.Select(s => new { s.Id, Name = ar && !string.IsNullOrWhiteSpace(s.TitleAr) ? s.TitleAr : s.TitleEn }), "Id", "Name");
+    var typeItems = Enum.GetValues<ActivityType>().Select(t => new SelectListItem(TypeText(t), ((int)t).ToString()));
+    var statusItems = Enum.GetValues<ActivityStatus>().Select(s => new SelectListItem(StatusText(s), ((int)s).ToString()));
 }
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
@@ -12,74 +37,74 @@
 
             <div class="row g-3">
                 <div class="col-md-4">
-                    <label class="form-label">Season</label>
-                    <select class="form-select" asp-for="SeasonId" asp-items="@(new SelectList(seasons, "Id", "TitleEn"))"></select>
+                    <label class="form-label">@T("Season", "الموسم")</label>
+                    <select class="form-select" asp-for="SeasonId" asp-items="seasonItems"></select>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Type</label>
-                    <select class="form-select" asp-for="Type" asp-items="Html.GetEnumSelectList<ActivityType>()"></select>
+                    <label class="form-label">@T("Type", "النوع")</label>
+                    <select class="form-select" asp-for="Type" asp-items="typeItems"></select>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Status</label>
-                    <select class="form-select" asp-for="Status" asp-items="Html.GetEnumSelectList<ActivityStatus>()"></select>
+                    <label class="form-label">@T("Publication status", "حالة النشر")</label>
+                    <select class="form-select" asp-for="Status" asp-items="statusItems"></select>
                 </div>
 
                 <div class="col-md-6">
-                    <label class="form-label">Title (EN)</label>
+                    <label class="form-label">@T("Title (English)", "العنوان بالإنجليزية")</label>
                     <input class="form-control" asp-for="TitleEn" />
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Title (AR)</label>
+                    <label class="form-label">@T("Title (Arabic)", "العنوان بالعربية")</label>
                     <input class="form-control" asp-for="TitleAr" />
                 </div>
 
                 <div class="col-md-6">
-                    <label class="form-label">Start</label>
+                    <label class="form-label">@T("Start", "البداية")</label>
                     <input class="form-control" asp-for="StartDateTime" type="datetime-local" />
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">End</label>
+                    <label class="form-label">@T("End", "النهاية")</label>
                     <input class="form-control" asp-for="EndDateTime" type="datetime-local" />
                 </div>
 
                 <div class="col-md-6">
-                    <label class="form-label">Location (EN)</label>
+                    <label class="form-label">@T("Location (English)", "الموقع بالإنجليزية")</label>
                     <input class="form-control" asp-for="LocationEn" />
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Location (AR)</label>
+                    <label class="form-label">@T("Location (Arabic)", "الموقع بالعربية")</label>
                     <input class="form-control" asp-for="LocationAr" />
                 </div>
 
                 <div class="col-md-4">
-                    <label class="form-label">Capacity</label>
+                    <label class="form-label">@T("Capacity", "السعة")</label>
                     <input class="form-control" asp-for="Capacity" />
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Walk-ins</label>
+                    <label class="form-label">@T("Walk-ins", "الحضور دون حجز")</label>
                     <div class="form-check mt-2">
                         <input class="form-check-input" asp-for="AllowWalkIn" />
-                        <label class="form-check-label">Allow</label>
+                        <label class="form-check-label" for="AllowWalkIn">@T("Allow walk-ins", "السماح بالحضور دون حجز")</label>
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Category (EN)</label>
+                    <label class="form-label">@T("Category (English)", "التصنيف بالإنجليزية")</label>
                     <input class="form-control" asp-for="CategoryEn" />
                 </div>
 
                 <div class="col-md-12">
-                    <label class="form-label">Description (EN)</label>
+                    <label class="form-label">@T("Description (English)", "الوصف بالإنجليزية")</label>
                     <textarea class="form-control" asp-for="DescriptionEn" rows="3"></textarea>
                 </div>
                 <div class="col-md-12">
-                    <label class="form-label">Description (AR)</label>
+                    <label class="form-label">@T("Description (Arabic)", "الوصف بالعربية")</label>
                     <textarea class="form-control" asp-for="DescriptionAr" rows="3"></textarea>
                 </div>
             </div>
 
             <div class="d-flex justify-content-end gap-2 mt-4">
-                <a class="btn btn-outline-secondary" href="/Admin/Activities">Back</a>
-                <button class="btn btn-primary" type="submit">Save</button>
+                <a class="btn btn-outline-secondary" href="/Admin/Activities">@T("Back", "رجوع")</a>
+                <button class="btn btn-primary" type="submit">@T("Save changes", "حفظ التغييرات")</button>
             </div>
 
             <div class="text-danger small mt-3" asp-validation-summary="All"></div>

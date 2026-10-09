@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using GharsPlatform.Data;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
+using GharsPlatform.Models.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,8 @@ namespace GharsPlatform.Controllers.Admin;
 public class OrganizationsController : Controllers.BaseController
 {
     public OrganizationsController(AppDbContext db) : base(db) { }
+
+    private static bool IsAr() => System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
 
     public async Task<IActionResult> Index(string? status = null)
     {
@@ -66,7 +69,7 @@ public class OrganizationsController : Controllers.BaseController
             }
         }
         await AuditAsync("Create", nameof(Organization), org.Id.ToString(), null, org);
-        TempData["ToastSuccess"] = "Organization created.";
+        TempData["ToastSuccess"] = IsAr() ? "تمت إضافة الجهة." : "Organization created.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -116,7 +119,7 @@ public class OrganizationsController : Controllers.BaseController
         org.UpdatedByUserId = CurrentUserId;
         await Db.SaveChangesAsync();
         await AuditAsync("Update", nameof(Organization), org.Id.ToString(), old, org);
-        TempData["ToastSuccess"] = "Organization updated.";
+        TempData["ToastSuccess"] = IsAr() ? "تم تحديث بيانات الجهة." : "Organization updated.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -132,7 +135,8 @@ public class OrganizationsController : Controllers.BaseController
         org.UpdatedByUserId = CurrentUserId;
         await Db.SaveChangesAsync();
         await AuditAsync("Delete", nameof(Organization), id.ToString(), org, null);
-        TempData["ToastWarning"] = "Organization deleted.";
+        TempData["ToastWarning"] = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar"
+            ? $"تمت إزالة {(string.IsNullOrWhiteSpace(org.NameAr) ? org.NameEn : org.NameAr)} من المنصة." : $"{org.NameEn} was removed from the platform.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -164,7 +168,7 @@ public class OrganizationsController : Controllers.BaseController
         await Db.SaveChangesAsync();
         await AuditAsync("Approve", nameof(Organization), id.ToString(), old, new { org.Status, org.ApprovedAtUtc, org.ApprovedByUserId });
 
-        TempData["ToastSuccess"] = "Organization approved.";
+        TempData["ToastSuccess"] = IsAr() ? "تم اعتماد الجهة." : "Organization approved.";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -190,7 +194,7 @@ public class OrganizationsController : Controllers.BaseController
         await Db.SaveChangesAsync();
         await AuditAsync("Reject", nameof(Organization), id.ToString(), old, new { org.Status, org.Notes });
 
-        TempData["ToastWarning"] = "Organization rejected.";
+        TempData["ToastWarning"] = IsAr() ? "تم رفض الجهة." : "Organization rejected.";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -198,10 +202,10 @@ public class OrganizationsController : Controllers.BaseController
     {
         public int Id { get; set; }
         [Required] public OrganizationType OrganizationType { get; set; } = OrganizationType.Club;
-        [Required, MaxLength(250)] public string NameEn { get; set; } = "";
-        [Required, MaxLength(250)] public string NameAr { get; set; } = "";
-        [Required, EmailAddress, MaxLength(250)] public string Email { get; set; } = "";
-        [Required, MaxLength(50)] public string Phone { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "Enter the name in English.", Ar = "أدخلوا الاسم بالإنجليزية."), MaxLength(250)] public string NameEn { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "Enter the name in Arabic.", Ar = "أدخلوا الاسم بالعربية."), MaxLength(250)] public string NameAr { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "Enter the email address.", Ar = "أدخلوا البريد الإلكتروني."), BilingualEmailAddress(ErrorMessage = "Enter a valid email address.", Ar = "أدخلوا بريداً إلكترونياً صالحاً."), MaxLength(250)] public string Email { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "Enter the phone number.", Ar = "أدخلوا رقم الهاتف."), MaxLength(50)] public string Phone { get; set; } = "";
         [MaxLength(500)] public string? AddressEn { get; set; }
         [MaxLength(500)] public string? AddressAr { get; set; }
         [MaxLength(300)] public string? WebsiteUrl { get; set; }

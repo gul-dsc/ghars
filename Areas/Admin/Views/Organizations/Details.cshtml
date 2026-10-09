@@ -1,21 +1,24 @@
 @model GharsPlatform.Models.Core.Organization
+@using System.Globalization
 @{
-    ViewData["Title"] = "Organization Details";
-    ViewData["PageTitle"] = "Organization Details";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Organization details", "تفاصيل الجهة");
+    ViewData["PageTitle"] = T("Organization details", "تفاصيل الجهة");
 }
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Organizations"><i class="bi bi-arrow-left"></i> Back</a>
+    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Organizations"><i class="bi @(ar ? "bi-arrow-right" : "bi-arrow-left")"></i> @T("Back", "رجوع")</a>
     <div class="d-flex gap-2">
         @if (Model.Status == ApprovalStatus.Pending)
         {
             <form method="post" action="/Admin/Organizations/Approve/@Model.Id">
                 @Html.AntiForgeryToken()
-                <button class="btn btn-sm btn-success" type="submit"><i class="bi bi-check2"></i> Approve</button>
+                <button class="btn btn-sm btn-success" type="submit"><i class="bi bi-check2"></i> @T("Approve", "اعتماد")</button>
             </form>
             <form method="post" action="/Admin/Organizations/Reject/@Model.Id" class="d-flex gap-2">
                 @Html.AntiForgeryToken()
-                <input class="form-control form-control-sm" name="reason" placeholder="Rejection reason (optional)" />
-                <button class="btn btn-sm btn-danger" type="submit"><i class="bi bi-x"></i> Reject</button>
+                <input class="form-control form-control-sm" name="reason" placeholder="@T("Reason for rejection (optional)", "سبب الرفض (اختياري)")" aria-label="@T("Reason for rejection (optional)", "سبب الرفض (اختياري)")" />
+                <button class="btn btn-sm btn-danger" type="submit"><i class="bi bi-x"></i> @T("Reject", "رفض")</button>
             </form>
         }
     </div>
@@ -25,21 +28,21 @@
     <div class="col-lg-7">
         <div class="card border-0 shadow-sm rounded-4">
             <div class="card-body">
-                <h5 class="mb-1">@Model.NameEn</h5>
-                <div class="text-muted">@Model.NameAr</div>
+                <h5 class="mb-1" dir="auto">@Model.NameEn</h5>
+                <div class="text-muted" dir="auto">@Model.NameAr</div>
                 <div class="mt-3 small">
-                    <div><strong>Type:</strong> @Model.OrganizationType</div>
-                    <div><strong>Email:</strong> @Model.Email</div>
-                    <div><strong>Phone:</strong> @Model.Phone</div>
-                    <div><strong>City:</strong> @Model.City</div>
-                    <div><strong>Website:</strong> @Model.WebsiteUrl</div>
-                    <div class="mt-2"><strong>Status:</strong> <span class="badge text-bg-@(Model.Status==ApprovalStatus.Approved?"success":Model.Status==ApprovalStatus.Pending?"warning":"danger")">@Model.Status</span></div>
+                    <div><strong>@T("Type:", "النوع:")</strong> @GharsPlatform.Controllers.Admin.OrganizationText.TypeLabel(Model.OrganizationType)</div>
+                    <div><strong>@T("Email:", "البريد الإلكتروني:")</strong> <span dir="ltr">@Model.Email</span></div>
+                    <div><strong>@T("Phone:", "الهاتف:")</strong> <span dir="ltr">@Model.Phone</span></div>
+                    <div><strong>@T("City:", "المدينة:")</strong> @Model.City</div>
+                    <div><strong>@T("Website:", "الموقع الإلكتروني:")</strong> <span dir="ltr">@Model.WebsiteUrl</span></div>
+                    <div class="mt-2"><strong>@T("Status:", "الحالة:")</strong> <span class="badge @GharsPlatform.Controllers.Admin.OrganizationText.StatusBadgeClass(Model.Status)">@GharsPlatform.Controllers.Admin.OrganizationText.StatusLabel(Model.Status)</span></div>
                 </div>
 
                 @if (!string.IsNullOrWhiteSpace(Model.Notes))
                 {
                     <hr />
-                    <div class="small"><strong>Notes:</strong><br />@Model.Notes</div>
+                    <div class="small"><strong>@T("Notes:", "ملاحظات:")</strong><br />@Model.Notes</div>
                 }
             </div>
         </div>
@@ -48,10 +51,10 @@
     <div class="col-lg-5">
         <div class="card border-0 shadow-sm rounded-4">
             <div class="card-body">
-                <h6 class="fw-semibold"><i class="bi bi-person-lines-fill me-2"></i>Contacts</h6>
+                <h6 class="fw-semibold"><i class="bi bi-person-lines-fill me-2"></i>@T("Contacts", "جهات الاتصال")</h6>
                 @if (Model.Contacts == null || !Model.Contacts.Any())
                 {
-                    <div class="text-muted">No contacts.</div>
+                    <div class="text-muted">@T("No contacts.", "لا توجد جهات اتصال.")</div>
                 }
                 else
                 {
@@ -59,18 +62,18 @@
                         @foreach (var c in Model.Contacts.OrderByDescending(x => x.IsPrimary))
                         {
                             <li class="list-group-item">
-                                <div class="fw-semibold">@c.FullName @(c.IsPrimary ? "(Primary)" : "")</div>
-                                <div class="small text-muted">@c.Email • @c.Phone</div>
+                                <div class="fw-semibold">@c.FullName @(c.IsPrimary ? T("(Primary)", "(رئيسية)") : "")</div>
+                                <div class="small text-muted"><span dir="ltr">@c.Email</span> • <span dir="ltr">@c.Phone</span></div>
                             </li>
                         }
                     </ul>
                 }
 
                 <hr />
-                <h6 class="fw-semibold"><i class="bi bi-file-earmark me-2"></i>Documents</h6>
+                <h6 class="fw-semibold"><i class="bi bi-file-earmark me-2"></i>@T("Documents", "المستندات")</h6>
                 @if (Model.Documents == null || !Model.Documents.Any())
                 {
-                    <div class="text-muted">No documents.</div>
+                    <div class="text-muted">@T("No documents.", "لا توجد مستندات.")</div>
                 }
                 else
                 {
@@ -82,7 +85,7 @@
                                     <div class="fw-semibold">@d.DocumentType</div>
                                     <div class="small text-muted">@d.OriginalFileName</div>
                                 </div>
-                                <a class="btn btn-sm btn-outline-primary" href="/protected-files/organization/@d.Id" target="_blank" rel="noopener noreferrer">Open</a>
+                                <a class="btn btn-sm btn-outline-primary" href="/protected-files/organization/@d.Id" target="_blank" rel="noopener noreferrer">@T("Open", "فتح")</a>
                             </li>
                         }
                     </ul>

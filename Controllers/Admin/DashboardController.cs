@@ -172,14 +172,38 @@ public class DashboardController : Controller
         ViewBag.ChannelSubmissionsAwaitingReview = await _db.GalleryItems
             .CountAsync(x => x.ApprovalStatus == ChannelApprovalStatus.SubmittedForApproval);
 
+        // Display language for the labels this action prepares. Figures and queries do not depend on it.
+        var isAr = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+        string EnumLabel(string name) => name switch
+        {
+            "Lecture" => isAr ? "محاضرة" : "Lecture",
+            "Workshop" => isAr ? "ورشة عمل" : "Workshop",
+            "TrainingProgram" => isAr ? "تدريب" : "Training",
+            "Course" => isAr ? "دورة" : "Course",
+            "Event" => isAr ? "فعالية" : "Event",
+            "Activity" => isAr ? "نشاط" : "Activity",
+            "Players" => isAr ? "اللاعبون" : "Players",
+            "Coaches" => isAr ? "المدربون" : "Coaches",
+            "Administrators" => isAr ? "الإداريون" : "Administrators",
+            "Parents" => isAr ? "أولياء الأمور" : "Parents",
+            "Others" => isAr ? "أخرى" : "Others",
+            "Image" => isAr ? "صورة" : "Image",
+            "Video" => isAr ? "فيديو" : "Video",
+            "Pdf" => isAr ? "ملف PDF" : "PDF",
+            "AwarenessVideo" => isAr ? "فيديو توعوي" : "Awareness video",
+            "EducationalBooklet" => isAr ? "كتيّب تثقيفي" : "Educational booklet",
+            _ => name
+        };
+        string Pick(string? en, string? ar) => isAr && !string.IsNullOrWhiteSpace(ar) ? ar! : (en ?? ar ?? "");
+
         ViewBag.IsSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
         ViewBag.ActiveSeason = activeSeason;
         // What the header names. Follows the filter, so the season on screen is the season measured.
         ViewBag.SelectedSeason = selectedSeasonId.HasValue ? seasons.FirstOrDefault(x => x.Id == selectedSeasonId.Value) : null;
         ViewBag.Filters = new { seasonId = selectedSeasonId, clubId, partnerId, activityType, from, to, kpiCategory };
-        ViewBag.Seasons = seasons.Select(x => new SelectListItem(x.TitleEn, x.Id.ToString(), selectedSeasonId == x.Id)).ToList();
-        ViewBag.Clubs = clubs.Select(x => new SelectListItem(x.NameEn, x.Id.ToString(), clubId == x.Id)).ToList();
-        ViewBag.Partners = partners.Select(x => new SelectListItem(x.NameEn, x.Id.ToString(), partnerId == x.Id)).ToList();
+        ViewBag.Seasons = seasons.Select(x => new SelectListItem(Pick(x.TitleEn, x.TitleAr), x.Id.ToString(), selectedSeasonId == x.Id)).ToList();
+        ViewBag.Clubs = clubs.Select(x => new SelectListItem(Pick(x.NameEn, x.NameAr), x.Id.ToString(), clubId == x.Id)).ToList();
+        ViewBag.Partners = partners.Select(x => new SelectListItem(Pick(x.NameEn, x.NameAr), x.Id.ToString(), partnerId == x.Id)).ToList();
 
         ViewBag.TotalClubs = totalClubs;
         ViewBag.TotalPartners = totalPartners;
@@ -191,7 +215,7 @@ public class DashboardController : Controller
         ViewBag.SatisfactionScore = satisfactionScore;
         ViewBag.ProgramCoverage = programCoverage;
         ViewBag.ParticipationGrowth = growth;
-        ViewBag.GenderDistribution = "Not captured";
+        ViewBag.GenderDistribution = isAr ? "غير مسجل" : "Not captured";
         ViewBag.ActiveUsers = activeUsers;
         ViewBag.UpcomingEvents = upcomingEvents;
         ViewBag.CompletedActivities = completedActivities;
@@ -246,14 +270,22 @@ public class DashboardController : Controller
             .Select(g => new { g.Key.Year, g.Key.Month, Count = g.Count() })
             .ToListAsync()).Select(x => (x.Year, x.Month, x.Count)));
 
-        var bookingStatus = await bookings.GroupBy(x => x.Status).Select(g => new { Label = g.Key.ToString(), Value = g.Count() }).ToListAsync();
-        var programType = await activities.GroupBy(x => x.Type).Select(g => new { Label = g.Key.ToString(), Value = g.Count() }).ToListAsync();
-        var agendaCategory = await agenda.GroupBy(x => x.Category).Select(g => new { Label = g.Key.ToString(), Value = g.Sum(x => x.NumberOfParticipants) }).ToListAsync();
-        var mediaDistribution = await _db.MediaItems.GroupBy(x => x.MediaType).Select(g => new { Label = g.Key.ToString(), Value = g.Count() }).ToListAsync();
-        var libraryDistribution = await library.GroupBy(x => x.ContentType).Select(g => new { Label = g.Key.ToString(), Value = g.Count() }).ToListAsync();
+        // Grouped in SQL, labelled in memory: the bilingual label is not translatable to SQL, and the
+        // Pending/PendingPartnerApproval alias is one value so it already groups once.
+        var bookingStatus = (await bookings.GroupBy(x => x.Status).Select(g => new { Status = g.Key, Value = g.Count() }).ToListAsync())
+            .OrderBy(x => BookingStatusText.Distinct.ToList().IndexOf(x.Status))
+            .Select(x => new { Label = BookingStatusText.Label(x.Status), Value = x.Value })
+            .ToList();
+        var programType = (await activities.GroupBy(x => x.Type).Select(g => new { Label = g.Key.ToString(), Value = g.Count() }).ToListAsync())
+            .Select(x => new { Label = EnumLabel(x.Label), x.Value }).ToList();
+        var agendaCategory = (await agenda.GroupBy(x => x.Category).Select(g => new { Label = g.Key.ToString(), Value = g.Sum(x => x.NumberOfParticipants) }).ToListAsync())
+            .Select(x => new { Label = EnumLabel(x.Label), x.Value }).ToList();
+        var mediaDistribution = (await _db.MediaItems.GroupBy(x => x.MediaType).Select(g => new { Label = g.Key.ToString(), Value = g.Count() }).ToListAsync())
+            .Select(x => new { Label = EnumLabel(x.Label), x.Value }).ToList();
+        var libraryDistribution = (await library.GroupBy(x => x.ContentType).Select(g => new { Label = g.Key.ToString(), Value = g.Count() }).ToListAsync())
+            .Select(x => new { Label = EnumLabel(x.Label), x.Value }).ToList();
 
         // Targets and labels come from the central Ghars KPI catalog (never hardcoded per view).
-        var isAr = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
         string KpiLabel(KpiDefinition k) => isAr ? k.NameAr : k.NameEn;
         var kpiTargets = new[]
         {
@@ -274,7 +306,7 @@ public class DashboardController : Controller
         // returned in whatever order the server chose, so the same data could rank differently between
         // two refreshes.
         var clubComparison = await kpis.Where(x => x.Organization != null)
-            .Select(x => new { Club = x.Organization!.NameEn, Score = (x.PlayerParticipationRate + x.AttendanceRate + x.EthicalValuesAdherenceRate + x.HealthyDietaryHabitsRate + x.SatisfactionRate) / 5 })
+            .Select(x => new { Club = isAr && x.Organization!.NameAr != "" ? x.Organization!.NameAr : x.Organization!.NameEn, Score = (x.PlayerParticipationRate + x.AttendanceRate + x.EthicalValuesAdherenceRate + x.HealthyDietaryHabitsRate + x.SatisfactionRate) / 5 })
             .OrderByDescending(x => x.Score)
             .ThenBy(x => x.Club)
             .Take(7)
@@ -288,14 +320,30 @@ public class DashboardController : Controller
             .Take(8)
             .ToListAsync();
 
-        var recentActivity = await bookings.OrderByDescending(x => x.CreatedAtUtc).Take(6)
-            .Select(x => new { Title = x.Activity != null ? x.Activity.TitleEn : "Booking", Club = x.Organization != null ? x.Organization.NameEn : "Club", Status = x.Status.ToString(), Date = x.CreatedAtUtc.ToString("yyyy-MM-dd") })
-            .ToListAsync();
+        var recentActivity = (await bookings.OrderByDescending(x => x.CreatedAtUtc).Take(6)
+            .Select(x => new { TitleEn = x.Activity != null ? x.Activity.TitleEn : null, TitleAr = x.Activity != null ? x.Activity.TitleAr : null, ClubEn = x.Organization != null ? x.Organization.NameEn : null, ClubAr = x.Organization != null ? x.Organization.NameAr : null, x.Status, Date = x.CreatedAtUtc.ToString("yyyy-MM-dd") })
+            .ToListAsync())
+            .Select(x => new
+            {
+                Title = x.TitleEn == null && x.TitleAr == null ? (isAr ? "حجز" : "Booking") : Pick(x.TitleEn, x.TitleAr),
+                Club = x.ClubEn == null && x.ClubAr == null ? (isAr ? "نادٍ" : "Club") : Pick(x.ClubEn, x.ClubAr),
+                Status = BookingStatusText.Label(x.Status),
+                x.Date
+            })
+            .ToList();
 
-        var upcomingList = await activities.Where(x => x.Status == ActivityStatus.Published && x.StartDateTime >= now)
+        var upcomingList = (await activities.Where(x => x.Status == ActivityStatus.Published && x.StartDateTime >= now)
             .OrderBy(x => x.StartDateTime).Take(6)
-            .Select(x => new { Title = x.TitleEn, Entity = x.PartnerOrganization != null ? x.PartnerOrganization.NameEn : "Ghars", Type = x.Type.ToString(), Date = x.StartDateTime.ToString("yyyy-MM-dd HH:mm") })
-            .ToListAsync();
+            .Select(x => new { x.TitleEn, x.TitleAr, EntityEn = x.PartnerOrganization != null ? x.PartnerOrganization.NameEn : null, EntityAr = x.PartnerOrganization != null ? x.PartnerOrganization.NameAr : null, Type = x.Type.ToString(), Date = x.StartDateTime.ToString("yyyy-MM-dd HH:mm") })
+            .ToListAsync())
+            .Select(x => new
+            {
+                Title = Pick(x.TitleEn, x.TitleAr),
+                Entity = x.EntityEn == null && x.EntityAr == null ? (isAr ? "غرس" : "Ghars") : Pick(x.EntityEn, x.EntityAr),
+                Type = EnumLabel(x.Type),
+                x.Date
+            })
+            .ToList();
 
         var approvals = new[]
         {
@@ -320,6 +368,8 @@ public class DashboardController : Controller
             .Select(g => new { Club = g.Key.NameEn, Type = g.Key.ActivityType.ToString(), Count = g.Count() })
             .Take(12)
             .ToListAsync();
+        // Type label only; the club name is the grouping key and stays as stored (English).
+        var heatmapView = heatmap.Select(x => new { x.Club, Type = EnumLabel(x.Type), x.Count }).ToList();
 
         ViewBag.MonthLabelsJson = JsonSerializer.Serialize(monthLabels);
         ViewBag.BookingTrendJson = JsonSerializer.Serialize(bookingTrend);
@@ -336,7 +386,7 @@ public class DashboardController : Controller
         ViewBag.RecentActivity = recentActivity;
         ViewBag.UpcomingList = upcomingList;
         ViewBag.Approvals = approvals;
-        ViewBag.Heatmap = heatmap;
+        ViewBag.Heatmap = heatmapView;
 
         // The dashboard is bilingual, so the sentences it prints have to be. These were English-only,
         // which left the Arabic dashboard with an English panel. The figures are unchanged; only the
@@ -364,7 +414,7 @@ public class DashboardController : Controller
         if (!avgPhysicalActivity.HasValue)
         {
             insights.Add(isAr
-                ? "لم تُبلّغ الأندية عن الالتزام بالنشاط البدني لهذا التحديد."
+                ? "لم تُبلّغ الأندية عن نسبة الالتزام بالنشاط البدني ضمن التحديد الحالي."
                 : "Physical-activity compliance has not been reported by clubs for this selection.");
         }
         insights.Add(pendingApprovals > 10
@@ -373,13 +423,13 @@ public class DashboardController : Controller
         if (clubComparison.Any())
         {
             insights.Add(isAr
-                ? $"{clubComparison.First().Club} يتصدر حالياً أداء المؤشرات بين الأندية."
+                ? $"يتصدر {clubComparison.First().Club} حالياً أداء مؤشرات الأداء بين الأندية."
                 : $"{clubComparison.First().Club} currently leads club KPI performance.");
         }
         if (upcomingEvents > 0)
         {
             insights.Add(isAr
-                ? $"{upcomingEvents} من الأنشطة المنشورة القادمة مجدولة."
+                ? $"عدد الأنشطة المنشورة القادمة المجدولة: {upcomingEvents}."
                 : $"{upcomingEvents} upcoming published activities are scheduled.");
         }
         ViewBag.Insights = insights;

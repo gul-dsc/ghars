@@ -1,11 +1,17 @@
 @model List<GharsPlatform.Models.Core.NewsItem>
 @{
-    ViewData["Title"] = "News Ticker";
-    ViewData["PageTitle"] = "News Ticker";
+    var ar = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("News", "الأخبار");
+    ViewData["PageTitle"] = ViewData["Title"];
 }
+<div class="alert alert-info small">
+    <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+    @T("News items are saved here but are not currently displayed anywhere on the public site.", "تُحفظ الأخبار هنا لكنها غير معروضة حالياً في أي مكان على الموقع العام.")
+</div>
 <div class="d-flex align-items-center justify-content-between mb-3">
-    <div class="fw-semibold">News Items</div>
-    <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/News/Create"><i class="bi bi-plus-lg"></i> Create</a>
+    <div class="fw-semibold">@T("News items", "الأخبار")</div>
+    <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/News/Create"><i class="bi bi-plus-lg"></i> @T("Add news item", "إضافة خبر")</a>
 </div>
 
 <div class="card border-0 shadow-sm rounded-4">
@@ -13,11 +19,11 @@
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
             <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Active</th>
-                <th>Priority</th>
-                <th></th>
+                <th>@T("ID", "الرقم")</th>
+                <th>@T("Title", "العنوان")</th>
+                <th>@T("Active", "نشط")</th>
+                <th>@T("Priority", "الأولوية")</th>
+                <th><span class="visually-hidden">@T("Actions", "الإجراءات")</span></th>
             </tr>
             </thead>
             <tbody>
@@ -25,13 +31,13 @@
             {
                 <tr>
                     <td>@n.Id</td>
-                    <td class="fw-semibold">@n.TitleEn</td>
-                    <td>@(n.IsActive ? "Yes" : "No")</td>
+                    <td class="fw-semibold">@(ar && !string.IsNullOrWhiteSpace(n.TitleAr) ? n.TitleAr : n.TitleEn)</td>
+                    <td>@(n.IsActive ? T("Yes", "نعم") : T("No", "لا"))</td>
                     <td>@n.Priority</td>
                     <td class="text-end">
                         <form method="post" action="/Admin/News/Toggle/@n.Id">
                             @Html.AntiForgeryToken()
-                            <button class="btn btn-sm btn-outline-secondary" type="submit">Toggle</button>
+                            <button class="btn btn-sm btn-outline-secondary" type="submit">@(n.IsActive ? T("Deactivate", "إيقاف") : T("Activate", "تفعيل"))</button>
                         </form>
                     </td>
                 </tr>

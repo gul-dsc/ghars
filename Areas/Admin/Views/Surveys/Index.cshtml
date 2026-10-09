@@ -4,7 +4,7 @@
 @{
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string e, string a) => ar ? a : e;
-    ViewData["Title"] = T("Ghars Surveys", "استبيانات غرس");
+    ViewData["Title"] = T("Ghars surveys", "استبيانات غرس");
     ViewData["PageTitle"] = ViewData["Title"];
 
     var counts = ViewBag.ResponseCounts as Dictionary<int, int> ?? new();
@@ -32,7 +32,7 @@
     </div>
 </div>
 
-<h2 class="h6 text-uppercase text-muted mb-2">@T("Official Participant Satisfaction Survey", "استبيان قياس رضا المشاركين الرسمي")</h2>
+<h2 class="h6 text-uppercase text-muted mb-2">@T("Official participant satisfaction survey", "استبيان قياس رضا المشاركين الرسمي")</h2>
 <p class="text-muted small">@T("One per sports season. Its 1-5 rating answers are the source of the official satisfaction percentage.", "استبيان واحد لكل موسم رياضي. تُعد إجابات التقييم من ١ إلى ٥ مصدر النسبة الرسمية للرضا.")</p>
 
 <div class="card border-0 shadow-sm rounded-4 mb-4">
@@ -43,7 +43,7 @@
                     <th>@T("Title", "العنوان")</th>
                     <th>@T("Season", "الموسم")</th>
                     <th>@T("Questions", "الأسئلة")</th>
-                    <th>@T("Responses", "الاستجابات")</th>
+                    <th>@T("Responses", "الإجابات")</th>
                     <th>@T("Status", "الحالة")</th>
                     <th class="text-end">@T("Actions", "إجراءات")</th>
                 </tr>
@@ -101,7 +101,7 @@
                     <th>@T("Title", "العنوان")</th>
                     <th>@T("Activity", "النشاط")</th>
                     <th>@T("Questions", "الأسئلة")</th>
-                    <th>@T("Responses", "الاستجابات")</th>
+                    <th>@T("Responses", "الإجابات")</th>
                     <th>@T("Status", "الحالة")</th>
                     <th class="text-end">@T("Actions", "إجراءات")</th>
                 </tr>

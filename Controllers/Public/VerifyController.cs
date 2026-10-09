@@ -16,15 +16,22 @@ public class VerifyController : Controller
     [HttpGet("/verify/certificate/{token}")]
     public async Task<IActionResult> Certificate(string token)
     {
+        // An unknown or empty token still answers 404, but with a readable bilingual page.
         if (string.IsNullOrWhiteSpace(token))
-            return NotFound();
+            return NotVerified();
 
         var cert = await _db.Certificates
             .Include(x => x.Activity)
             .FirstOrDefaultAsync(x => x.VerifyToken == token);
 
-        if (cert is null) return NotFound();
+        if (cert is null) return NotVerified();
 
         return View(cert);
+    }
+
+    private IActionResult NotVerified()
+    {
+        Response.StatusCode = StatusCodes.Status404NotFound;
+        return View("NotVerified");
     }
 }

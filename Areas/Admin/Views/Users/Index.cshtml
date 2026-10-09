@@ -1,19 +1,22 @@
 @model List<GharsPlatform.Controllers.Admin.UsersController.UserRowVm>
+@using System.Globalization
 @{
-    ViewData["Title"] = "Users";
-    ViewData["PageTitle"] = "Users";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Users", "المستخدمون");
+    ViewData["PageTitle"] = T("Users", "المستخدمون");
 }
 <div class="d-flex align-items-center justify-content-between mb-3">
-    <div class="fw-semibold">Users</div>
+    <div class="fw-semibold">@T("Users", "المستخدمون")</div>
     <div class="d-flex flex-wrap gap-2">
         @if (User.IsInRole("Super Admin"))
         {
             <form id="bulkSend" method="post" asp-area="Admin" asp-controller="Users" asp-action="SendCredentialsBulk" class="d-inline"
-                  data-confirm="Send login details to the selected users? Each one gets a NEW password by email and their current password stops working.">
+                  data-confirm="@T("Email login details to the selected users? Each one is given a new password by email, and their current password stops working.", "إرسال بيانات الدخول إلى المستخدمين المحددين؟ ستُعيَّن لكل منهم كلمة مرور جديدة تُرسل بالبريد الإلكتروني، وتتوقف كلمة المرور الحالية عن العمل.")" data-confirm-ok="@T("Send login details", "إرسال بيانات الدخول")">
                 @Html.AntiForgeryToken()
-                <button class="btn btn-sm btn-outline-success" type="submit"><i class="bi bi-envelope"></i> Email login details to selected</button>
+                <button class="btn btn-sm btn-outline-success" type="submit"><i class="bi bi-envelope"></i> @T("Email login details to selected", "إرسال بيانات الدخول للمحددين")</button>
             </form>
-            <a class="btn btn-sm btn-primary super-admin-action" asp-area="Admin" asp-controller="Users" asp-action="Create"><i class="bi bi-plus-lg"></i> Create User</a>
+            <a class="btn btn-sm btn-primary super-admin-action" asp-area="Admin" asp-controller="Users" asp-action="Create"><i class="bi bi-plus-lg"></i> @T("Create user", "إنشاء مستخدم")</a>
         }
     </div>
 </div>
@@ -21,62 +24,72 @@
 @if (placeholders.Count > 0 && User.IsInRole("Super Admin"))
 {
     <div class="alert alert-warning d-flex flex-wrap align-items-center justify-content-between gap-2">
-        <div><strong>@placeholders.Count placeholder organization accounts</strong> (club-… / partner-…) were created before the real users were nominated.</div>
+        <div>
+            <div><strong>@T($"{placeholders.Count} unused setup accounts", $"{placeholders.Count} حسابات إعداد غير مستخدمة")</strong> @T("(club-… / partner-…) were created for each organization before its real users were nominated.", "(club-… / partner-…) أُنشئت لكل جهة قبل ترشيح مستخدميها الفعليين.")</div>
+            <details class="small mt-1">
+                <summary>@T("Show the accounts", "عرض الحسابات")</summary>
+                <ul class="mb-0 mt-1">
+                    @foreach (var email in placeholders) { <li dir="ltr" class="text-start">@email</li> }
+                </ul>
+            </details>
+        </div>
         <form method="post" asp-area="Admin" asp-controller="Users" asp-action="RemovePlaceholderAccounts" class="d-inline"
-              data-confirm="Delete these @placeholders.Count placeholder accounts? @string.Join(", ", placeholders.Take(40))@(placeholders.Count > 40 ? " …" : ""). Real users, admins and democlub/demoentity are kept." data-confirm-ok="Delete them">
+              data-confirm="@T($"Delete these {placeholders.Count} unused setup accounts and their organization links? Admin accounts and all other users are kept. This can't be undone.", $"حذف حسابات الإعداد غير المستخدمة ({placeholders.Count}) وروابطها بالجهات؟ تبقى حسابات المشرفين وجميع المستخدمين الآخرين. لا يمكن التراجع عن ذلك.")" data-confirm-ok="@T("Delete them", "حذفها")">
             @Html.AntiForgeryToken()
-            <button class="btn btn-sm btn-danger" type="submit"><i class="bi bi-trash"></i> Remove placeholder accounts</button>
+            <button class="btn btn-sm btn-danger" type="submit"><i class="bi bi-trash"></i> @T("Remove unused setup accounts", "حذف حسابات الإعداد غير المستخدمة")</button>
         </form>
     </div>
 }
-<div class="small text-muted mb-2">Emailing login details sets a new random password for that user and sends it with their username. Test (.local) and deactivated accounts are skipped.</div>
+<div class="small text-muted mb-2">@T("Emailing login details sets a new random password for that user and sends it with their username. Accounts without a working email address (test accounts) and deactivated accounts are skipped.", "يؤدي إرسال بيانات الدخول إلى تعيين كلمة مرور عشوائية جديدة للمستخدم وإرسالها مع اسم المستخدم. يتم تخطي الحسابات التي ليس لها بريد إلكتروني صالح (حسابات الاختبار) والحسابات المعطّلة.")</div>
 <div class="card border-0 shadow-sm rounded-4">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
-            <thead class="table-light"><tr><th><input type="checkbox" class="form-check-input" aria-label="Select all" onclick="document.querySelectorAll('.user-pick').forEach(c => c.checked = this.checked)" /></th><th>Name</th><th>Email</th><th>Roles</th><th>Status</th><th>Login details</th><th></th></tr></thead>
+            <thead class="table-light"><tr><th><input type="checkbox" class="form-check-input" aria-label="@T("Select all", "تحديد الكل")" onclick="document.querySelectorAll('.user-pick').forEach(c => c.checked = this.checked)" /></th><th>@T("Name", "الاسم")</th><th>@T("Email", "البريد الإلكتروني")</th><th>@T("Roles", "الأدوار")</th><th>@T("Status", "الحالة")</th><th>@T("Login details", "بيانات الدخول")</th><th><span class="visually-hidden">@T("Actions", "الإجراءات")</span></th></tr></thead>
             <tbody>
             @foreach (var u in Model)
             {
                 <tr>
-                    <td><input type="checkbox" class="form-check-input user-pick" name="ids" value="@u.Id" form="bulkSend" aria-label="Select @u.Email" /></td>
+                    <td><input type="checkbox" class="form-check-input user-pick" name="ids" value="@u.Id" form="bulkSend" aria-label="@T($"Select {u.Email}", $"تحديد {u.Email}")" /></td>
                     <td class="fw-semibold">@u.FullName</td>
-                    <td>@u.Email</td>
-                    <td>@u.Roles</td>
-                    <td><span class="badge text-bg-@(u.IsLocked ? "danger" : "success")">@(u.IsLocked ? "Inactive" : "Active")</span></td>
+                    <td><span dir="ltr">@u.Email</span></td>
+                    <td>@GharsPlatform.Controllers.Admin.OrganizationText.RoleLabels(u.Roles)</td>
+                    <td><span class="badge text-bg-@(u.IsLocked ? "danger" : "success")">@(u.IsLocked ? T("Inactive", "معطّل") : T("Active", "نشط"))</span></td>
                     <td class="small">
                         @if (u.LoginSentAtUtc is DateTime sentUtc)
                         {
                             // Shown in UAE time (UTC+4, no daylight saving).
                             var sentLocal = sentUtc.AddHours(4);
-                            <span class="badge text-bg-success-subtle text-success-emphasis border border-success-subtle" title="@(u.LoginSentBy != null ? "Sent by " + u.LoginSentBy : "")">
-                                <i class="bi bi-envelope-check"></i> Sent
+                            <span class="badge text-bg-success-subtle text-success-emphasis border border-success-subtle" title="@(u.LoginSentBy != null ? T("Sent by ", "أرسلها ") + u.LoginSentBy : "")">
+                                <i class="bi bi-envelope-check"></i> @T("Sent", "أُرسلت")
                             </span>
-                            <div class="text-muted mt-1">@sentLocal.ToString("dd MMM yyyy, HH:mm")@(u.LoginSentCount > 1 ? $" · {u.LoginSentCount} times" : "")</div>
+                            <div class="text-muted mt-1"><span dir="ltr">@sentLocal.ToString(ar ? "dd/MM/yyyy, HH:mm" : "dd MMM yyyy, HH:mm", CultureInfo.InvariantCulture)</span>@(u.LoginSentCount > 1 ? T($" · {u.LoginSentCount} times", $" · عدد مرات الإرسال: {u.LoginSentCount}") : "")</div>
                         }
                         else
                         {
-                            <span class="badge text-bg-light text-secondary border">Not sent</span>
+                            <span class="badge text-bg-light text-secondary border">@T("Not sent", "لم تُرسل")</span>
                         }
                     </td>
                     <td class="text-end">
                         @if (User.IsInRole("Super Admin"))
                         {
                             <form method="post" asp-area="Admin" asp-controller="Users" asp-action="SendCredentials" asp-route-id="@u.Id" class="d-inline"
-                                  data-confirm="@(u.LoginSentAtUtc is DateTime prev ? $"Login details were already sent to {u.Email} on {prev.AddHours(4):dd MMM yyyy, HH:mm}. Send again? " : $"Email login details to {u.Email}? ")A new password is set and the current one stops working.">
+                                  data-confirm="@(u.LoginSentAtUtc is DateTime prev ? T($"Login details were already sent to {u.Email} on {prev.AddHours(4).ToString("dd MMM yyyy, HH:mm", CultureInfo.InvariantCulture)}. Send again? A new password is set and the current one stops working.", $"سبق إرسال بيانات الدخول إلى {u.Email} بتاريخ {prev.AddHours(4).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)}. إعادة الإرسال؟ ستُعيَّن كلمة مرور جديدة وتتوقف كلمة المرور الحالية عن العمل.") : T($"Email login details to {u.Email}? A new password is set and the current one stops working.", $"إرسال بيانات الدخول إلى {u.Email}؟ ستُعيَّن كلمة مرور جديدة وتتوقف كلمة المرور الحالية عن العمل."))" data-confirm-ok="@T("Send login details", "إرسال بيانات الدخول")">
                                 @Html.AntiForgeryToken()
-                                <button class="btn btn-sm btn-outline-success" type="submit" title="Email login details"><i class="bi bi-envelope"></i> Send login</button>
+                                <button class="btn btn-sm btn-outline-success" type="submit" title="@T("Email login details", "إرسال بيانات الدخول بالبريد")"><i class="bi bi-envelope"></i> @T("Send login", "إرسال بيانات الدخول")</button>
                             </form>
-                            <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Users" asp-action="Edit" asp-route-id="@u.Id">Edit</a>
-                            <form method="post" asp-area="Admin" asp-controller="Users" asp-action="Deactivate" asp-route-id="@u.Id" class="d-inline" data-confirm="Deactivate @u.Email? They will no longer be able to sign in." data-confirm-ok="Deactivate">
+                            <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Users" asp-action="Edit" asp-route-id="@u.Id">@T("Edit", "تعديل")</a>
+                            <form method="post" asp-area="Admin" asp-controller="Users" asp-action="Deactivate" asp-route-id="@u.Id" class="d-inline" data-confirm="@T($"Deactivate {u.Email}? They will no longer be able to sign in. The account and its records are kept.", $"تعطيل {u.Email}؟ لن يتمكن من تسجيل الدخول بعد ذلك، مع الإبقاء على الحساب وسجلاته.")" data-confirm-ok="@T("Deactivate", "تعطيل")">
                                 @Html.AntiForgeryToken()
-                                <button class="btn btn-sm btn-outline-warning" type="submit">Deactivate</button>
+                                <button class="btn btn-sm btn-outline-warning" type="submit">@T("Deactivate", "تعطيل")</button>
                             </form>
                         }
                         @if (User.IsInRole("Super Admin"))
                         {
-                            <form method="post" asp-area="Admin" asp-controller="Users" asp-action="Delete" asp-route-id="@u.Id" class="d-inline" data-confirm="Delete this user?">
+                            <form method="post" asp-area="Admin" asp-controller="Users" asp-action="Delete" asp-route-id="@u.Id" class="d-inline"
+                                  data-confirm="@T($"Permanently delete {u.Email}? Their account and organization links are removed; bookings, activities and other records they created are kept. This can't be undone. To block sign-in but keep the account, use Deactivate.", $"حذف {u.Email} نهائياً؟ سيُحذف الحساب وروابطه بالجهات، وتبقى الحجوزات والأنشطة والسجلات الأخرى التي أنشأها. لا يمكن التراجع عن ذلك. لمنع تسجيل الدخول مع الإبقاء على الحساب، استخدم التعطيل.")"
+                                  data-confirm-ok="@T("Delete user", "حذف المستخدم")">
                                 @Html.AntiForgeryToken()
-                                <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                                <button class="btn btn-sm btn-outline-danger" type="submit">@T("Delete", "حذف")</button>
                             </form>
                         }
                     </td>

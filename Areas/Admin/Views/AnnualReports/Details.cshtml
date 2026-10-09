@@ -10,7 +10,7 @@
     var people = ViewBag.People as Dictionary<string, string> ?? new();
     var history = ViewBag.History as List<OfferingHistoryEntry> ?? new();
     var canReview = AnnualReportWorkflow.DscCanReview(Model.Status);
-    ViewData["Title"] = T("Annual Report Review", "مراجعة التقرير السنوي");
+    ViewData["Title"] = T("Annual report review", "مراجعة التقرير السنوي");
     ViewData["PageTitle"] = ViewData["Title"];
 
     string Person(string? id) => string.IsNullOrWhiteSpace(id)
@@ -20,7 +20,7 @@
 
 <nav aria-label="@T("Breadcrumb", "مسار التنقل")">
     <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="/Admin/AnnualReports">@T("Ghars Annual Reports", "التقارير السنوية لغرس")</a></li>
+        <li class="breadcrumb-item"><a href="/Admin/AnnualReports">@T("Ghars annual reports", "التقارير السنوية لغرس")</a></li>
         <li class="breadcrumb-item active" aria-current="page">@N(Model.Organization)</li>
     </ol>
 </nav>

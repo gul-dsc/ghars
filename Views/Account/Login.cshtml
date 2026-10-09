@@ -3,7 +3,7 @@
 @{
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string e, string a) => ar ? a : e;
-    ViewData["Title"] = T("Login", "تسجيل الدخول");
+    ViewData["Title"] = T("Sign in", "تسجيل الدخول");
 }
 @* The form has no action attribute, so it posts back to the current URL including its query string.
    That is what carries ?returnUrl= through to the POST — for example when a visitor is sent here from
@@ -32,7 +32,7 @@
                         </div>
                         <a class="small" asp-controller="Account" asp-action="ForgotPassword">@T("Forgot password?", "نسيت كلمة المرور؟")</a>
                     </div>
-                    <button class="btn btn-primary w-100" type="submit">@T("Login", "دخول")</button>
+                    <button class="btn btn-primary w-100" type="submit">@T("Sign in", "تسجيل الدخول")</button>
                     <div class="text-danger small mt-3" asp-validation-summary="All"></div>
                 </form>
             </div>

@@ -15,6 +15,8 @@ namespace GharsPlatform.Controllers.Admin;
 [Authorize(Roles = $"{RoleNames.SuperAdmin},{RoleNames.DscAdmin}")]
 public class BookingsController : Controllers.BaseController
 {
+    private static bool IsAr() => System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+
     private readonly IHubContext<NotificationsHub> _hub;
 
     public BookingsController(AppDbContext db, IHubContext<NotificationsHub> hub) : base(db)
@@ -72,7 +74,9 @@ public class BookingsController : Controllers.BaseController
         if (booking is null) return NotFound();
         if (booking.Status != BookingStatus.Pending)
         {
-            TempData["ToastWarning"] = "This booking is not pending.";
+            TempData["ToastWarning"] = IsAr()
+                ? $"يمكن اعتماد الحجز أو رفضه هنا فقط عندما يكون بانتظار رد الجهة المنفذة. حالته الآن: {BookingStatusText.Label(booking.Status)}."
+                : $"Only a booking awaiting the entity's response can be approved or rejected here. Its status is now: {BookingStatusText.Label(booking.Status)}.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -101,16 +105,16 @@ public class BookingsController : Controllers.BaseController
 
         // Persist notification + broadcast (target org)
         await CreateAndDispatchNotificationAsync(
-            titleEn: "Booking Approved",
-            titleAr: "تمت الموافقة على الحجز",
-            messageEn: $"Your booking request for '{booking.Activity?.TitleEn}' has been approved.",
-            messageAr: $"تمت الموافقة على طلب الحجز للنشاط '{booking.Activity?.TitleAr}'.",
+            titleEn: "Booking approved by DSC",
+            titleAr: "اعتمد المجلس طلب الحجز",
+            messageEn: $"Your booking request for '{NotificationTitleEn(booking)}' has been approved by DSC.",
+            messageAr: $"اعتمد المجلس طلب الحجز الخاص بكم للبرنامج '{NotificationTitleAr(booking)}'.",
             targetType: NotificationTargetType.Organization,
             targetOrganizationId: booking.OrganizationId,
             linkUrl: Url.Action("Details", "Bookings", new { area = "Admin", id = booking.Id })
         );
 
-        TempData["ToastSuccess"] = "Booking approved.";
+        TempData["ToastSuccess"] = IsAr() ? "تم اعتماد الحجز وإبلاغ النادي." : "Booking approved. The club has been notified.";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -127,7 +131,9 @@ public class BookingsController : Controllers.BaseController
         if (booking is null) return NotFound();
         if (booking.Status != BookingStatus.Pending)
         {
-            TempData["ToastWarning"] = "This booking is not pending.";
+            TempData["ToastWarning"] = IsAr()
+                ? $"يمكن اعتماد الحجز أو رفضه هنا فقط عندما يكون بانتظار رد الجهة المنفذة. حالته الآن: {BookingStatusText.Label(booking.Status)}."
+                : $"Only a booking awaiting the entity's response can be approved or rejected here. Its status is now: {BookingStatusText.Label(booking.Status)}.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -159,18 +165,30 @@ public class BookingsController : Controllers.BaseController
         await AuditAsync("Reject", nameof(BookingRequest), id.ToString(), old, booking);
 
         await CreateAndDispatchNotificationAsync(
-            titleEn: "Booking Rejected",
-            titleAr: "تم رفض الحجز",
-            messageEn: $"Your booking request for '{booking.Activity?.TitleEn}' has been rejected.",
-            messageAr: $"تم رفض طلب الحجز للنشاط '{booking.Activity?.TitleAr}'.",
+            titleEn: "Booking request rejected by DSC",
+            titleAr: "رفض المجلس طلب الحجز",
+            messageEn: $"Your booking request for '{NotificationTitleEn(booking)}' has been rejected by DSC.",
+            messageAr: $"رفض المجلس طلب الحجز الخاص بكم للبرنامج '{NotificationTitleAr(booking)}'.",
             targetType: NotificationTargetType.Organization,
             targetOrganizationId: booking.OrganizationId,
             linkUrl: Url.Action("Details", "Bookings", new { area = "Admin", id = booking.Id })
         );
 
-        TempData["ToastWarning"] = "Booking rejected.";
+        TempData["ToastWarning"] = IsAr() ? "تم رفض طلب الحجز وإبلاغ النادي." : "Booking request rejected. The club has been notified.";
         return RedirectToAction(nameof(Details), new { id });
     }
+
+    // The program name for a notification, in each language regardless of who is reading now. Same
+    // rule as BookingSource.Title: a custom request has no Activity, so it is named by its subject.
+    private static string NotificationTitleEn(BookingRequest b) =>
+        !string.IsNullOrWhiteSpace(b.Activity?.TitleEn) ? b.Activity!.TitleEn
+        : !string.IsNullOrWhiteSpace(b.Activity?.TitleAr) ? b.Activity!.TitleAr!
+        : !string.IsNullOrWhiteSpace(b.Subject) ? b.Subject! : "Custom program request";
+
+    private static string NotificationTitleAr(BookingRequest b) =>
+        !string.IsNullOrWhiteSpace(b.Activity?.TitleAr) ? b.Activity!.TitleAr!
+        : !string.IsNullOrWhiteSpace(b.Activity?.TitleEn) ? b.Activity!.TitleEn
+        : !string.IsNullOrWhiteSpace(b.Subject) ? b.Subject! : "طلب برنامج مخصص";
 
     private async Task CreateAndDispatchNotificationAsync(
         string titleEn,

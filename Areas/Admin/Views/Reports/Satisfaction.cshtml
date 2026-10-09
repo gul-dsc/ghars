@@ -1,23 +1,26 @@
 @model List<GharsPlatform.Controllers.Admin.ReportsController.SatisfactionRow>
+@using System.Globalization
 @{
-    ViewData["Title"] = "Satisfaction Report";
-    ViewData["PageTitle"] = "Satisfaction Report";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Satisfaction report", "تقرير الرضا");
+    ViewData["PageTitle"] = ViewData["Title"];
 }
 <div class="card border-0 shadow-sm rounded-4">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
             <tr>
-                <th>Question</th>
-                <th>Avg Stars</th>
-                <th>Responses</th>
+                <th>@T("Question", "السؤال")</th>
+                <th>@T("Legacy question ratings", "تقييمات الأسئلة السابقة")</th>
+                <th>@T("Responses", "الإجابات")</th>
             </tr>
             </thead>
             <tbody>
             @foreach (var r in Model)
             {
                 <tr>
-                    <td class="fw-semibold">@r.QuestionEn</td>
+                    <td class="fw-semibold">@(ar && !string.IsNullOrWhiteSpace(r.QuestionAr) ? r.QuestionAr : r.QuestionEn)</td>
                     <td>@String.Format("{0:0.00}", r.AvgStars)</td>
                     <td>@r.Count</td>
                 </tr>

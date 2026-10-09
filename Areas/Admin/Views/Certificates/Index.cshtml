@@ -1,11 +1,17 @@
 @model List<GharsPlatform.Models.Core.Certificate>
+@using System.Globalization
 @{
-    ViewData["Title"] = "Certificates";
-    ViewData["PageTitle"] = "Certificates";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var recipients = ViewBag.Recipients as Dictionary<string, string[]> ?? new();
+}
+@{
+    ViewData["Title"] = T("Certificates", "الشهادات");
+    ViewData["PageTitle"] = T("Certificates", "الشهادات");
 }
 <div class="d-flex align-items-center justify-content-between mb-3">
-    <div class="fw-semibold">Certificates</div>
-    @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Certificates/Issue"><i class="bi bi-plus-lg"></i> Issue</a> }
+    <div class="fw-semibold">@T("Certificates", "الشهادات")</div>
+    @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Certificates/Issue"><i class="bi bi-plus-lg"></i> @T("Issue certificates", "إصدار الشهادات")</a> }
 </div>
 
 <div class="card border-0 shadow-sm rounded-4">
@@ -13,13 +19,13 @@
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
             <tr>
-                <th>ID</th>
-                <th>Certificate No</th>
-                <th>Activity</th>
-                <th>UserId</th>
-                <th>Status</th>
-                <th>Issued</th>
-                <th></th>
+                <th>@T("ID", "الرقم")</th>
+                <th>@T("Certificate number", "رقم الشهادة")</th>
+                <th>@T("Program", "البرنامج")</th>
+                <th>@T("Recipient", "المستلم")</th>
+                <th>@T("Status", "الحالة")</th>
+                <th>@T("Issued on", "تاريخ الإصدار")</th>
+                <th><span class="visually-hidden">@T("Actions", "الإجراءات")</span></th>
             </tr>
             </thead>
             <tbody>
@@ -27,23 +33,29 @@
             {
                 <tr>
                     <td>@c.Id</td>
-                    <td class="fw-semibold">@c.CertificateNo</td>
-                    <td>@c.Activity?.TitleEn</td>
-                    <td class="text-truncate" style="max-width:220px;">@c.UserId</td>
-                    <td><span class="badge text-bg-@(c.Status==CertificateStatus.Issued?"success":"danger")">@c.Status</span></td>
+                    <td class="fw-semibold"><bdi dir="ltr">@c.CertificateNo</bdi></td>
+                    <td>@(ar && !string.IsNullOrWhiteSpace(c.Activity?.TitleAr) ? c.Activity!.TitleAr : c.Activity?.TitleEn)</td>
+                    <td>@if (!string.IsNullOrEmpty(c.UserId) && recipients.TryGetValue(c.UserId, out var who)) { <div class="fw-semibold">@(string.IsNullOrWhiteSpace(who[0]) ? who[1] : who[0])</div><div class="small text-muted"><bdi>@who[1]</bdi></div> } else { <span class="text-muted small">@T("Unknown user", "مستخدم غير معروف")</span> }</td>
+                    <td><span class="badge text-bg-@(c.Status==CertificateStatus.Issued?"success":"danger")">@(c.Status == CertificateStatus.Issued ? T("Issued", "صادرة") : c.Status == CertificateStatus.Revoked ? T("Revoked", "ملغاة") : c.Status.ToString())</span></td>
                     <td>@c.IssuedAtUtc.ToString("yyyy-MM-dd")</td>
                     <td class="text-end">
-                        <a class="btn btn-sm btn-outline-primary" href="/Admin/Certificates/Download/@c.Id">PDF</a>
+                        <a class="btn btn-sm btn-outline-primary" href="/Admin/Certificates/Download/@c.Id" aria-label="@T($"Download certificate {c.CertificateNo} as PDF", $"تنزيل الشهادة {c.CertificateNo} بصيغة PDF")">PDF</a>
                         @if (User.IsInRole("Super Admin") && c.Status == CertificateStatus.Issued)
                         {
-                            <form method="post" action="/Admin/Certificates/Revoke/@c.Id" class="d-inline">
+                            <form method="post" action="/Admin/Certificates/Revoke/@c.Id" class="d-inline"
+                                  data-confirm="@T($"Revoke certificate {c.CertificateNo}? It will show as revoked to anyone who checks it. This can't be undone.", $"إلغاء الشهادة ⁦{c.CertificateNo}⁩؟ ستظهر كملغاة لكل من يتحقق منها. لا يمكن التراجع عن ذلك.")"
+                                  data-confirm-ok="@T("Revoke", "إلغاء الشهادة")">
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="reason" value="Administrative revoke" />
-                                <button class="btn btn-sm btn-outline-danger" type="submit">Revoke</button>
+                                <button class="btn btn-sm btn-outline-danger" type="submit">@T("Revoke", "إلغاء")</button>
                             </form>
                         }
                     </td>
                 </tr>
+            }
+            @if (!Model.Any())
+            {
+                <tr><td colspan="7" class="text-muted p-3">@T("No certificates have been issued yet.", "لم تُصدر أي شهادات بعد.")</td></tr>
             }
             </tbody>
         </table>

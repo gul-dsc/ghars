@@ -1,8 +1,11 @@
 @model List<GharsPlatform.Models.Core.BookingRequest>
 @using GharsPlatform.Helpers
 @{
-    ViewData["Title"] = "Bookings";
-    ViewData["PageTitle"] = "Bookings";
+    var ar = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Booking requests", "طلبات الحجز");
+    ViewData["PageTitle"] = T("Booking requests", "طلبات الحجز");
+    string OrgName(Organization? o) => o is null ? "—" : (ar && !string.IsNullOrWhiteSpace(o.NameAr) ? o.NameAr : o.NameEn);
     var status = ViewBag.Status as string;
     var source = ViewBag.Source as BookingSourceFilter?;
     // Preserved across the two filter rows so choosing a source does not silently clear the status.
@@ -16,24 +19,27 @@
     string Active(bool on) => on ? "btn-secondary" : "btn-outline-secondary";
 }
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-    <div class="fw-semibold">Bookings <span class="text-muted">(@Model.Count)</span></div>
+    <div class="fw-semibold">@T("Booking requests", "طلبات الحجز") <span class="text-muted">(@Model.Count)</span></div>
     <div class="d-flex gap-2 flex-wrap">
-        <a class="btn btn-sm @Active(status == "Pending")" href="@Q("Pending", source)">Pending</a>
-        <a class="btn btn-sm @Active(status == "Approved")" href="@Q("Approved", source)">Approved</a>
-        <a class="btn btn-sm @Active(status == "Rejected")" href="@Q("Rejected", source)">Rejected</a>
-        <a class="btn btn-sm @Active(string.IsNullOrWhiteSpace(status))" href="@Q(null, source)">All statuses</a>
+        @foreach (var st in BookingStatusText.Distinct)
+        {
+            var key = st.ToString();
+            var on = Enum.TryParse<BookingStatus>(status ?? "", out var cur) && cur == st;
+            <a class="btn btn-sm @Active(on)" href="@Q(key, source)">@BookingStatusText.Label(st)</a>
+        }
+        <a class="btn btn-sm @Active(string.IsNullOrWhiteSpace(status))" href="@Q(null, source)">@T("All statuses", "كل الحالات")</a>
     </div>
 </div>
 
 @* Booking Source filter. Both paths stay in this one list — DSC sees every request either way. *@
 <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
-    <span class="text-muted small">Booking source:</span>
-    <a class="btn btn-sm @Active(source is null)" href="@Q(status, null)">All</a>
+    <span class="text-muted small">@T("Booking source:", "مصدر الحجز:")</span>
+    <a class="btn btn-sm @Active(source is null)" href="@Q(status, null)">@T("All", "الكل")</a>
     <a class="btn btn-sm @Active(source == BookingSourceFilter.ExistingProgram)" href="@Q(status, BookingSourceFilter.ExistingProgram)">
-        <i class="bi bi-collection me-1" aria-hidden="true"></i>Existing Program
+        <i class="bi bi-collection me-1" aria-hidden="true"></i>@T("Existing program", "برنامج قائم")
     </a>
     <a class="btn btn-sm @Active(source == BookingSourceFilter.CustomProgram)" href="@Q(status, BookingSourceFilter.CustomProgram)">
-        <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>Custom Program
+        <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>@T("Custom program", "برنامج مخصص")
     </a>
 </div>
 
@@ -42,15 +48,15 @@
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
             <tr>
-                <th>ID</th>
-                <th>Club</th>
-                <th>Program</th>
-                <th>Booking source</th>
-                <th>Implementing entity</th>
-                <th>Seats</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th></th>
+                <th>@T("ID", "الرقم")</th>
+                <th>@T("Club", "النادي")</th>
+                <th>@T("Program", "البرنامج")</th>
+                <th>@T("Booking source", "مصدر الحجز")</th>
+                <th>@T("Implementing entity", "الجهة المنفذة")</th>
+                <th>@T("Seats", "المقاعد")</th>
+                <th>@T("Status", "الحالة")</th>
+                <th>@T("Created", "تاريخ الإنشاء")</th>
+                <th><span class="visually-hidden">@T("Actions", "الإجراءات")</span></th>
             </tr>
             </thead>
             <tbody>
@@ -58,7 +64,7 @@
             {
                 <tr>
                     <td>@b.Id</td>
-                    <td class="fw-semibold">@b.Organization?.NameEn</td>
+                    <td class="fw-semibold">@OrgName(b.Organization)</td>
                     @* Never b.Activity?.TitleEn alone: a custom request has no Activity and would
                        show an empty cell where the requested program name belongs. *@
                     <td>@BookingSource.Title(b)</td>
@@ -67,18 +73,18 @@
                             <i class="bi @BookingSource.Icon(b) me-1" aria-hidden="true"></i>@BookingSource.Label(b)
                         </span>
                     </td>
-                    <td>@(b.PartnerOrganization?.NameEn ?? "—")</td>
+                    <td>@OrgName(b.PartnerOrganization)</td>
                     <td>@b.RequestedSeats</td>
-                    <td><span class="badge text-bg-@(b.Status==BookingStatus.Approved?"success":b.Status==BookingStatus.Pending?"warning":"danger")">@b.Status</span></td>
+                    <td><span class="badge @BookingStatusText.BadgeClass(b.Status)">@BookingStatusText.Label(b.Status)</span></td>
                     <td>@b.CreatedAtUtc.ToString("yyyy-MM-dd")</td>
                     <td class="text-end">
-                        <a class="btn btn-sm btn-primary" href="/Admin/Bookings/Details/@b.Id">Details</a>
+                        <a class="btn btn-sm btn-primary" href="/Admin/Bookings/Details/@b.Id">@T("Details", "التفاصيل")</a>
                     </td>
                 </tr>
             }
             @if (Model.Count == 0)
             {
-                <tr><td colspan="9" class="text-muted p-3">No bookings match this filter.</td></tr>
+                <tr><td colspan="9" class="text-muted p-3">@T("No booking requests match this filter.", "لا توجد طلبات حجز مطابقة لهذه التصفية.")</td></tr>
             }
             </tbody>
         </table>

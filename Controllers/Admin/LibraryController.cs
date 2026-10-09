@@ -20,6 +20,8 @@ public class LibraryController : Controllers.BaseController
         _env = env;
     }
 
+    private static bool IsAr() => System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+
     public async Task<IActionResult> Categories()
     {
         var list = await Db.LibraryCategories.OrderBy(x => x.SortOrder).ToListAsync();
@@ -44,7 +46,7 @@ public class LibraryController : Controllers.BaseController
         });
 
         await Db.SaveChangesAsync();
-        TempData["ToastSuccess"] = "Category created.";
+        TempData["ToastSuccess"] = IsAr() ? "تم إنشاء التصنيف." : "Category created.";
         return RedirectToAction(nameof(Categories));
     }
 
@@ -117,7 +119,7 @@ public class LibraryController : Controllers.BaseController
         });
 
         await Db.SaveChangesAsync();
-        TempData["ToastSuccess"] = "Library item created.";
+        TempData["ToastSuccess"] = IsAr() ? "تمت إضافة الإصدار إلى المكتبة الرقمية." : "Library item created.";
         return RedirectToAction(nameof(Items));
     }
 

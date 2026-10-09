@@ -1,55 +1,61 @@
 @model List<GharsPlatform.Models.Core.MediaAlbum>
 @using GharsPlatform.Models.Core
+@using System.Globalization
 @{
-    ViewData["Title"] = "Gallery Albums";
-    ViewData["PageTitle"] = "Gallery Albums";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    string L(string? en, string? arText) => ar ? (string.IsNullOrWhiteSpace(arText) ? en ?? "" : arText) : (en ?? arText ?? "");
+    ViewData["Title"] = T("Gallery albums", "ألبومات معرض الصور");
+    ViewData["PageTitle"] = ViewData["Title"];
     var seasons = ViewBag.Seasons as List<Season> ?? new();
     var orgs = ViewBag.Organizations as List<Organization> ?? new();
     var acts = ViewBag.Activities as List<Activity> ?? new();
     var keywordValue = Context.Request.Query["keyword"].ToString();
 }
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <div><h1 class="h4 mb-0">Gallery Albums</h1><div class="text-muted">Create albums and attach photos, videos, and PDFs.</div></div>
+    <div><h1 class="h4 mb-0">@T("Gallery albums", "ألبومات معرض الصور")</h1><div class="text-muted">@T("Create albums and add photos, videos and PDF files.", "أنشئوا الألبومات وأضيفوا إليها الصور والفيديوهات وملفات PDF.")</div></div>
     @if (User.IsInRole(RoleNames.SuperAdmin))
     {
-        <a class="btn btn-primary" asp-area="Admin" asp-controller="Gallery" asp-action="Create"><i class="bi bi-plus-lg"></i> Create Album</a>
+        <a class="btn btn-primary" asp-area="Admin" asp-controller="Gallery" asp-action="Create"><i class="bi bi-plus-lg"></i> @T("Create album", "إنشاء ألبوم")</a>
     }
 </div>
 <form method="get" class="card p-3 rounded-4 border-0 shadow-sm mb-3">
     <div class="row g-2">
         @* These filters are labelled by their option text alone, which a screen reader does not
            announce. Visually-hidden labels give each an accessible name without altering the row. *@
-        <div class="col-md-3"><label class="visually-hidden" for="f-gal-keyword">Search albums</label><input class="form-control" id="f-gal-keyword" name="keyword" value="@keywordValue" placeholder="Search albums" /></div>
-        <div class="col-md-2"><label class="visually-hidden" for="f-gal-seasonId">Season</label><select class="form-select" id="f-gal-seasonId" name="seasonId"><option value="">All seasons</option>@foreach(var s in seasons){<option value="@s.Id">@s.TitleEn</option>}</select></div>
-        <div class="col-md-3"><label class="visually-hidden" for="f-gal-organizationId">Club or entity</label><select class="form-select" id="f-gal-organizationId" name="organizationId"><option value="">All clubs/entities</option>@foreach(var o in orgs){<option value="@o.Id">@o.NameEn</option>}</select></div>
-        <div class="col-md-2"><label class="visually-hidden" for="f-gal-isPublic">Status</label><select class="form-select" id="f-gal-isPublic" name="isPublic"><option value="">All status</option><option value="true">Published</option><option value="false">Hidden</option></select></div>
-        <div class="col-md-2"><button class="btn btn-outline-primary w-100">Filter</button></div>
+        <div class="col-md-3"><label class="visually-hidden" for="f-gal-keyword">@T("Search albums", "البحث في الألبومات")</label><input class="form-control" id="f-gal-keyword" name="keyword" value="@keywordValue" placeholder="@T("Search albums", "البحث في الألبومات")" /></div>
+        <div class="col-md-2"><label class="visually-hidden" for="f-gal-seasonId">@T("Season", "الموسم")</label><select class="form-select" id="f-gal-seasonId" name="seasonId"><option value="">@T("All seasons", "جميع المواسم")</option>@foreach(var s in seasons){<option value="@s.Id">@L(s.TitleEn, s.TitleAr)</option>}</select></div>
+        <div class="col-md-3"><label class="visually-hidden" for="f-gal-organizationId">@T("Club or entity", "النادي أو الجهة")</label><select class="form-select" id="f-gal-organizationId" name="organizationId"><option value="">@T("All clubs and entities", "جميع الأندية والجهات")</option>@foreach(var o in orgs){<option value="@o.Id">@L(o.NameEn, o.NameAr)</option>}</select></div>
+        <div class="col-md-2"><label class="visually-hidden" for="f-gal-isPublic">@T("Status", "الحالة")</label><select class="form-select" id="f-gal-isPublic" name="isPublic"><option value="">@T("All statuses", "جميع الحالات")</option><option value="true">@T("Published", "منشور")</option><option value="false">@T("Hidden", "مخفي")</option></select></div>
+        <div class="col-md-2"><button class="btn btn-outline-primary w-100">@T("Filter", "تصفية")</button></div>
     </div>
 </form>
 <div class="card rounded-4 border-0 shadow-sm overflow-hidden">
     <table class="table align-middle mb-0">
-        <thead><tr><th>Album</th><th>Linked To</th><th>Date</th><th>Items</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+        <thead><tr><th>@T("Album", "الألبوم")</th><th>@T("Linked to", "مرتبط بـ")</th><th>@T("Date", "التاريخ")</th><th>@T("Items", "العناصر")</th><th>@T("Status", "الحالة")</th><th class="text-end">@T("Actions", "إجراءات")</th></tr></thead>
         <tbody>
         @foreach(var x in Model)
         {
             <tr>
                 <td><strong>@x.TitleEn</strong><div class="text-muted small">@x.TitleAr</div></td>
-                <td>@(x.Activity?.TitleEn ?? x.Organization?.NameEn ?? "General album")</td>
+                <td>@(x.Activity != null ? L(x.Activity.TitleEn, x.Activity.TitleAr) : x.Organization != null ? L(x.Organization.NameEn, x.Organization.NameAr) : T("General album", "ألبوم عام"))</td>
                 <td>@x.AlbumDate.ToString("yyyy-MM-dd")</td>
                 <td>@(x.Items?.Count ?? 0)</td>
-                @{ var badgeClass = x.IsPublic ? "text-bg-success" : "text-bg-secondary"; var statusText = x.IsPublic ? "Published" : "Hidden"; }
+                @{ var badgeClass = x.IsPublic ? "text-bg-success" : "text-bg-secondary"; var statusText = x.IsPublic ? T("Published", "منشور") : T("Hidden", "مخفي"); }
                 <td><span class="badge @badgeClass">@statusText</span></td>
                 <td class="text-end">
-                    <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Gallery" asp-action="Details" asp-route-id="@x.Id"><i class="bi bi-collection-play"></i> Manage Items</a>
+                    <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Gallery" asp-action="Details" asp-route-id="@x.Id"><i class="bi bi-collection-play"></i> @T("Manage items", "إدارة العناصر")</a>
                         @if (User.IsInRole(RoleNames.SuperAdmin))
                         {
-                            <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@x.Id">Edit Album</a>
+                            <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@x.Id">@T("Edit album", "تعديل الألبوم")</a>
                         }
                     @if (User.IsInRole(RoleNames.SuperAdmin))
                     {
-                        <form method="post" asp-action="Delete" asp-route-id="@x.Id" class="d-inline" data-confirm="Delete this album and all media?">
+                        <form method="post" asp-action="Delete" asp-route-id="@x.Id" class="d-inline"
+                              data-confirm="@T("Delete this album and all of its media items? This cannot be undone.", "حذف هذا الألبوم وجميع عناصر الوسائط فيه؟ لا يمكن التراجع عن هذا الإجراء.")"
+                              data-confirm-ok="@T("Delete", "حذف")">
                             @Html.AntiForgeryToken()
-                            <button class="btn btn-sm btn-outline-danger">Delete</button>
+                            <button class="btn btn-sm btn-outline-danger">@T("Delete", "حذف")</button>
                         </form>
                     }
                 </td>
@@ -60,5 +66,5 @@
 </div>
 @if(!Model.Any())
 {
-    <div class="alert alert-light border mt-3">No albums found. Super Admin can create the first album.</div>
+    <div class="alert alert-light border mt-3">@T("No albums found. A Super Admin can create the first album.", "لا توجد ألبومات. يمكن لالمشرف العام إنشاء الألبوم الأول.")</div>
 }

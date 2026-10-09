@@ -396,16 +396,16 @@ public class BookingsController : Controller
             if (activity is null)
             {
                 await CreateAndDispatchNotificationAsync("New Custom Program Request", "طلب برنامج مخصص جديد",
-                    $"{clubEn} requested a custom program '{subjectEn}' ({booking.ReferenceNumber}). Your review is required.",
-                    $"طلب {clubAr} برنامجاً مخصصاً '{subjectAr}' ({booking.ReferenceNumber}). مطلوب المراجعة.",
+                    $"{clubEn} requested a custom program '{subjectEn}' ({booking.ReferenceNumber}). Please respond.",
+                    $"طلب {clubAr} برنامجاً مخصصاً '{subjectAr}' ({booking.ReferenceNumber}). يرجى الرد على الطلب.",
                     NotificationType.Warning, NotificationTargetType.Organization, partnerOrgId.Value,
                     Url.Action(nameof(Details), "Bookings", new { area = "", id = booking.Id }));
             }
             else
             {
                 await CreateAndDispatchNotificationAsync("New Booking Request", "طلب حجز جديد",
-                    $"{clubEn} submitted booking request {booking.ReferenceNumber} for '{subjectEn}'. Your review is required.",
-                    $"قدّم {clubAr} طلب الحجز {booking.ReferenceNumber} للنشاط '{subjectAr}'. مطلوب المراجعة.",
+                    $"{clubEn} submitted booking request {booking.ReferenceNumber} for '{subjectEn}'. Please respond.",
+                    $"قدّم {clubAr} طلب الحجز {booking.ReferenceNumber} للنشاط '{subjectAr}'. يرجى الرد على الطلب.",
                     NotificationType.Warning, NotificationTargetType.Organization, partnerOrgId.Value,
                     Url.Action(nameof(Details), "Bookings", new { area = "", id = booking.Id }));
             }
@@ -459,7 +459,7 @@ public class BookingsController : Controller
         var option = booking.ProposedTimeOptions.FirstOrDefault(x => x.Id == optionId && x.IsActive);
         if (option is null)
         {
-            TempData["ToastWarning"] = "Selected option is no longer available.";
+            TempData["ToastWarning"] = T("The selected time is no longer available.", "الوقت المختار لم يعد متاحاً.");
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
 
@@ -505,7 +505,7 @@ public class BookingsController : Controller
                 Url.Action(nameof(Details), "Bookings", new { area = "", id = booking.Id }));
         }
 
-        TempData["ToastSuccess"] = "Proposed time accepted and booking confirmed.";
+        TempData["ToastSuccess"] = T("Proposed time accepted. The booking is confirmed.", "تم قبول الوقت المقترح وتأكيد الحجز.");
         return RedirectToAction(nameof(Details), new { id = bookingId });
     }
 
@@ -553,7 +553,7 @@ public class BookingsController : Controller
                 Url.Action(nameof(Details), "Bookings", new { area = "", id = booking.Id }));
         }
 
-        TempData["ToastWarning"] = "All proposed times rejected.";
+        TempData["ToastWarning"] = T("You declined all proposed times. The implementing entity has been asked for new options.", "تم الاعتذار عن جميع الأوقات المقترحة، وطُلب من الجهة المنفذة تقديم خيارات جديدة.");
         return RedirectToAction(nameof(Details), new { id = bookingId });
     }
 
@@ -790,4 +790,7 @@ public class BookingsController : Controller
         await _db.SaveChangesAsync();
         await _hub.Clients.All.SendAsync("notificationReceived", new { title = titleEn, message = messageEn, linkUrl });
     }
+
+    private static string T(string en, string ar) =>
+        CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? ar : en;
 }

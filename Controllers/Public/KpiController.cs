@@ -384,7 +384,7 @@ public class KpiController : Controller
     public class KpiVm
     {
         public int Id { get; set; }
-        [Required] public int SeasonId { get; set; }
+        [GharsPlatform.Models.Validation.BilingualRequired(ErrorMessage = "Select a sports season.", Ar = "اختاروا الموسم الرياضي.")] public int SeasonId { get; set; }
         public int OrganizationId { get; set; }
 
         // System-derived from Agenda when data exists (read-only in the UI).

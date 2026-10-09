@@ -10,7 +10,7 @@
     var canReview = ChannelWorkflow.DscCanReview(Model.ApprovalStatus);
     // Reviewers see the file whatever its state: the endpoint grants DSC access to unapproved content.
     var src = !string.IsNullOrWhiteSpace(Model.FilePath) ? $"/protected-files/gallery/{Model.Id}" : Model.ExternalUrl;
-    ViewData["Title"] = T("Ghars Channel Review", "مراجعة قناة غرس");
+    ViewData["Title"] = T("Ghars Channel review", "مراجعة محتوى قناة غرس");
     ViewData["PageTitle"] = ViewData["Title"];
 }
 

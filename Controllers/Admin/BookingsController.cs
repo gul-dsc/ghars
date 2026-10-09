@@ -82,7 +82,12 @@ public class BookingsController : Controllers.BaseController
 
         var old = new { booking.Status, booking.DecisionAtUtc, booking.DecidedByUserId };
 
-        booking.Status = BookingStatus.Approved;
+        // Taken with a conditional update, so a second click or a decision the entity made a moment
+        // ago cannot be overwritten.
+        await using var tx = await Db.Database.BeginTransactionAsync();
+        var claim = await BookingWorkflow.TryClaimAsync(Db, booking, BookingDecision.DscApprove, CurrentUserId);
+        if (claim != BookingClaimResult.Claimed) return DecisionRefused(claim, booking);
+
         booking.DecisionAtUtc = DateTime.UtcNow;
         booking.DecidedByUserId = CurrentUserId;
 
@@ -97,6 +102,7 @@ public class BookingsController : Controllers.BaseController
         });
 
         await Db.SaveChangesAsync();
+        await tx.CommitAsync();
         // A DSC approval is still an approval: if the club picked one of the entity's published
         // times, that time is now taken and must stop being offered. Guarded on the slot being
         // Pending, so this is a no-op for every booking that carries no slot.
@@ -111,7 +117,8 @@ public class BookingsController : Controllers.BaseController
             messageAr: $"اعتمد المجلس طلب الحجز الخاص بكم للبرنامج '{NotificationTitleAr(booking)}'.",
             targetType: NotificationTargetType.Organization,
             targetOrganizationId: booking.OrganizationId,
-            linkUrl: Url.Action("Details", "Bookings", new { area = "Admin", id = booking.Id })
+            // The club's own booking page: the admin details page is not open to a club.
+            linkUrl: Url.Action("Details", "Bookings", new { area = "", id = booking.Id })
         );
 
         TempData["ToastSuccess"] = IsAr() ? "تم اعتماد الحجز وإبلاغ النادي." : "Booking approved. The club has been notified.";
@@ -139,7 +146,10 @@ public class BookingsController : Controllers.BaseController
 
         var old = new { booking.Status, booking.DecisionAtUtc, booking.DecidedByUserId, booking.Notes };
 
-        booking.Status = BookingStatus.Rejected;
+        await using var tx = await Db.Database.BeginTransactionAsync();
+        var claim = await BookingWorkflow.TryClaimAsync(Db, booking, BookingDecision.DscReject, CurrentUserId);
+        if (claim != BookingClaimResult.Claimed) return DecisionRefused(claim, booking);
+
         booking.DecisionAtUtc = DateTime.UtcNow;
         booking.DecidedByUserId = CurrentUserId;
         if (!string.IsNullOrWhiteSpace(reason))
@@ -159,6 +169,7 @@ public class BookingsController : Controllers.BaseController
         });
 
         await Db.SaveChangesAsync();
+        await tx.CommitAsync();
         // Rejected by DSC frees the time again, exactly as a rejection by the entity does. After the
         // save, so a rejection that did not persist cannot release the slot underneath it.
         await PartnerAvailabilityWorkflow.ReleaseForBookingAsync(Db, booking, CurrentUserId);
@@ -171,11 +182,25 @@ public class BookingsController : Controllers.BaseController
             messageAr: $"رفض المجلس طلب الحجز الخاص بكم للبرنامج '{NotificationTitleAr(booking)}'.",
             targetType: NotificationTargetType.Organization,
             targetOrganizationId: booking.OrganizationId,
-            linkUrl: Url.Action("Details", "Bookings", new { area = "Admin", id = booking.Id })
+            // The club's own booking page: the admin details page is not open to a club.
+            linkUrl: Url.Action("Details", "Bookings", new { area = "", id = booking.Id })
         );
 
         TempData["ToastWarning"] = IsAr() ? "تم رفض طلب الحجز وإبلاغ النادي." : "Booking request rejected. The club has been notified.";
         return RedirectToAction(nameof(Details), new { id });
+    }
+
+    /// <summary>The decision lost its claim: the status changed or another decision got there first.</summary>
+    private IActionResult DecisionRefused(BookingClaimResult claim, BookingRequest booking)
+    {
+        TempData["ToastWarning"] = claim == BookingClaimResult.NotAllowed
+            ? (IsAr()
+                ? $"يمكن اعتماد الحجز أو رفضه هنا فقط عندما يكون بانتظار رد الجهة المنفذة. حالته الآن: {BookingStatusText.Label(booking.Status)}."
+                : $"Only a booking awaiting the entity's response can be approved or rejected here. Its status is now: {BookingStatusText.Label(booking.Status)}.")
+            : (IsAr()
+                ? "تم تحديث هذا الحجز قبل لحظات، لذلك لم يُنفَّذ الإجراء ولم يتم تغيير أي شيء. راجعوا حالته الحالية."
+                : "This booking was updated a moment ago, so the action was not applied. Nothing was changed. Check its current status.");
+        return RedirectToAction(nameof(Details), new { id = booking.Id });
     }
 
     // The program name for a notification, in each language regardless of who is reading now. Same
@@ -213,44 +238,7 @@ public class BookingsController : Controllers.BaseController
             CreatedByUserId = CurrentUserId
         };
 
-        Db.Notifications.Add(n);
-        await Db.SaveChangesAsync();
-
-        // Deliveries: resolve target users at write time so read status is per user
-        var userIds = new List<string>();
-
-        if (targetType == NotificationTargetType.Organization && targetOrganizationId.HasValue)
-        {
-            userIds = await Db.OrganizationAdminLinks
-                .Where(x => x.OrganizationId == targetOrganizationId.Value)
-                .Select(x => x.UserId)
-                .Distinct()
-                .ToListAsync();
-        }
-
-        foreach (var uid in userIds)
-        {
-            Db.NotificationDeliveries.Add(new NotificationDelivery
-            {
-                NotificationId = n.Id,
-                UserId = uid,
-                DeliveredAtUtc = DateTime.UtcNow
-            });
-        }
-
-        await Db.SaveChangesAsync();
-
-        // SignalR broadcast (all connected users will receive, client filters by user deliveries)
-        await _hub.Clients.All.SendAsync("notification", new
-        {
-            id = n.Id,
-            titleEn = n.TitleEn,
-            titleAr = n.TitleAr,
-            messageEn = n.MessageEn,
-            messageAr = n.MessageAr,
-            type = n.Type.ToString(),
-            linkUrl = n.LinkUrl,
-            createdAtUtc = n.CreatedAtUtc
-        });
+        // Recipients resolved on the server; the live push reaches only them.
+        await NotificationDispatcher.SendAsync(Db, _hub, n);
     }
 }

@@ -235,7 +235,10 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/%40microsoft/signalr@8.0.8/dist/browser/signalr.min.js"></script>
+    @* The same SignalR client build the public layout loads ("@@" renders "@"). The line used before
+       requested @microsoft/signalr@8.0.8, a version the CDN does not have (404), so the admin pages
+       never loaded the client and never showed a live notification. *@
+    <script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
     <script src="~/js/admin.js" asp-append-version="true"></script>
 
     <script>

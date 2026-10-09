@@ -87,7 +87,12 @@ public class LibraryController : Controllers.BaseController
         if (!string.IsNullOrWhiteSpace(vm.ExternalUrl) && !FileValidationHelper.IsSafeHttpUrl(vm.ExternalUrl))
             ModelState.AddModelError(nameof(vm.ExternalUrl), isAr ? "الرابط غير صالح. يجب أن يبدأ بـ http أو https." : "Invalid link. Only http/https URLs are allowed.");
 
-        var fileError = FileValidationHelper.Validate(vm.File, FileValidationHelper.LibraryFile, isAr);
+        // Each kind of item takes only its own format: a video file for an awareness video, and a
+        // PDF for a lecture or booklet. Checked on the server, including the file's content.
+        var fileProfile = vm.ContentType == LibraryContentType.AwarenessVideo
+            ? FileValidationHelper.LibraryVideo
+            : FileValidationHelper.LibraryDocument;
+        var fileError = FileValidationHelper.Validate(vm.File, fileProfile, isAr);
         if (fileError != null) ModelState.AddModelError(nameof(vm.File), fileError);
         var coverError = FileValidationHelper.Validate(vm.CoverImage, FileValidationHelper.Image, isAr);
         if (coverError != null) ModelState.AddModelError(nameof(vm.CoverImage), coverError);

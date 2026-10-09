@@ -128,20 +128,11 @@ public class KpiController : Controllers.BaseController
             MessageEn = string.IsNullOrWhiteSpace(notes) ? messageEn : $"{messageEn} — {notes}",
             MessageAr = string.IsNullOrWhiteSpace(notes) ? messageAr : $"{messageAr} — {notes}",
             Type = status == KpiSubmissionStatus.Approved ? NotificationType.Success : NotificationType.Warning,
-            TargetType = NotificationTargetType.Organization,
-            TargetOrganizationId = e.OrganizationId,
             LinkUrl = "/kpi",
             CreatedAtUtc = DateTime.UtcNow,
             CreatedByUserId = CurrentUserId
         };
-        Db.Notifications.Add(n);
-        await Db.SaveChangesAsync();
-
-        var users = await Db.OrganizationAdminLinks.Where(x => x.OrganizationId == e.OrganizationId).Select(x => x.UserId).Distinct().ToListAsync();
-        foreach (var u in users)
-            Db.NotificationDeliveries.Add(new NotificationDelivery { NotificationId = n.Id, UserId = u, DeliveredAtUtc = DateTime.UtcNow });
-        await Db.SaveChangesAsync();
-        await _hub.Clients.All.SendAsync("notificationReceived", new { title = n.TitleEn, message = n.MessageEn, linkUrl = n.LinkUrl });
+        await NotificationDispatcher.SendToOrganizationAsync(Db, _hub, n, e.OrganizationId);
 
         TempData["ToastSuccess"] = IsAr() ? "تم تسجيل قرار المراجعة." : "Review decision recorded.";
         return RedirectToAction(nameof(Details), new { id });

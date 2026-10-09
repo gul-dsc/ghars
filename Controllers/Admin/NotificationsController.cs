@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using GharsPlatform.Data;
+using GharsPlatform.Helpers;
 using GharsPlatform.Hubs;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
@@ -52,6 +53,25 @@ public class NotificationsController : Controllers.BaseController
     {
         await LoadTargetsAsync();
 
+        // The target must name something that exists; an empty or unknown target used to send to
+        // nobody while the page still reported success.
+        switch (vm.TargetType)
+        {
+            case NotificationTargetType.Organization when vm.TargetOrganizationId is null || !await Db.Organizations.AnyAsync(o => o.Id == vm.TargetOrganizationId):
+                ModelState.AddModelError(nameof(vm.TargetOrganizationId), IsAr() ? "اختاروا الجهة المستهدفة." : "Choose the organization to notify.");
+                break;
+            case NotificationTargetType.Role when string.IsNullOrWhiteSpace(vm.TargetRoleName) || !await Db.Roles.AnyAsync(r => r.Name == vm.TargetRoleName):
+                ModelState.AddModelError(nameof(vm.TargetRoleName), IsAr() ? "اختاروا الدور المستهدف." : "Choose the role to notify.");
+                break;
+            case NotificationTargetType.User when string.IsNullOrWhiteSpace(vm.TargetUserId) || !await Db.Users.AnyAsync(u => u.Id == vm.TargetUserId):
+                ModelState.AddModelError(nameof(vm.TargetUserId), IsAr() ? "اختاروا المستخدم المستهدف." : "Choose the user to notify.");
+                break;
+        }
+
+        // Opened through LocalRedirect from the inbox, so only a path on this site can work.
+        if (!string.IsNullOrWhiteSpace(vm.LinkUrl) && !Url.IsLocalUrl(vm.LinkUrl.Trim()))
+            ModelState.AddModelError(nameof(vm.LinkUrl), IsAr() ? "يجب أن يكون الرابط صفحة داخل المنصة ويبدأ بـ /." : "The link must be a page on this platform, starting with /.");
+
         if (!ModelState.IsValid) return View(vm);
 
         var n = new Notification
@@ -62,70 +82,23 @@ public class NotificationsController : Controllers.BaseController
             MessageAr = vm.MessageAr.Trim(),
             Type = vm.Type,
             TargetType = vm.TargetType,
-            TargetRoleName = vm.TargetRoleName?.Trim(),
-            TargetOrganizationId = vm.TargetOrganizationId,
-            TargetUserId = vm.TargetUserId?.Trim(),
-            LinkUrl = vm.LinkUrl?.Trim(),
+            // Only the field that matches the target type is kept, so the stored row says who it was for.
+            TargetRoleName = vm.TargetType == NotificationTargetType.Role ? vm.TargetRoleName?.Trim() : null,
+            TargetOrganizationId = vm.TargetType == NotificationTargetType.Organization ? vm.TargetOrganizationId : null,
+            TargetUserId = vm.TargetType == NotificationTargetType.User ? vm.TargetUserId?.Trim() : null,
+            LinkUrl = string.IsNullOrWhiteSpace(vm.LinkUrl) ? null : vm.LinkUrl.Trim(),
             CreatedAtUtc = DateTime.UtcNow,
             CreatedByUserId = CurrentUserId
         };
 
-        Db.Notifications.Add(n);
-        await Db.SaveChangesAsync();
+        // Recipients are resolved on the server and the live push goes to them alone; the count
+        // reported below is the number of deliveries actually written.
+        var sent = await NotificationDispatcher.SendAsync(Db, _hub, n);
 
-        // Resolve deliveries (snapshot)
-        var userIds = new List<string>();
-
-        if (n.TargetType == NotificationTargetType.All)
-        {
-            userIds = await Db.Users.Select(x => x.Id).ToListAsync();
-        }
-        else if (n.TargetType == NotificationTargetType.Organization && n.TargetOrganizationId.HasValue)
-        {
-            userIds = await Db.OrganizationAdminLinks
-                .Where(x => x.OrganizationId == n.TargetOrganizationId.Value)
-                .Select(x => x.UserId).Distinct().ToListAsync();
-        }
-        else if (n.TargetType == NotificationTargetType.User && !string.IsNullOrWhiteSpace(n.TargetUserId))
-        {
-            userIds = new List<string> { n.TargetUserId! };
-        }
-        else if (n.TargetType == NotificationTargetType.Role && !string.IsNullOrWhiteSpace(n.TargetRoleName))
-        {
-            // Identity role users (join via AspNetUserRoles)
-            var role = await Db.Roles.FirstOrDefaultAsync(r => r.Name == n.TargetRoleName);
-            if (role != null)
-            {
-                userIds = await Db.UserRoles.Where(ur => ur.RoleId == role.Id).Select(ur => ur.UserId).Distinct().ToListAsync();
-            }
-        }
-
-        foreach (var uid in userIds)
-        {
-            Db.NotificationDeliveries.Add(new NotificationDelivery
-            {
-                NotificationId = n.Id,
-                UserId = uid,
-                DeliveredAtUtc = DateTime.UtcNow
-            });
-        }
-
-        await Db.SaveChangesAsync();
-
-        // Push to connected clients
-        await _hub.Clients.All.SendAsync("notification", new
-        {
-            id = n.Id,
-            titleEn = n.TitleEn,
-            titleAr = n.TitleAr,
-            messageEn = n.MessageEn,
-            messageAr = n.MessageAr,
-            type = n.Type.ToString(),
-            linkUrl = n.LinkUrl,
-            createdAtUtc = n.CreatedAtUtc
-        });
-
-        TempData["ToastSuccess"] = IsAr() ? $"تم إرسال الإشعار إلى {userIds.Count} من المستخدمين." : $"Notification sent to {userIds.Count} user(s).";
+        if (sent == 0)
+            TempData["ToastWarning"] = IsAr() ? "تم حفظ الإشعار، لكن لا يوجد مستخدم نشط ضمن الفئة المستهدفة." : "The notification was saved, but no active user matches this target.";
+        else
+            TempData["ToastSuccess"] = IsAr() ? $"تم إرسال الإشعار إلى {sent} من المستخدمين." : $"Notification sent to {sent} user(s).";
         return RedirectToAction(nameof(Index));
     }
 

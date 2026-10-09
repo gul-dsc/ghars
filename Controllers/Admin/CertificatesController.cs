@@ -79,8 +79,6 @@ public class CertificatesController : Controllers.BaseController
         }
 
         var issuedBy = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
-        var uploadRoot = Path.Combine(_env.WebRootPath, "uploads", "certificates");
-        Directory.CreateDirectory(uploadRoot);
 
         var already = await Db.Certificates
             .Where(x => x.ActivityId == session.ActivityId && attendees.Contains(x.UserId) && x.Status == CertificateStatus.Issued)
@@ -115,9 +113,9 @@ public class CertificatesController : Controllers.BaseController
                 IsRtl: isRtl
             ));
 
-            var pdfFile = $"{verifyToken}.pdf";
-            var pdfPathFull = Path.Combine(uploadRoot, pdfFile);
-            await System.IO.File.WriteAllBytesAsync(pdfPathFull, pdfBytes);
+            // Outside wwwroot, under a random name unrelated to the verification token: the PDF names
+            // the participant, and the token is printed in a public QR code.
+            var pdfKey = await ProtectedFileStore.SaveBytesAsync(pdfBytes, _env, ProtectedFileStore.Certificates, ".pdf");
 
             var cert = new Certificate
             {
@@ -127,7 +125,7 @@ public class CertificatesController : Controllers.BaseController
                 IssuedAtUtc = DateTime.UtcNow,
                 CertificateNo = certNo,
                 VerifyToken = verifyToken,
-                PdfPath = "/uploads/certificates/" + pdfFile,
+                PdfPath = pdfKey,
                 Status = CertificateStatus.Issued
             };
 
@@ -144,17 +142,24 @@ public class CertificatesController : Controllers.BaseController
         return RedirectToAction(nameof(Index));
     }
 
+    /// <summary>
+    /// The only way to obtain a certificate PDF: DSC Admin or Super Admin (the controller's roles),
+    /// issued or revoked alike. Handles both the protected storage key and the legacy
+    /// <c>/uploads/certificates/...</c> path of rows not yet migrated; static access to that legacy
+    /// folder is denied in Program.cs.
+    /// </summary>
     public async Task<IActionResult> Download(int id)
     {
         var cert = await Db.Certificates.FirstOrDefaultAsync(x => x.Id == id);
         if (cert is null) return NotFound();
-        if (string.IsNullOrWhiteSpace(cert.PdfPath)) return NotFound();
 
-        var full = Path.Combine(_env.WebRootPath, cert.PdfPath.TrimStart('/').Replace("/", Path.DirectorySeparatorChar.ToString()));
-        if (!System.IO.File.Exists(full)) return NotFound();
+        var full = ProtectedFileStore.ResolvePhysicalPath(cert.PdfPath, _env);
+        if (full is null || !System.IO.File.Exists(full)) return NotFound();
 
-        var bytes = await System.IO.File.ReadAllBytesAsync(full);
-        return File(bytes, "application/pdf", $"{cert.CertificateNo}.pdf");
+        Response.Headers.XContentTypeOptions = "nosniff";
+        Response.Headers.CacheControl = "no-store";
+        var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, useAsync: true);
+        return File(stream, "application/pdf", $"{cert.CertificateNo}.pdf");
     }
 
     [HttpPost]

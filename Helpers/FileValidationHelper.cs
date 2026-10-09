@@ -8,8 +8,9 @@ public static class FileValidationHelper
 {
     public sealed record ValidationProfile(string[] Extensions, string[] MimePrefixes, long MaxBytes);
 
+    // No SVG: an SVG can carry script, and these files are served from the site's own origin.
     public static readonly ValidationProfile Image = new(
-        new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg" },
+        new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" },
         new[] { "image/" },
         10 * 1024 * 1024);
 
@@ -24,10 +25,22 @@ public static class FileValidationHelper
         new[] { "image/", "video/" },
         200 * 1024 * 1024);
 
-    /// <summary>Library main file: PDF preferred, video allowed.</summary>
-    public static readonly ValidationProfile LibraryFile = new(
-        new[] { ".pdf", ".mp4", ".webm" },
-        new[] { "application/pdf", "video/" },
+    /// <summary>Video only (legacy gallery album items of type Video).</summary>
+    public static readonly ValidationProfile Video = new(
+        new[] { ".mp4", ".webm", ".mov" },
+        new[] { "video/" },
+        200 * 1024 * 1024);
+
+    /// <summary>Library main file for lectures and booklets: PDF only.</summary>
+    public static readonly ValidationProfile LibraryDocument = new(
+        new[] { ".pdf" },
+        new[] { "application/pdf" },
+        200 * 1024 * 1024);
+
+    /// <summary>Library main file for an awareness video: MP4 or WebM only (what the viewer plays).</summary>
+    public static readonly ValidationProfile LibraryVideo = new(
+        new[] { ".mp4", ".webm" },
+        new[] { "video/" },
         200 * 1024 * 1024);
 
     /// <summary>KPI supporting evidence: reports, spreadsheets, tables, scans.</summary>
@@ -79,6 +92,15 @@ public static class FileValidationHelper
             return isArabic
                 ? $"حجم الملف يتجاوز الحد الأقصى ({maxMb} ميجابايت)."
                 : $"File exceeds the maximum size of {maxMb} MB.";
+        }
+
+        // The name and the declared type both come from the browser. The first bytes of the file
+        // must also match the format its extension claims.
+        if (!FileSignatures.Matches(file, ext))
+        {
+            return isArabic
+                ? $"محتوى الملف لا يطابق نوعه ({ext}). ارفعوا ملفاً صالحاً من النوع المسموح."
+                : $"The file's content doesn't match its type ({ext}). Upload a valid file of an allowed type.";
         }
 
         return null;

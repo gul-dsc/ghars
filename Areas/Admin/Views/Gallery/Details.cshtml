@@ -41,7 +41,7 @@
     <div class="row g-3 align-items-center">
         @if(!string.IsNullOrWhiteSpace(Model.CoverImagePath))
         {
-            <div class="col-md-2"><img src="@Model.CoverImagePath" alt="@T("Album cover", "غلاف الألبوم")" class="img-fluid rounded-4" style="max-height:130px;object-fit:cover" /></div>
+            <div class="col-md-2"><img src="@GharsPlatform.Helpers.GalleryMediaUrls.AlbumCover(Model)" alt="@T("Album cover", "غلاف الألبوم")" class="img-fluid rounded-4" style="max-height:130px;object-fit:cover" /></div>
         }
         <div class="col">
             <h5 class="mb-1">@Model.TitleEn</h5>
@@ -83,12 +83,12 @@
             <tbody>
             @foreach(var item in Model.Items.OrderBy(x=>x.SortOrder))
             {
-                var source = item.FilePath ?? item.VideoUrl ?? "";
+                var source = GharsPlatform.Helpers.GalleryMediaUrls.AlbumItem(item) ?? "";
                 <tr>
                     <td>
                         @if(item.MediaType == MediaType.Image && !string.IsNullOrWhiteSpace(item.FilePath))
                         {
-                            <img src="@item.FilePath" alt="" class="rounded" style="width:70px;height:52px;object-fit:cover" />
+                            <img src="@GharsPlatform.Helpers.GalleryMediaUrls.AlbumItem(item)" alt="" class="rounded" style="width:70px;height:52px;object-fit:cover" />
                         }
                         else if(item.MediaType == MediaType.Video)
                         {
@@ -132,7 +132,7 @@
         <div class="card h-100 rounded-4 border-0 shadow-sm overflow-hidden">
             <div class="bg-light d-flex align-items-center justify-content-center" style="height:190px;">
             @if(item.MediaType == MediaType.Image && !string.IsNullOrWhiteSpace(item.FilePath))
-            { <img src="@item.FilePath" alt="" style="width:100%;height:190px;object-fit:cover" /> }
+            { <img src="@GharsPlatform.Helpers.GalleryMediaUrls.AlbumItem(item)" alt="" style="width:100%;height:190px;object-fit:cover" /> }
             else if(item.MediaType == MediaType.Video)
             { <i class="bi bi-play-circle-fill" style="font-size:4rem"></i> }
             else

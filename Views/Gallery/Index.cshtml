@@ -214,9 +214,9 @@
     {
         var title = ar ? album.TitleAr : album.TitleEn;
         var desc = ar ? album.DescriptionAr : album.DescriptionEn;
-        var cover = !string.IsNullOrWhiteSpace(album.CoverImagePath)
-            ? album.CoverImagePath
-            : album.Items.FirstOrDefault(i => i.MediaType == MediaType.Image && !string.IsNullOrWhiteSpace(i.FilePath))?.FilePath;
+        var firstImage = album.Items.FirstOrDefault(i => i.MediaType == MediaType.Image && !string.IsNullOrWhiteSpace(i.FilePath));
+        var cover = GharsPlatform.Helpers.GalleryMediaUrls.AlbumCover(album)
+            ?? (firstImage is null ? null : GharsPlatform.Helpers.GalleryMediaUrls.AlbumItem(firstImage));
         <div class="col-md-4">
             <div class="card h-100 rounded-4 shadow-sm border-0 overflow-hidden">
                 @if (!string.IsNullOrWhiteSpace(cover))

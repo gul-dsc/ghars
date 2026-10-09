@@ -437,23 +437,11 @@ public class ActivitiesController : Controllers.BaseController
             MessageEn = messageEn,
             MessageAr = messageAr,
             Type = type,
-            TargetType = NotificationTargetType.Organization,
-            TargetOrganizationId = a.PartnerOrganizationId.Value,
             LinkUrl = "/partner/programs",
             CreatedAtUtc = DateTime.UtcNow,
             CreatedByUserId = CurrentUserId
         };
-        Db.Notifications.Add(n);
-        await Db.SaveChangesAsync();
-
-        var userIds = await Db.OrganizationAdminLinks
-            .Where(x => x.OrganizationId == a.PartnerOrganizationId.Value)
-            .Select(x => x.UserId).Distinct().ToListAsync();
-        foreach (var uid in userIds)
-            Db.NotificationDeliveries.Add(new NotificationDelivery { NotificationId = n.Id, UserId = uid, DeliveredAtUtc = DateTime.UtcNow });
-        await Db.SaveChangesAsync();
-
-        await _hub.Clients.All.SendAsync("notificationReceived", new { title = titleEn, message = messageEn, linkUrl = n.LinkUrl });
+        await NotificationDispatcher.SendToOrganizationAsync(Db, _hub, n, a.PartnerOrganizationId.Value);
     }
 
     public class ActivityVm

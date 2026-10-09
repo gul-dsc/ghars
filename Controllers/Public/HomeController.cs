@@ -324,46 +324,13 @@ public class HomeController : Controller
             MessageEn = $"{entity.FullName} ({topicEn}): {entity.Subject}",
             MessageAr = $"{entity.FullName} ({topicAr}): {entity.Subject}",
             Type = NotificationType.Info,
-            TargetType = NotificationTargetType.Role,
-            TargetRoleName = RoleNames.DscAdmin,
             // Site-relative: NotificationsController.Open passes this to LocalRedirect.
             LinkUrl = $"/Admin/ContactMessages/Details/{entity.Id}",
             CreatedAtUtc = DateTime.UtcNow,
             CreatedByUserId = entity.SubmittedByUserId
         };
-        _db.Notifications.Add(n);
-        await _db.SaveChangesAsync();
-
-        // Deliver to both admin roles. TargetRoleName above records DSC Admin as the nominal audience,
-        // but Super Admins can open the queue too and a site with no DSC Admin yet must not lose the
-        // enquiry into a notification nobody receives.
-        var roleNames = new[] { RoleNames.DscAdmin, RoleNames.SuperAdmin };
-        var roleIds = await _db.Roles.Where(r => r.Name != null && roleNames.Contains(r.Name))
-            .Select(r => r.Id).ToListAsync();
-        var userIds = await _db.UserRoles.Where(ur => roleIds.Contains(ur.RoleId))
-            .Select(ur => ur.UserId).Distinct().ToListAsync();
-
-        foreach (var uid in userIds)
-            _db.NotificationDeliveries.Add(new NotificationDelivery
-            {
-                NotificationId = n.Id,
-                UserId = uid,
-                DeliveredAtUtc = DateTime.UtcNow
-            });
-        await _db.SaveChangesAsync();
-
-        // "notification" with the rich payload is what admin.js renders as a toast.
-        await _hub.Clients.All.SendAsync("notification", new
-        {
-            id = n.Id,
-            titleEn = n.TitleEn,
-            titleAr = n.TitleAr,
-            messageEn = n.MessageEn,
-            messageAr = n.MessageAr,
-            type = n.Type.ToString(),
-            linkUrl = n.LinkUrl,
-            createdAtUtc = n.CreatedAtUtc
-        });
+        // DSC Admins and Super Admins only: the message carries the sender's name and subject.
+        await NotificationDispatcher.SendToDscReviewersAsync(_db, _hub, n);
     }
 
     public IActionResult Error() => View();

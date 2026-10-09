@@ -288,7 +288,8 @@
     </div>
 }
 
-@if (isPartnerSide)
+@* Offered only in the statuses the server accepts a proposal in (BookingWorkflow). *@
+@if (isPartnerSide && BookingWorkflow.IsAllowed(BookingDecision.EntityProposeTimes, Model.Status))
 {
     <form method="post" action="/partner/bookings/propose-times" class="metric-card booking-section-card mb-4" id="proposalForm">
         @Html.AntiForgeryToken()

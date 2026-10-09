@@ -29,7 +29,17 @@ public static class ProtectedFileStore
     /// </summary>
     public const string ProgramAttachments = "programs";
 
-    public static readonly string[] AllCategories = { KpiEvidence, OrganizationDocuments, SurveyReports, ProgramAttachments };
+    /// <summary>
+    /// Issued certificate PDFs. They carry the participant's name, so they are served only through
+    /// the DSC download endpoint. Files are named by a random GUID that is unrelated to the public
+    /// verification token, so knowing a certificate's QR link reveals nothing about where its PDF is.
+    /// Rows issued before this category existed carry a legacy <c>/uploads/certificates/{token}.pdf</c>
+    /// path; <see cref="CertificateFileMigrator"/> moves them, and static access to that folder is
+    /// denied in Program.cs in the meantime.
+    /// </summary>
+    public const string Certificates = "certificates";
+
+    public static readonly string[] AllCategories = { KpiEvidence, OrganizationDocuments, SurveyReports, ProgramAttachments, Certificates };
 
     public static string Root(IWebHostEnvironment env) => Path.Combine(env.ContentRootPath, RootFolderName);
 
@@ -53,6 +63,22 @@ public static class ProtectedFileStore
         var name = $"{Guid.NewGuid():N}{Path.GetExtension(file.FileName).ToLowerInvariant()}";
         await using var fs = new FileStream(Path.Combine(folder, name), FileMode.Create);
         await file.CopyToAsync(fs);
+
+        return $"{safeCategory}/{name}";
+    }
+
+    /// <summary>
+    /// Writes generated content (not an upload) into the protected root under a new GUID filename and
+    /// returns the storage key to persist.
+    /// </summary>
+    public static async Task<string> SaveBytesAsync(byte[] content, IWebHostEnvironment env, string category, string extension)
+    {
+        var safeCategory = NormalizeCategory(category);
+        var folder = Path.Combine(Root(env), safeCategory);
+        Directory.CreateDirectory(folder);
+
+        var name = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
+        await File.WriteAllBytesAsync(Path.Combine(folder, name), content);
 
         return $"{safeCategory}/{name}";
     }

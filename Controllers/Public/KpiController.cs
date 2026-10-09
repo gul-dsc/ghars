@@ -325,26 +325,13 @@ public class KpiController : Controller
             MessageEn = "A club submitted KPI data for review.",
             MessageAr = "قدم نادٍ بيانات مؤشرات الأداء للمراجعة.",
             Type = NotificationType.Warning,
-            TargetType = NotificationTargetType.Role,
-            TargetRoleName = RoleNames.DscAdmin,
             LinkUrl = $"/Admin/Kpi/Details/{id}",
             CreatedAtUtc = DateTime.UtcNow,
             CreatedByUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
         };
-        _db.Notifications.Add(n);
-        await _db.SaveChangesAsync();
-
-        // Resolve deliveries so DSC reviewers see it in their inbox (not only the live toast).
-        var role = await _db.Roles.FirstOrDefaultAsync(r => r.Name == RoleNames.DscAdmin);
-        if (role != null)
-        {
-            var userIds = await _db.UserRoles.Where(ur => ur.RoleId == role.Id).Select(ur => ur.UserId).Distinct().ToListAsync();
-            foreach (var uid in userIds)
-                _db.NotificationDeliveries.Add(new NotificationDelivery { NotificationId = n.Id, UserId = uid, DeliveredAtUtc = DateTime.UtcNow });
-            await _db.SaveChangesAsync();
-        }
-
-        await _hub.Clients.All.SendAsync("notificationReceived", new { title = n.TitleEn, message = n.MessageEn, linkUrl = n.LinkUrl });
+        // The DSC review queue, like every other submission for review (Super Admins included, so a
+        // site with no DSC Admin yet still receives it).
+        await NotificationDispatcher.SendToDscReviewersAsync(_db, _hub, n);
     }
 
     private async Task AuditAsync(string action, int id, object? oldValues, object? newValues)

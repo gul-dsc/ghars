@@ -116,6 +116,62 @@ public class CertificateAccessTests
     }
 
     [Fact]
+    public async Task Public_verification_never_shows_the_revocation_reason_but_dsc_administrators_see_it()
+    {
+        var (cert, _, super) = await IssueAsync();
+        var dsc = await _data.UserAsync(RoleNames.DscAdmin);
+        var reason = $"Disciplinary note {TestData.Unique()}";
+
+        await _f.ClientFor(super).PostAsync($"/Admin/Certificates/Revoke/{cert.Id}", Form(("reason", reason)));
+        Assert.Equal(reason, await _data.Db(db => db.Certificates.Where(c => c.Id == cert.Id).Select(c => c.RevokeReason).FirstAsync()));
+
+        foreach (var (client, revokedText) in new[]
+                 {
+                     (_f.ClientFor(null, "en"), "has been revoked"),
+                     (_f.ClientFor(null, "ar"), "تم إلغاء هذه الشهادة"),
+                     // A signed-in non-administrator gets the same public page.
+                     (_f.ClientFor(await _data.UserAsync(RoleNames.Viewer)), "has been revoked")
+                 })
+        {
+            var page = await client.GetAsync($"/verify/certificate/{cert.VerifyToken}");
+            Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+            var html = WebUtility.HtmlDecode(await page.Content.ReadAsStringAsync());
+            Assert.Contains(revokedText, html);
+            Assert.Contains(cert.CertificateNo, html);
+            Assert.DoesNotContain(reason, html);
+            Assert.DoesNotContain("Reason:", html);
+            Assert.DoesNotContain("السبب:", html);
+        }
+
+        // DSC administrators still see the reason, on the admin certificate list.
+        var admin = WebUtility.HtmlDecode(await (await _f.ClientFor(dsc).GetAsync("/Admin/Certificates")).Content.ReadAsStringAsync());
+        Assert.Contains(reason, admin);
+    }
+
+    [Fact]
+    public void Verification_view_model_carries_no_private_certificate_fields()
+    {
+        var names = typeof(GharsPlatform.ViewModels.CertificateVerificationVm).GetProperties().Select(p => p.Name).ToHashSet();
+        Assert.Equal(new[] { "ActivityTitleAr", "ActivityTitleEn", "CertificateNo", "IsValid", "IssuedAtUtc" }, names.OrderBy(n => n, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task Existing_verification_links_keep_working_through_migration_and_rollback()
+    {
+        var (legacyId, token, _) = await LegacyCertificateAsync();
+        var anon = _f.ClientFor(null);
+        var url = $"/verify/certificate/{token}";
+
+        Assert.Equal(HttpStatusCode.OK, (await anon.GetAsync(url)).StatusCode);
+        await RunMigratorAsync("--commit");
+        Assert.StartsWith("certificates/", await _data.Db(db => db.Certificates.Where(c => c.Id == legacyId).Select(c => c.PdfPath).FirstAsync()));
+        Assert.Equal(HttpStatusCode.OK, (await anon.GetAsync(url)).StatusCode);
+        await RunMigratorAsync("--rollback", LatestManifest());
+        Assert.Equal(HttpStatusCode.OK, (await anon.GetAsync(url)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await anon.GetAsync("/verify/certificate/not-a-real-token")).StatusCode);
+    }
+
+    [Fact]
     public async Task Legacy_file_is_not_served_statically_but_still_downloads_for_admins()
     {
         var (legacyId, token, _) = await LegacyCertificateAsync();

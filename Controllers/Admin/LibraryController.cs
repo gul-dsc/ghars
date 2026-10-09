@@ -99,8 +99,10 @@ public class LibraryController : Controllers.BaseController
 
         if (!ModelState.IsValid) return View(vm);
 
-        var filePath = vm.File is { Length: > 0 } ? await FileValidationHelper.SaveAsync(vm.File, _env.WebRootPath, "uploads/library") : null;
-        var coverPath = vm.CoverImage is { Length: > 0 } ? await FileValidationHelper.SaveAsync(vm.CoverImage, _env.WebRootPath, "uploads/library") : null;
+        // Stored outside wwwroot. Readers reach them only through Library/Stream and Library/Cover,
+        // which check the item's publication state on every request.
+        var filePath = vm.File is { Length: > 0 } ? await ProtectedFileStore.SaveAsync(vm.File, _env, ProtectedFileStore.Library) : null;
+        var coverPath = vm.CoverImage is { Length: > 0 } ? await ProtectedFileStore.SaveAsync(vm.CoverImage, _env, ProtectedFileStore.Library) : null;
 
         Db.LibraryItems.Add(new LibraryItem
         {
@@ -126,18 +128,6 @@ public class LibraryController : Controllers.BaseController
         await Db.SaveChangesAsync();
         TempData["ToastSuccess"] = IsAr() ? "تمت إضافة الإصدار إلى المكتبة الرقمية." : "Library item created.";
         return RedirectToAction(nameof(Items));
-    }
-
-    private static async Task<string> SaveFileAsync(IFormFile file, string rootFolder)
-    {
-        var ext = Path.GetExtension(file.FileName);
-        var safeName = $"{Guid.NewGuid():N}{ext}";
-        var fullPath = Path.Combine(rootFolder, safeName);
-
-        await using var fs = new FileStream(fullPath, FileMode.Create);
-        await file.CopyToAsync(fs);
-
-        return "/uploads/library/" + safeName;
     }
 
     public class CategoryVm

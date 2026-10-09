@@ -39,7 +39,16 @@ public static class ProtectedFileStore
     /// </summary>
     public const string Certificates = "certificates";
 
-    public static readonly string[] AllCategories = { KpiEvidence, OrganizationDocuments, SurveyReports, ProgramAttachments, Certificates };
+    /// <summary>
+    /// Digital Library files and cover images. Served only through <c>/Library/Stream/{id}</c> and
+    /// <c>/Library/Cover/{id}</c>, which apply the item's own publication rules, so an unpublished or
+    /// members-only item is not reachable by guessing a URL. Items created before this category
+    /// existed carry a legacy <c>/uploads/library/…</c> path; static access to that folder is denied in
+    /// Program.cs and <see cref="ProtectedFileMigrator"/> moves the files.
+    /// </summary>
+    public const string Library = "library";
+
+    public static readonly string[] AllCategories = { KpiEvidence, OrganizationDocuments, SurveyReports, ProgramAttachments, Certificates, Library };
 
     public static string Root(IWebHostEnvironment env) => Path.Combine(env.ContentRootPath, RootFolderName);
 

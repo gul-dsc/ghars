@@ -146,14 +146,12 @@ var app = builder.Build();
 
 // One-time operational utility for relocating protected uploads out of wwwroot. Runs instead of the
 // web host (and without seeding) so it can never fire as a side effect of a normal start.
-//   dotnet run -- migrate-protected-files [--commit | --purge]
+// Dry run by default; see Helpers/ProtectedFileMigrator.cs for --commit, --rollback and --purge.
+//   dotnet run -- migrate-protected-files [--commit | --rollback <manifest> | --purge <manifest>] [--production]
 if (args.Length > 0 && string.Equals(args[0], "migrate-protected-files", StringComparison.OrdinalIgnoreCase))
 {
     using var migrationScope = app.Services.CreateScope();
-    return await ProtectedFileMigrator.RunAsync(
-        migrationScope.ServiceProvider,
-        commit: args.Contains("--commit"),
-        purge: args.Contains("--purge"));
+    return await ProtectedFileMigrator.RunAsync(migrationScope.ServiceProvider, args);
 }
 
 // Moves certificate PDFs issued before protected storage out of wwwroot, under new random names.
@@ -314,9 +312,10 @@ app.UseHttpsRedirection();
 //   /uploads/gallery — DSC gallery media. Channel items are served by /protected-files/gallery/{id}
 //     (hiding one hides its file) and album media by /protected-files/album-media|album-cover/{id}
 //     (an unpublished album's files are not public).
-// /uploads/org is deliberately absent: it also holds public organization logos. Its documents are
-// removed from disk by the --purge phase of the migration instead.
-string[] deniedStaticPrefixes = { "/uploads/kpi", "/uploads/surveys", "/uploads/agenda", "/uploads/channel", "/uploads/certificates", "/uploads/gallery" };
+//   /uploads/library — Digital Library files and covers. Served by /Library/Stream|Cover/{id}, which apply
+//     the item's publication rules; new uploads are stored outside wwwroot, and `migrate-protected-files`
+//     moves the older ones.
+string[] deniedStaticPrefixes = { "/uploads/kpi", "/uploads/surveys", "/uploads/agenda", "/uploads/channel", "/uploads/certificates", "/uploads/gallery", "/uploads/library" };
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value ?? string.Empty;
@@ -325,6 +324,20 @@ app.Use(async (context, next) =>
         context.Response.StatusCode = StatusCodes.Status404NotFound;
         return;
     }
+
+    // /uploads/org holds public organization logos alongside licence and supporting documents uploaded
+    // before protected storage. A file there is served only when it is an organization's current logo;
+    // every other file — a legacy document, or an original kept after migration — answers 404.
+    if (path.StartsWith("/uploads/org/", StringComparison.OrdinalIgnoreCase))
+    {
+        var db = context.RequestServices.GetRequiredService<AppDbContext>();
+        if (path.Contains("..", StringComparison.Ordinal) || !await db.Organizations.AnyAsync(o => o.LogoPath == path))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+    }
+
     await next();
 });
 

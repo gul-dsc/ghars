@@ -1,4 +1,6 @@
 using GharsPlatform.Data;
+using GharsPlatform.Models.Core;
+using GharsPlatform.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,13 +22,25 @@ public class VerifyController : Controller
         if (string.IsNullOrWhiteSpace(token))
             return NotVerified();
 
-        var cert = await _db.Certificates
-            .Include(x => x.Activity)
-            .FirstOrDefaultAsync(x => x.VerifyToken == token);
+        // Projected straight to the public view model: the revocation reason, the participant and
+        // the stored file path are never loaded for this page.
+        var vm = await _db.Certificates
+            .AsNoTracking()
+            .Where(x => x.VerifyToken == token)
+            .Select(x => new CertificateVerificationVm
+            {
+                CertificateNo = x.CertificateNo,
+                IsValid = x.Status == CertificateStatus.Issued,
+                IssuedAtUtc = x.IssuedAtUtc,
+                ActivityTitleEn = x.Activity != null ? x.Activity.TitleEn : null,
+                ActivityTitleAr = x.Activity != null ? x.Activity.TitleAr : null
+            })
+            .FirstOrDefaultAsync();
 
-        if (cert is null) return NotVerified();
+        if (vm is null) return NotVerified();
 
-        return View(cert);
+        Response.Headers.CacheControl = "no-store";
+        return View(vm);
     }
 
     private IActionResult NotVerified()

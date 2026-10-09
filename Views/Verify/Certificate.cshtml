@@ -1,13 +1,13 @@
-@model GharsPlatform.Models.Core.Certificate
+@model GharsPlatform.ViewModels.CertificateVerificationVm
 @using System.Globalization
 @{
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string e, string a) => ar ? a : e;
     ViewData["Title"] = T("Certificate verification", "التحقق من الشهادة");
-    var issued = Model.Status == CertificateStatus.Issued;
-    var activityTitle = ar && !string.IsNullOrWhiteSpace(Model.Activity?.TitleAr) ? Model.Activity!.TitleAr : Model.Activity?.TitleEn;
+    var issued = Model.IsValid;
+    var activityTitle = ar && !string.IsNullOrWhiteSpace(Model.ActivityTitleAr) ? Model.ActivityTitleAr : Model.ActivityTitleEn;
 }
-@* The participant's name is deliberately not shown on this public page (decision D4). *@
+@* Public page: no participant name (decision D4) and no revocation reason, which only DSC administrators see. *@
 <div class="row justify-content-center">
     <div class="col-lg-9">
         <div class="card shadow-sm border-0 rounded-4">
@@ -23,10 +23,7 @@
                 {
                     <div class="alert alert-danger mb-0">
                         <i class="bi bi-x-octagon me-1"></i>@T("This certificate has been revoked and is no longer valid.", "تم إلغاء هذه الشهادة ولم تعد صالحة.")
-                        @if (!string.IsNullOrWhiteSpace(Model.RevokeReason))
-                        {
-                            <div class="small mt-1">@T("Reason:", "السبب:") @Model.RevokeReason</div>
-                        }
+                        <div class="small mt-1">@T("For more information, contact the Ghars Program at Dubai Sports Council.", "لمزيد من المعلومات، يرجى التواصل مع برنامج غرس في مجلس دبي الرياضي.")</div>
                     </div>
                 }
                 <hr />

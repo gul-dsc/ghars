@@ -36,7 +36,7 @@
                     <td class="fw-semibold"><bdi dir="ltr">@c.CertificateNo</bdi></td>
                     <td>@(ar && !string.IsNullOrWhiteSpace(c.Activity?.TitleAr) ? c.Activity!.TitleAr : c.Activity?.TitleEn)</td>
                     <td>@if (!string.IsNullOrEmpty(c.UserId) && recipients.TryGetValue(c.UserId, out var who)) { <div class="fw-semibold">@(string.IsNullOrWhiteSpace(who[0]) ? who[1] : who[0])</div><div class="small text-muted"><bdi>@who[1]</bdi></div> } else { <span class="text-muted small">@T("Unknown user", "مستخدم غير معروف")</span> }</td>
-                    <td><span class="badge text-bg-@(c.Status==CertificateStatus.Issued?"success":"danger")">@(c.Status == CertificateStatus.Issued ? T("Issued", "صادرة") : c.Status == CertificateStatus.Revoked ? T("Revoked", "ملغاة") : c.Status.ToString())</span></td>
+                    <td><span class="badge text-bg-@(c.Status==CertificateStatus.Issued?"success":"danger")">@(c.Status == CertificateStatus.Issued ? T("Issued", "صادرة") : c.Status == CertificateStatus.Revoked ? T("Revoked", "ملغاة") : c.Status.ToString())</span>@if (c.Status == CertificateStatus.Revoked && !string.IsNullOrWhiteSpace(c.RevokeReason)) { <div class="small text-muted mt-1">@T("Reason:", "السبب:") @c.RevokeReason</div> }</td>
                     <td>@c.IssuedAtUtc.ToString("yyyy-MM-dd")</td>
                     <td class="text-end">
                         <a class="btn btn-sm btn-outline-primary" href="/Admin/Certificates/Download/@c.Id" aria-label="@T($"Download certificate {c.CertificateNo} as PDF", $"تنزيل الشهادة {c.CertificateNo} بصيغة PDF")">PDF</a>

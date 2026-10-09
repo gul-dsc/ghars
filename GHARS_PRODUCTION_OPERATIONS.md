@@ -194,33 +194,46 @@ platform is returned to service — clubs can re-upload evidence, but only if th
 
 ## 5. The protected-file migration utility
 
-One-time relocation of legacy files from `wwwroot/uploads` into `protected-uploads/`. It is an **operator
-command** and never runs as part of a normal startup — it replaces the web host and skips seeding entirely.
+One-time relocation of legacy files from `wwwroot/uploads` into `protected-uploads/`, under new random
+names. It covers KPI evidence, organization licence and supporting documents, official survey reports,
+and Digital Library files and covers. Organization logos are public and are not touched. It is an
+**operator command** and never runs as part of a normal startup — it replaces the web host and skips
+seeding entirely. In Production, every step that writes needs `--production` as well.
 
 ```bash
-dotnet GharsPlatform.dll migrate-protected-files              # 1. dry run — reports, changes nothing
-dotnet GharsPlatform.dll migrate-protected-files --commit     # 2. copies files, repoints DB, keeps originals
-dotnet GharsPlatform.dll migrate-protected-files --purge      # 3. deletes the legacy originals
+dotnet GharsPlatform.dll migrate-protected-files                                    # 1. dry run — reports, changes nothing
+dotnet GharsPlatform.dll migrate-protected-files --commit --production              # 2. copy, verify (SHA-256), repoint; originals kept; writes a manifest
+dotnet GharsPlatform.dll migrate-protected-files --rollback <manifest> --production  #    undo step 2
+dotnet GharsPlatform.dll migrate-protected-files --purge <manifest> --production     # 3. delete verified originals
 ```
 
-Run the phases as three separate, verified steps:
+Run the phases as separate, verified steps:
 
 1. **Dry run.** Review the report. `MISSING FILE` rows are pre-existing broken references — investigate
    them before continuing; the migrator leaves those rows untouched rather than repointing them at a path
    that also does not exist.
-2. **`--commit`.** Copies each file, verifies the copy's length, then updates the database. The legacy file
-   is **kept**. The application works correctly in this state — both path shapes resolve.
-3. **Verify.** Open real evidence for several clubs through the UI.
-4. **`--purge`.** Only after step 3. Deletes a legacy file only once the protected copy is confirmed
-   present.
+2. **`--commit`.** Copies each file, compares the SHA-256 hash of the copy with the original, then updates
+   every row in one transaction. If the database update fails, the copies are removed and nothing changes.
+   The legacy file is **kept**, and the application works in this state — both path shapes resolve. The
+   manifest path is printed at the end (`protected-uploads/_migrations/protected-files-….csv`); **copy it
+   to the backup location**.
+3. **Verify.** Open real evidence, organization documents and library items through the UI.
+4. **`--purge <manifest>`.** Only after step 3, and not before post-deployment sign-off. An original is
+   deleted only if every row that used it is on a copy whose hash still matches, and no file column
+   anywhere in the database still names it.
 
 > Take a database and file backup **before `--commit`** and again **before `--purge`**.
+
+Legacy organization documents stay on disk under `wwwroot/uploads/org` until `--purge`, but are no longer
+served: the application serves a file from `/uploads/org` only when it is an organization's current logo.
+`/uploads/library` is not served statically at all; library files go through `/Library/Stream/{id}` and
+`/Library/Cover/{id}`.
 
 ### Rollback
 
 | Situation | Action |
 |---|---|
-| After `--commit`, before `--purge` | Restore the previous `FilePath` / `ReportPdfPath` values from backup. The legacy files are still on disk, so the application returns to its prior behaviour immediately. **No file recovery needed.** |
+| After `--commit`, before `--purge` | `migrate-protected-files --rollback <manifest> --production`. Each row that still points at its copy, and whose original is present and unchanged, is pointed back at the original, and the copy is removed. **No file recovery needed.** |
 | After `--purge` | The legacy copies are gone. Roll back by restoring both the database *and* `protected-uploads/` from backup. This is the reason `--purge` is a separate, deliberate step. |
 
 `/uploads/kpi`, `/uploads/surveys` and `/uploads/agenda` are refused by the static deny-list in
@@ -603,8 +616,9 @@ figures inside DSC's governance reporting.
 | Apply migrations | `dotnet ef database update` |
 | Generate migration script | `dotnet ef migrations script --idempotent -o ghars.sql` |
 | Migrate protected files (dry run) | `dotnet GharsPlatform.dll migrate-protected-files` |
-| Migrate protected files (commit) | `dotnet GharsPlatform.dll migrate-protected-files --commit` |
-| Purge legacy copies | `dotnet GharsPlatform.dll migrate-protected-files --purge` |
+| Migrate protected files (commit) | `dotnet GharsPlatform.dll migrate-protected-files --commit --production` |
+| Undo the commit | `dotnet GharsPlatform.dll migrate-protected-files --rollback <manifest> --production` |
+| Purge legacy copies | `dotnet GharsPlatform.dll migrate-protected-files --purge <manifest> --production` |
 | Load the approved roster | `dotnet GharsPlatform.dll reconcile-organizations --production [--commit]` |
 | Reset an administrator password | `dotnet GharsPlatform.dll set-admin-password --email <address> --production` |
 | Create the club/entity accounts | `dotnet run -- seed-organization-accounts --domain <domain> --production [--commit]` |

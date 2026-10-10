@@ -6,7 +6,7 @@
     string T(string en, string ar) => isAr ? ar : en;
     var org = Model.Organization!;
     var name = isAr && !string.IsNullOrWhiteSpace(org.NameAr) ? org.NameAr : org.NameEn;
-    var logo = string.IsNullOrWhiteSpace(org.LogoPath) ? Url.Content("~/img/partners/default-partner.svg") : Url.Content(org.LogoPath);
+    var logo = Url.Content("~" + GharsPlatform.Helpers.OrganizationLogo.SrcOrDefault(org.LogoPath));
     ViewData["Title"] = name;
 
     var isClub = User.IsInRole(RoleNames.ClubAdmin);

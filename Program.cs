@@ -132,6 +132,16 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0
         }));
 
+    // Browser CSP violation reports. One page can raise several at once, so the limit is per minute.
+    options.AddPolicy("csp-report", context => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 30,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+
     options.OnRejected = async (context, token) =>
     {
         context.HttpContext.Response.ContentType = "text/plain; charset=utf-8";
@@ -299,6 +309,10 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// Content Security Policy — report-only until the violation reports have been reviewed. See
+// Helpers/SecurityHeaders.cs; switch with Security:Csp:Mode (ReportOnly | Enforce | Off).
+app.UseGharsSecurityHeaders(SecurityHeaders.ModeFrom(app.Configuration));
+
 // Defence in depth: these folders are served exclusively through ProtectedFilesController, so deny
 // static access even for rows that have not yet been migrated out of wwwroot.
 //   /uploads/kpi, /uploads/surveys — only ever held protected content (KPI evidence, official reports).
@@ -326,12 +340,14 @@ app.Use(async (context, next) =>
     }
 
     // /uploads/org holds public organization logos alongside licence and supporting documents uploaded
-    // before protected storage. A file there is served only when it is an organization's current logo;
-    // every other file — a legacy document, or an original kept after migration — answers 404.
-    if (path.StartsWith("/uploads/org/", StringComparison.OrdinalIgnoreCase))
+    // before protected storage. A file there is served only when it is a well-formed uploaded image that
+    // is an organization's current logo and is not recorded as an organization document; every other
+    // file — a legacy document, an original kept after migration, a traversal attempt — answers 404.
+    // See Helpers/OrganizationLogo.cs.
+    if (path.StartsWith("/uploads/org", StringComparison.OrdinalIgnoreCase))
     {
         var db = context.RequestServices.GetRequiredService<AppDbContext>();
-        if (path.Contains("..", StringComparison.Ordinal) || !await db.Organizations.AnyAsync(o => o.LogoPath == path))
+        if (!await OrganizationLogo.IsServableUploadAsync(db, path))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
@@ -354,6 +370,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHub<NotificationsHub>("/hubs/notifications");
+app.MapCspReports().RequireRateLimiting("csp-report");
 
 app.MapControllerRoute(
     name: "areas",

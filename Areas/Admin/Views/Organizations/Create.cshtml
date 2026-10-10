@@ -1,6 +1,7 @@
 @model GharsPlatform.Controllers.Admin.OrganizationsController.OrganizationVm
 @using System.Globalization
 @using GharsPlatform.Models.Core
+@using GharsPlatform.Helpers
 @using Microsoft.AspNetCore.Mvc.Rendering
 @using OrgText = GharsPlatform.Controllers.Admin.OrganizationText
 @{
@@ -11,14 +12,38 @@
     ViewData["PageTitle"] = ViewData["Title"];
 }
 <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
-<form method="post">
+<form method="post" enctype="multipart/form-data">
     @Html.AntiForgeryToken()
     <input type="hidden" asp-for="Id" />
     <div asp-validation-summary="All" class="text-danger small"></div>
     <div class="row g-3">
         <div class="col-md-4"><label class="form-label">@T("Type", "النوع")</label><select class="form-select" asp-for="OrganizationType" asp-items="@(OrgText.Types.Select(t => new SelectListItem(OrgText.TypeLabel(t), ((byte)t).ToString())))"></select></div>
         <div class="col-md-4"><label class="form-label">@T("Status", "الحالة")</label><select class="form-select" asp-for="Status" asp-items="@(OrgText.Statuses.Select(s => new SelectListItem(OrgText.StatusLabel(s), ((byte)s).ToString())))"></select></div>
-        <div class="col-md-4"><label class="form-label">@T("Logo image address (optional)", "عنوان صورة الشعار (اختياري)")</label><input class="form-control" asp-for="LogoPath" dir="ltr" placeholder="/img/partners/default-partner.svg" /></div>
+        <div class="col-md-6">
+            <label class="form-label" for="LogoPath">@T("Logo", "الشعار")</label>
+            <select class="form-select" asp-for="LogoPath" dir="ltr">
+                <option value="">@T("No logo (default image)", "بدون شعار (الصورة الافتراضية)")</option>
+                @if (OrganizationLogo.IsUpload(Model.CurrentLogoPath))
+                {
+                    <option value="@Model.CurrentLogoPath">@T("Current uploaded logo", "الشعار المرفوع الحالي")</option>
+                }
+                @foreach (var image in Model.SiteLogos)
+                {
+                    <option value="@image">@image</option>
+                }
+            </select>
+            <span asp-validation-for="LogoPath" class="text-danger small"></span>
+            @if (!string.IsNullOrEmpty(Model.CurrentLogoPath) && !OrganizationLogo.IsWellFormed(Model.CurrentLogoPath))
+            {
+                <div class="form-text text-danger">@T("The saved logo address is not an allowed image and is not shown publicly. Choose a logo or upload one.", "عنوان الشعار المحفوظ ليس صورة مسموحة ولا يُعرض للعامة. اختاروا شعاراً أو ارفعوا صورة.")</div>
+            }
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" for="LogoFile">@T("Or upload a new logo", "أو ارفعوا شعاراً جديداً")</label>
+            <input class="form-control" type="file" asp-for="LogoFile" accept=".png,.jpg,.jpeg,.gif,.webp" />
+            <div class="form-text">@T("PNG, JPG, GIF or WebP, up to 10 MB. An upload replaces the choice on the left.", "PNG أو JPG أو GIF أو WebP، بحد أقصى 10 ميجابايت. الملف المرفوع يحل محل الاختيار المجاور.")</div>
+            <span asp-validation-for="LogoFile" class="text-danger small"></span>
+        </div>
         <div class="col-md-6"><label class="form-label">@T("Name (English)", "الاسم (بالإنجليزية)")</label><input class="form-control" asp-for="NameEn" dir="ltr" /></div>
         <div class="col-md-6"><label class="form-label">@T("Name (Arabic)", "الاسم (بالعربية)")</label><input class="form-control" asp-for="NameAr" dir="rtl" /></div>
         <div class="col-md-6"><label class="form-label">@T("Email", "البريد الإلكتروني")</label><input class="form-control" asp-for="Email" dir="ltr" /></div>

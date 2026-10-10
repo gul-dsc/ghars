@@ -352,6 +352,38 @@ The startup log states which path ran. On a correct production start you will se
 4. Confirm folder permissions (§2.3).
 5. Smoke-test using §4.1.
 
+### 6.2.2 Organization logos
+
+A logo is the only organization file served without signing in, so `Organizations.LogoPath` may
+hold only a site image (`/img/clubs|partners|brand/<name>.<png|jpg|gif|webp|svg>`) or an uploaded
+logo (`/uploads/org/<32 hex>.<png|jpg|gif|webp>`). Any other value is no longer served, and pages
+show the default image instead. Before deploying, list the rows that will fall back:
+
+```sql
+SELECT Id, NameEn, LogoPath FROM Organizations
+WHERE LogoPath IS NOT NULL AND LogoPath <> ''
+  AND LogoPath NOT LIKE '/img/clubs/%' AND LogoPath NOT LIKE '/img/partners/%' AND LogoPath NOT LIKE '/img/brand/%'
+  AND NOT (LogoPath LIKE '/uploads/org/%' AND (LogoPath LIKE '%.png' OR LogoPath LIKE '%.jpg' OR LogoPath LIKE '%.jpeg' OR LogoPath LIKE '%.gif' OR LogoPath LIKE '%.webp'));
+```
+
+An empty result means nothing changes visibly. For any row listed, choose a site image or upload the
+logo again under Admin → Organizations → Edit; do not edit the column by hand.
+
+### 6.2.3 Content Security Policy
+
+Every response carries a `Content-Security-Policy-Report-Only` header (Helpers/SecurityHeaders.cs).
+Browsers block nothing; they post what they would have blocked to `/csp-report`, and the
+application logs each report as a warning from the `CspReport` category ("CSP violation report").
+
+| `Security:Csp:Mode` (appsettings or `Security__Csp__Mode`) | Effect |
+|---|---|
+| `ReportOnly` (default) | Policy reported, not enforced |
+| `Enforce` | Policy enforced. Only after the reports have been reviewed and are empty |
+| `Off` | No policy header |
+
+Scripts, styles and fonts are served from `wwwroot/lib` (versions and hashes in its README), so no
+CDN needs to be reachable from users' browsers.
+
 ### 6.3 Migrations
 
 ```bash
@@ -624,6 +656,8 @@ figures inside DSC's governance reporting.
 | Create the club/entity accounts | `dotnet run -- seed-organization-accounts --domain <domain> --production [--commit]` |
 | Re-issue their passwords | `… seed-organization-accounts --domain <domain> --production --reset-passwords --commit` |
 | Verify protection | `GET /uploads/kpi/<file>` → **404** |
+| Logos that will fall back to the default | SQL in §6.2.2 |
+| Content Security Policy mode | `Security__Csp__Mode=ReportOnly` (default) / `Enforce` / `Off` — §6.2.3 |
 
 **Related:** `GHARS_IMPLEMENTATION_REPORT.md` §20 (protected storage architecture and authorization rules)
 and §21 (production hardening pass, security regression results, remaining risks).

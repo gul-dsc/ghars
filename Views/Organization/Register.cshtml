@@ -104,7 +104,8 @@
 
                         <div class="col-md-4">
                             <label class="form-label">@T("Logo (optional)", "الشعار (اختياري)")</label>
-                            <input class="form-control" type="file" asp-for="LogoFile" />
+                            <input class="form-control" type="file" asp-for="LogoFile" accept=".png,.jpg,.jpeg,.gif,.webp" />
+                            <span asp-validation-for="LogoFile" class="text-danger small"></span>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">@T("Trade license or license", "الرخصة التجارية أو الترخيص")</label>

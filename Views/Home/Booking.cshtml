@@ -46,9 +46,7 @@
         .SelectMany(g => g.Value.Select(a => (Entity: byId[g.Key], Offering: a)))
         .ToList();
 
-    string LogoOf(Organization o) => string.IsNullOrWhiteSpace(o.LogoPath)
-        ? Url.Content("~/img/partners/default-partner.svg")
-        : Url.Content(o.LogoPath);
+    string LogoOf(Organization o) => Url.Content("~" + GharsPlatform.Helpers.OrganizationLogo.SrcOrDefault(o.LogoPath));
 
     // The Custom Program Request entry point, used in three places: the choice card at the top of the
     // page, the secondary action beneath the catalogue, and the empty state. Its own route, so the

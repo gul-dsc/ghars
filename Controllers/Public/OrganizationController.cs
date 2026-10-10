@@ -71,6 +71,9 @@ public class OrganizationController : Controller
 
     private async Task<IActionResult> SaveOrganizationAsync(OrganizationRegistrationVm vm)
     {
+        // The logo is served publicly from the site's own origin, so it must really be a raster image.
+        var logoError = OrganizationLogo.ValidateUpload(vm.LogoFile, System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar");
+        if (logoError is not null) ModelState.AddModelError(nameof(vm.LogoFile), logoError);
         if (!ModelState.IsValid) return View("Register", vm);
 
         var exists = await _db.Organizations.IgnoreQueryFilters()
@@ -101,11 +104,8 @@ public class OrganizationController : Controller
 
         // The logo is PUBLIC (shown on public organization listings) and stays under wwwroot.
         // Licence and supporting documents below are PROTECTED and never touch the web root.
-        var logoRoot = Path.Combine(_env.WebRootPath, "uploads", "org");
-        Directory.CreateDirectory(logoRoot);
-
         if (vm.LogoFile is not null && vm.LogoFile.Length > 0)
-            org.LogoPath = await SaveFileAsync(vm.LogoFile, logoRoot);
+            org.LogoPath = await OrganizationLogo.SaveUploadAsync(vm.LogoFile, _env);
 
         _db.Organizations.Add(org);
         await _db.SaveChangesAsync();
@@ -181,17 +181,5 @@ public class OrganizationController : Controller
 
         await _db.SaveChangesAsync();
         return RedirectToAction(nameof(RegisterSuccess));
-    }
-
-    private static async Task<string> SaveFileAsync(IFormFile file, string rootFolder)
-    {
-        var ext = Path.GetExtension(file.FileName);
-        var safeName = $"{Guid.NewGuid():N}{ext}";
-        var fullPath = Path.Combine(rootFolder, safeName);
-
-        await using var fs = new FileStream(fullPath, FileMode.Create);
-        await file.CopyToAsync(fs);
-
-        return "/uploads/org/" + safeName;
     }
 }

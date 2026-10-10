@@ -5,6 +5,7 @@ using GharsPlatform.Helpers;
 using GharsPlatform.Hubs;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
+using GharsPlatform.Models.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -107,7 +108,7 @@ public class ActivitiesController : Controllers.BaseController
 
         return users.ToDictionary(
             x => x.Id,
-            x => string.IsNullOrWhiteSpace(x.FullName) ? "Authorised user" : x.FullName!);
+            x => string.IsNullOrWhiteSpace(x.FullName) ? (IsAr() ? "مستخدم مخوّل" : "Authorised user") : x.FullName!);
     }
 
     [Authorize(Roles = RoleNames.SuperAdmin)]
@@ -127,7 +128,7 @@ public class ActivitiesController : Controllers.BaseController
 
         if (vm.EndDateTime <= vm.StartDateTime)
         {
-            ModelState.AddModelError(nameof(vm.EndDateTime), "End time must be after start time.");
+            ModelState.AddModelError(nameof(vm.EndDateTime), IsAr() ? "يجب أن يكون وقت الانتهاء بعد وقت البدء." : "End time must be after start time.");
             return View(vm);
         }
 
@@ -155,7 +156,7 @@ public class ActivitiesController : Controllers.BaseController
         await Db.SaveChangesAsync();
         await AuditAsync("Create", nameof(Activity), entity.Id.ToString(), null, entity);
 
-        TempData["ToastSuccess"] = "Activity created.";
+        TempData["ToastSuccess"] = IsAr() ? "تم إنشاء البرنامج." : "Program created.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -228,7 +229,7 @@ public class ActivitiesController : Controllers.BaseController
         await Db.SaveChangesAsync();
         await AuditAsync("Update", nameof(Activity), a.Id.ToString(), old, a);
 
-        TempData["ToastSuccess"] = "Activity updated.";
+        TempData["ToastSuccess"] = IsAr() ? "تم تحديث البرنامج." : "Program updated.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -258,7 +259,7 @@ public class ActivitiesController : Controllers.BaseController
         await Db.SaveChangesAsync();
         await AuditAsync("Publish", nameof(Activity), id.ToString(), old, new { a.Status, a.ApprovalStatus });
 
-        TempData["ToastSuccess"] = "Activity published.";
+        TempData["ToastSuccess"] = IsAr() ? "تم نشر البرنامج." : "Program published.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -275,7 +276,8 @@ public class ActivitiesController : Controllers.BaseController
         // they are gone nothing records where their files lived. A cancelled activity keeps both.
         var orphanedFiles = new List<string>();
 
-        if (await Db.BookingRequests.AnyAsync(x => x.ActivityId == id))
+        var cancelledInstead = await Db.BookingRequests.AnyAsync(x => x.ActivityId == id);
+        if (cancelledInstead)
         {
             a.Status = ActivityStatus.Cancelled;
             a.UpdatedAtUtc = DateTime.UtcNow;
@@ -296,7 +298,13 @@ public class ActivitiesController : Controllers.BaseController
         foreach (var key in orphanedFiles) ProtectedFileStore.TryDelete(key, _env);
 
         await AuditAsync("Delete", nameof(Activity), id.ToString(), a, null);
-        TempData["ToastWarning"] = "Activity deleted or cancelled when linked records exist.";
+        var name = IsAr() && !string.IsNullOrWhiteSpace(a.TitleAr) ? a.TitleAr : a.TitleEn;
+        if (cancelledInstead)
+            TempData["ToastWarning"] = IsAr()
+                ? $"لم يُحذف البرنامج '{name}' لأن عليه حجوزات، وتم إلغاؤه بدلاً من ذلك."
+                : $"'{name}' has bookings, so it was cancelled instead of deleted.";
+        else
+            TempData["ToastSuccess"] = IsAr() ? $"تم حذف البرنامج '{name}'." : $"'{name}' was deleted.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -333,7 +341,7 @@ public class ActivitiesController : Controllers.BaseController
 
         if (!OfferingWorkflow.CanUnpublish(a.ApprovalStatus))
         {
-            TempData["ToastWarning"] = "Only an approved offering can be unpublished.";
+            TempData["ToastWarning"] = IsAr() ? "يمكن سحب البرنامج المعتمد فقط." : "Only an approved program can be withdrawn.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -346,12 +354,12 @@ public class ActivitiesController : Controllers.BaseController
         await Db.SaveChangesAsync();
         await AuditAsync("OfferingUnpublishedByDsc", nameof(Activity), a.Id.ToString(), old, new { a.Status, a.ApprovalStatus, a.ReviewNotes });
 
-        await NotifyPartnerAsync(a, "Program unpublished", "تم إلغاء نشر البرنامج",
+        await NotifyPartnerAsync(a, "Program withdrawn", "تم سحب البرنامج",
             $"'{a.TitleEn}' was withdrawn from the club catalogue by DSC.",
             $"تم سحب البرنامج '{a.TitleAr}' من كتالوج الأندية من قبل مجلس دبي الرياضي.",
             NotificationType.Warning);
 
-        TempData["ToastSuccess"] = "Offering unpublished.";
+        TempData["ToastSuccess"] = IsAr() ? "تم سحب البرنامج من كتالوج الأندية." : "Program withdrawn from the club catalogue.";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -366,20 +374,20 @@ public class ActivitiesController : Controllers.BaseController
 
         if (!OfferingWorkflow.IsPartnerOffering(a))
         {
-            TempData["ToastWarning"] = "This activity is not a partner offering and has no review workflow.";
+            TempData["ToastWarning"] = IsAr() ? "هذا البرنامج ليس مقدّماً من جهة منفذة، فلا يمر بمراجعة الاعتماد." : "This program was not submitted by an implementing entity, so it has no review step.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
         if (!OfferingWorkflow.DscCanReview(a.ApprovalStatus))
         {
-            TempData["ToastWarning"] = "This offering is not awaiting review.";
+            TempData["ToastWarning"] = IsAr() ? "هذا البرنامج ليس بانتظار المراجعة." : "This program is not awaiting review.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
         // A return or a rejection has to tell the partner why, or it is not actionable.
         if (decision != OfferingApprovalStatus.Approved && string.IsNullOrWhiteSpace(notes))
         {
-            TempData["ToastWarning"] = "Reviewer notes are required when returning or rejecting an offering. | ملاحظات المراجع مطلوبة عند إعادة البرنامج أو رفضه.";
+            TempData["ToastWarning"] = IsAr() ? "ملاحظات المراجع مطلوبة عند إعادة البرنامج أو رفضه." : "Reviewer notes are required when returning or rejecting a program.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -410,7 +418,7 @@ public class ActivitiesController : Controllers.BaseController
         await AuditAsync(auditAction, nameof(Activity), a.Id.ToString(), old, new { a.Status, a.ApprovalStatus, a.ReviewNotes, a.ReviewedAtUtc });
         await NotifyPartnerAsync(a, titleEn, titleAr, messageEn, messageAr, notifType);
 
-        TempData["ToastSuccess"] = titleEn + ".";
+        TempData["ToastSuccess"] = (IsAr() ? titleAr : titleEn) + ".";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -429,23 +437,11 @@ public class ActivitiesController : Controllers.BaseController
             MessageEn = messageEn,
             MessageAr = messageAr,
             Type = type,
-            TargetType = NotificationTargetType.Organization,
-            TargetOrganizationId = a.PartnerOrganizationId.Value,
             LinkUrl = "/partner/programs",
             CreatedAtUtc = DateTime.UtcNow,
             CreatedByUserId = CurrentUserId
         };
-        Db.Notifications.Add(n);
-        await Db.SaveChangesAsync();
-
-        var userIds = await Db.OrganizationAdminLinks
-            .Where(x => x.OrganizationId == a.PartnerOrganizationId.Value)
-            .Select(x => x.UserId).Distinct().ToListAsync();
-        foreach (var uid in userIds)
-            Db.NotificationDeliveries.Add(new NotificationDelivery { NotificationId = n.Id, UserId = uid, DeliveredAtUtc = DateTime.UtcNow });
-        await Db.SaveChangesAsync();
-
-        await _hub.Clients.All.SendAsync("notificationReceived", new { title = titleEn, message = messageEn, linkUrl = n.LinkUrl });
+        await NotificationDispatcher.SendToOrganizationAsync(Db, _hub, n, a.PartnerOrganizationId.Value);
     }
 
     public class ActivityVm
@@ -458,10 +454,10 @@ public class ActivitiesController : Controllers.BaseController
         [Required]
         public ActivityType Type { get; set; } = ActivityType.Lecture;
 
-        [Required, MaxLength(250)]
+        [BilingualRequired(ErrorMessage = "Enter the English title.", Ar = "أدخلوا العنوان بالإنجليزية."), MaxLength(250)]
         public string TitleEn { get; set; } = "";
 
-        [Required, MaxLength(250)]
+        [BilingualRequired(ErrorMessage = "Enter the Arabic title.", Ar = "أدخلوا العنوان بالعربية."), MaxLength(250)]
         public string TitleAr { get; set; } = "";
 
         [MaxLength(3000)]
@@ -482,10 +478,10 @@ public class ActivitiesController : Controllers.BaseController
         [Required]
         public DateTime EndDateTime { get; set; } = DateTime.UtcNow.AddDays(7).AddHours(2);
 
-        [Required, MaxLength(300)]
+        [BilingualRequired(ErrorMessage = "Enter the location in English.", Ar = "أدخلوا الموقع بالإنجليزية."), MaxLength(300)]
         public string LocationEn { get; set; } = "";
 
-        [Required, MaxLength(300)]
+        [BilingualRequired(ErrorMessage = "Enter the location in Arabic.", Ar = "أدخلوا الموقع بالعربية."), MaxLength(300)]
         public string LocationAr { get; set; } = "";
 
         [Range(1, 5000)]

@@ -85,7 +85,7 @@
                                 <div class="text-muted small mb-2">
                                     @(categoryName ?? T("Uncategorized", "غير مصنف")) · @ContentTypeText(item.ContentType)
                                 </div>
-                                @if (!string.IsNullOrWhiteSpace(item.CoverImagePath)) { <img src="@item.CoverImagePath" class="rounded-3 mb-3" style="height:150px;object-fit:cover" alt="@title" /> }
+                                @if (GharsPlatform.Controllers.Public.LibraryController.CoverUrl(item) is { } coverUrl) { <img src="@coverUrl" class="rounded-3 mb-3" style="height:150px;object-fit:cover" alt="@title" /> }
                                 <h5 class="fw-bold mb-2">@title</h5>
                                 <div class="text-muted mb-3">
                                     @(publisher ?? T("Ghars Program", "برنامج غرس")) · @(item.PublicationDate?.ToString("yyyy-MM-dd") ?? "")

@@ -1,7 +1,11 @@
 @model GharsPlatform.Controllers.Admin.UsersController.UserEditVm
+@using System.Globalization
+@using GharsPlatform.Controllers.Admin
 @{
-    ViewData["Title"] = "Create User";
-    ViewData["PageTitle"] = "Create User";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Create user", "إنشاء مستخدم");
+    ViewData["PageTitle"] = T("Create user", "إنشاء مستخدم");
     var roles = ViewBag.Roles as List<string> ?? new();
     var orgs = ViewBag.Organizations as List<GharsPlatform.Models.Core.Organization> ?? new();
 }
@@ -10,15 +14,15 @@
     @Html.AntiForgeryToken()
     <div asp-validation-summary="All" class="text-danger small"></div>
     <div class="row g-3">
-        <div class="col-md-6"><label class="form-label">Full Name</label><input class="form-control" asp-for="FullName" /></div>
-        <div class="col-md-6"><label class="form-label">Email</label><input class="form-control" asp-for="Email" /></div>
-        <div class="col-md-6"><label class="form-label">Password</label><input class="form-control" asp-for="Password" type="password" required /></div>
-        <div class="col-md-6"><label class="form-label">Role</label><select class="form-select" asp-for="RoleName">@foreach (var r in roles){<option value="@r">@r</option>}</select></div>
-        <div class="col-md-6"><label class="form-label">Organization</label><select class="form-select" asp-for="PrimaryOrganizationId"><option value="">None</option>@foreach (var o in orgs){<option value="@o.Id">@o.NameEn (@o.OrganizationType)</option>}</select></div>
-        <div class="col-md-3"><label class="form-label">Language</label><select class="form-select" asp-for="PreferredLanguage"><option value="en">English</option><option value="ar">Arabic</option></select></div>
-        <div class="col-md-3 d-flex align-items-end"><div class="form-check"><input class="form-check-input" asp-for="IsActive" /><label class="form-check-label">Active</label></div></div>
+        <div class="col-md-6"><label class="form-label">@T("Full name", "الاسم الكامل")</label><input class="form-control" asp-for="FullName" /></div>
+        <div class="col-md-6"><label class="form-label">@T("Email", "البريد الإلكتروني")</label><input class="form-control" asp-for="Email" dir="ltr" /></div>
+        <div class="col-md-6"><label class="form-label">@T("Password", "كلمة المرور")</label><input class="form-control" asp-for="Password" type="password" required /><span asp-validation-for="Password" class="text-danger small"></span><div class="form-text">@T("At least 10 characters, with an uppercase letter, a lowercase letter, a number and a symbol.", "10 أحرف على الأقل، وتتضمن حرفاً إنجليزياً كبيراً وحرفاً صغيراً ورقماً ورمزاً.")</div></div>
+        <div class="col-md-6"><label class="form-label">@T("Role", "الدور")</label><select class="form-select" asp-for="RoleName">@foreach (var r in roles){<option value="@r">@OrganizationText.RoleLabel(r)</option>}</select></div>
+        <div class="col-md-6"><label class="form-label">@T("Organization", "الجهة")</label><select class="form-select" asp-for="PrimaryOrganizationId"><option value="">@T("None", "بدون")</option>@foreach (var o in orgs){<option value="@o.Id">@(ar && !string.IsNullOrWhiteSpace(o.NameAr) ? o.NameAr : o.NameEn) (@OrganizationText.TypeLabel(o.OrganizationType))</option>}</select></div>
+        <div class="col-md-3"><label class="form-label">@T("Language", "اللغة")</label><select class="form-select" asp-for="PreferredLanguage"><option value="en">English</option><option value="ar">العربية</option></select></div>
+        <div class="col-md-3 d-flex align-items-end"><div class="form-check"><input class="form-check-input" asp-for="IsActive" /><label class="form-check-label" asp-for="IsActive">@T("Active", "نشط")</label></div></div>
     </div>
-    <div class="mt-4"><button class="btn btn-primary" type="submit">Create</button><a class="btn btn-outline-secondary" asp-action="Index">Cancel</a></div>
+    <div class="mt-4"><button class="btn btn-primary" type="submit">@T("Create user", "إنشاء المستخدم")</button><a class="btn btn-outline-secondary" asp-action="Index">@T("Cancel", "إلغاء")</a></div>
 </form>
 </div></div>
 @section Scripts{<partial name="_ValidationScriptsPartial" />}

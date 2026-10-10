@@ -20,6 +20,8 @@ public class LibraryController : Controllers.BaseController
         _env = env;
     }
 
+    private static bool IsAr() => System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+
     public async Task<IActionResult> Categories()
     {
         var list = await Db.LibraryCategories.OrderBy(x => x.SortOrder).ToListAsync();
@@ -44,7 +46,7 @@ public class LibraryController : Controllers.BaseController
         });
 
         await Db.SaveChangesAsync();
-        TempData["ToastSuccess"] = "Category created.";
+        TempData["ToastSuccess"] = IsAr() ? "تم إنشاء التصنيف." : "Category created.";
         return RedirectToAction(nameof(Categories));
     }
 
@@ -85,15 +87,22 @@ public class LibraryController : Controllers.BaseController
         if (!string.IsNullOrWhiteSpace(vm.ExternalUrl) && !FileValidationHelper.IsSafeHttpUrl(vm.ExternalUrl))
             ModelState.AddModelError(nameof(vm.ExternalUrl), isAr ? "الرابط غير صالح. يجب أن يبدأ بـ http أو https." : "Invalid link. Only http/https URLs are allowed.");
 
-        var fileError = FileValidationHelper.Validate(vm.File, FileValidationHelper.LibraryFile, isAr);
+        // Each kind of item takes only its own format: a video file for an awareness video, and a
+        // PDF for a lecture or booklet. Checked on the server, including the file's content.
+        var fileProfile = vm.ContentType == LibraryContentType.AwarenessVideo
+            ? FileValidationHelper.LibraryVideo
+            : FileValidationHelper.LibraryDocument;
+        var fileError = FileValidationHelper.Validate(vm.File, fileProfile, isAr);
         if (fileError != null) ModelState.AddModelError(nameof(vm.File), fileError);
         var coverError = FileValidationHelper.Validate(vm.CoverImage, FileValidationHelper.Image, isAr);
         if (coverError != null) ModelState.AddModelError(nameof(vm.CoverImage), coverError);
 
         if (!ModelState.IsValid) return View(vm);
 
-        var filePath = vm.File is { Length: > 0 } ? await FileValidationHelper.SaveAsync(vm.File, _env.WebRootPath, "uploads/library") : null;
-        var coverPath = vm.CoverImage is { Length: > 0 } ? await FileValidationHelper.SaveAsync(vm.CoverImage, _env.WebRootPath, "uploads/library") : null;
+        // Stored outside wwwroot. Readers reach them only through Library/Stream and Library/Cover,
+        // which check the item's publication state on every request.
+        var filePath = vm.File is { Length: > 0 } ? await ProtectedFileStore.SaveAsync(vm.File, _env, ProtectedFileStore.Library) : null;
+        var coverPath = vm.CoverImage is { Length: > 0 } ? await ProtectedFileStore.SaveAsync(vm.CoverImage, _env, ProtectedFileStore.Library) : null;
 
         Db.LibraryItems.Add(new LibraryItem
         {
@@ -117,20 +126,8 @@ public class LibraryController : Controllers.BaseController
         });
 
         await Db.SaveChangesAsync();
-        TempData["ToastSuccess"] = "Library item created.";
+        TempData["ToastSuccess"] = IsAr() ? "تمت إضافة الإصدار إلى المكتبة الرقمية." : "Library item created.";
         return RedirectToAction(nameof(Items));
-    }
-
-    private static async Task<string> SaveFileAsync(IFormFile file, string rootFolder)
-    {
-        var ext = Path.GetExtension(file.FileName);
-        var safeName = $"{Guid.NewGuid():N}{ext}";
-        var fullPath = Path.Combine(rootFolder, safeName);
-
-        await using var fs = new FileStream(fullPath, FileMode.Create);
-        await file.CopyToAsync(fs);
-
-        return "/uploads/library/" + safeName;
     }
 
     public class CategoryVm

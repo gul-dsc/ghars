@@ -66,6 +66,10 @@ public class GalleryController : Controller
     public async Task<IActionResult> Create(AlbumVm vm)
     {
         await Lookups();
+        // Album files used to be stored with no check at all; they now pass the same validation as
+        // every other upload, including a check of the file's content.
+        var coverError = FileValidationHelper.Validate(vm.CoverImage, FileValidationHelper.Image, IsAr());
+        if (coverError != null) ModelState.AddModelError(nameof(vm.CoverImage), coverError);
         if(!ModelState.IsValid) return View(vm);
         var coverPath = await SaveFile(vm.CoverImage, "gallery/covers");
         var album = new MediaAlbum{
@@ -84,7 +88,7 @@ public class GalleryController : Controller
         };
         _db.MediaAlbums.Add(album);
         await _db.SaveChangesAsync();
-        TempData["ToastSuccess"]="Gallery album created.";
+        TempData["ToastSuccess"]=IsAr() ? "تم إنشاء الألبوم." : "Gallery album created.";
         return RedirectToAction(nameof(Details), new { id = album.Id });
     }
 
@@ -115,6 +119,10 @@ public class GalleryController : Controller
         var album = await _db.MediaAlbums.FirstOrDefaultAsync(x=>x.Id==id);
         if(album==null) return NotFound();
         await Lookups();
+        // Album files used to be stored with no check at all; they now pass the same validation as
+        // every other upload, including a check of the file's content.
+        var coverError = FileValidationHelper.Validate(vm.CoverImage, FileValidationHelper.Image, IsAr());
+        if (coverError != null) ModelState.AddModelError(nameof(vm.CoverImage), coverError);
         if(!ModelState.IsValid) return View(vm);
         var coverPath = await SaveFile(vm.CoverImage, "gallery/covers");
         album.TitleEn=vm.TitleEn;
@@ -130,7 +138,7 @@ public class GalleryController : Controller
         album.UpdatedAtUtc=DateTime.UtcNow;
         album.UpdatedByUserId=User.FindFirstValue(ClaimTypes.NameIdentifier);
         await _db.SaveChangesAsync();
-        TempData["ToastSuccess"]="Gallery album updated.";
+        TempData["ToastSuccess"]=IsAr() ? "تم تحديث الألبوم." : "Gallery album updated.";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -151,6 +159,8 @@ public class GalleryController : Controller
         var album = await _db.MediaAlbums.FirstOrDefaultAsync(x=>x.Id==vm.AlbumId);
         if(album==null) return NotFound();
         ViewBag.Album = album;
+        var itemError = FileValidationHelper.Validate(vm.File, AlbumItemProfile(vm.MediaType), IsAr());
+        if (itemError != null) ModelState.AddModelError(nameof(vm.File), itemError);
         if(!ModelState.IsValid) return View(vm);
         var filePath = await SaveFile(vm.File, "gallery/items");
         _db.MediaItems.Add(new MediaItem{
@@ -165,7 +175,7 @@ public class GalleryController : Controller
             CreatedByUserId=User.FindFirstValue(ClaimTypes.NameIdentifier)
         });
         await _db.SaveChangesAsync();
-        TempData["ToastSuccess"]="Media item added.";
+        TempData["ToastSuccess"]=IsAr() ? "تمت إضافة عنصر الوسائط." : "Media item added.";
         return RedirectToAction(nameof(Details), new { id = vm.AlbumId });
     }
 
@@ -193,6 +203,8 @@ public class GalleryController : Controller
         var item = await _db.MediaItems.Include(x=>x.Album).FirstOrDefaultAsync(x=>x.Id==id);
         if(item==null) return NotFound();
         ViewBag.Album = item.Album;
+        var itemError = FileValidationHelper.Validate(vm.File, AlbumItemProfile(vm.MediaType), IsAr());
+        if (itemError != null) ModelState.AddModelError(nameof(vm.File), itemError);
         if(!ModelState.IsValid) return View(vm);
         var filePath = await SaveFile(vm.File, "gallery/items");
         item.MediaType=vm.MediaType;
@@ -204,7 +216,7 @@ public class GalleryController : Controller
         item.UpdatedAtUtc=DateTime.UtcNow;
         item.UpdatedByUserId=User.FindFirstValue(ClaimTypes.NameIdentifier);
         await _db.SaveChangesAsync();
-        TempData["ToastSuccess"]="Media item updated.";
+        TempData["ToastSuccess"]=IsAr() ? "تم تحديث عنصر الوسائط." : "Media item updated.";
         return RedirectToAction(nameof(Details), new { id = item.AlbumId });
     }
 
@@ -218,7 +230,7 @@ public class GalleryController : Controller
         var albumId = item.AlbumId;
         _db.MediaItems.Remove(item);
         await _db.SaveChangesAsync();
-        TempData["ToastWarning"]="Media item deleted.";
+        TempData["ToastWarning"]=IsAr() ? "تم حذف عنصر الوسائط." : "Media item deleted.";
         return RedirectToAction(nameof(Details), new { id = albumId });
     }
 
@@ -232,7 +244,7 @@ public class GalleryController : Controller
         _db.MediaItems.RemoveRange(album.Items);
         _db.MediaAlbums.Remove(album);
         await _db.SaveChangesAsync();
-        TempData["ToastWarning"]="Gallery album deleted.";
+        TempData["ToastWarning"]=IsAr() ? "تم حذف الألبوم وجميع عناصره." : "Gallery album deleted.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -467,23 +479,11 @@ public class GalleryController : Controller
             MessageEn = string.IsNullOrWhiteSpace(notes) ? messageEn : $"{messageEn} — {notes}",
             MessageAr = string.IsNullOrWhiteSpace(notes) ? messageAr : $"{messageAr} — {notes}",
             Type = status == ChannelApprovalStatus.Approved ? NotificationType.Success : NotificationType.Warning,
-            TargetType = NotificationTargetType.Organization,
-            TargetOrganizationId = item.OrganizationId,
             LinkUrl = $"/partner/channel/details/{item.Id}",
             CreatedAtUtc = DateTime.UtcNow,
             CreatedByUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
         };
-        _db.Notifications.Add(n);
-        await _db.SaveChangesAsync();
-
-        var users = await _db.OrganizationAdminLinks
-            .Where(x => x.OrganizationId == item.OrganizationId)
-            .Select(x => x.UserId).Distinct().ToListAsync();
-        foreach (var u in users)
-            _db.NotificationDeliveries.Add(new NotificationDelivery { NotificationId = n.Id, UserId = u, DeliveredAtUtc = DateTime.UtcNow });
-        await _db.SaveChangesAsync();
-
-        await _hub.Clients.All.SendAsync("notificationReceived", new { title = n.TitleEn, message = n.MessageEn, linkUrl = n.LinkUrl });
+        await NotificationDispatcher.SendToOrganizationAsync(_db, _hub, n, item.OrganizationId.Value);
     }
 
     private async Task AuditAsync(string action, int itemId, object? oldValues, object? newValues)
@@ -520,16 +520,24 @@ public class GalleryController : Controller
             item.IsPublished = false;
             item.UpdatedAtUtc = DateTime.UtcNow;
             item.UpdatedByUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            TempData["ToastWarning"] = "Agenda media hidden from the gallery (the club's agenda record is preserved).";
+            TempData["ToastWarning"] = IsAr() ? "تم إخفاء وسائط الأجندة من معرض الصور، مع الاحتفاظ بسجل النشاط في أجندة النادي." : "Agenda media hidden from the gallery (the club's agenda record is preserved).";
         }
         else
         {
             _db.GalleryItems.Remove(item);
-            TempData["ToastWarning"] = "Media item deleted.";
+            TempData["ToastWarning"] = IsAr() ? "تم حذف عنصر الوسائط." : "Media item deleted.";
         }
         await _db.SaveChangesAsync();
         return RedirectToAction(nameof(MediaItems));
     }
+
+    /// <summary>The formats an album item of each media type may be uploaded as.</summary>
+    private static FileValidationHelper.ValidationProfile AlbumItemProfile(MediaType type) => type switch
+    {
+        MediaType.Video => FileValidationHelper.Video,
+        MediaType.Pdf => FileValidationHelper.Pdf,
+        _ => FileValidationHelper.Image
+    };
 
     private async Task<string?> SaveFile(IFormFile? file, string folder)
     {

@@ -34,9 +34,7 @@
 
     // The reconciled master-data logo. A genuine organization is expected to have one; the shared
     // placeholder exists so a missing file degrades to a neutral mark rather than a broken image.
-    var logo = string.IsNullOrWhiteSpace(org.LogoPath)
-        ? Url.Content("~/img/partners/default-partner.svg")
-        : Url.Content(org.LogoPath);
+    var logo = Url.Content("~" + GharsPlatform.Helpers.OrganizationLogo.SrcOrDefault(org.LogoPath));
 
     var workspaceLabel = workspace.Kind == WorkspaceKind.Club
         ? T("Club Workspace", "مساحة عمل النادي")

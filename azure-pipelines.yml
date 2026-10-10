@@ -149,7 +149,13 @@ stages:
   - stage: Deploy
     displayName: Deploy to production
     dependsOn: Build
-    condition: succeeded()
+    # Production is deployed from main and nothing else. The trigger above only starts runs for
+    # main, but a run can also be queued by hand ("Run pipeline" lets the user pick any branch), by
+    # a trigger override set in the Azure DevOps UI, or as pull-request validation. This condition
+    # holds for all of them: any other branch, tag or PR builds and stops here. A manual run of
+    # main still deploys - the approval check on the Ghars-Production environment is what gates it.
+    # DeploymentSafetyTests evaluates this exact expression; change both together.
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
     jobs:
       - deployment: DeployIIS
         displayName: Deploy to IIS
@@ -157,9 +163,9 @@ stages:
           name: Ghars-SelfHosted
         # Azure DevOps creates this Environment on first run if it does not exist. It is what gives
         # the deploy stage a record of what reached production and when, and it is the hook an
-        # approval check hangs off. No approval is configured, so every push to main deploys
-        # unattended - add one under Environments -> Ghars-Production -> Approvals and checks if
-        # that ever needs to change.
+        # approval check hangs off. Whether an approval is configured cannot be seen from this file;
+        # GHARS_DEPLOYMENT_SAFETY.md lists the checks an Azure DevOps administrator must confirm.
+        # Without one, every push to main deploys unattended.
         environment: Ghars-Production
         strategy:
           runOnce:
@@ -179,6 +185,7 @@ stages:
                     pwsh: false
                     errorActionPreference: stop
                     arguments: >
+                      -DeploymentTarget Production
                       -Source "$(Pipeline.Workspace)\ghars-drop\site"
                       -SitePath "$(sitePath)"
                       -AppPool "$(appPool)"

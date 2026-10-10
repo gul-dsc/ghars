@@ -3,12 +3,30 @@
 @using GharsPlatform.Helpers
 @using System.Globalization
 @{
-    // The review queue is bilingual, following the T() convention several other admin views already
-    // use. The generic activity CRUD table below it stays as it was, with the rest of the module.
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string e, string a) => ar ? a : e;
-    ViewData["Title"] = "Activities";
-    ViewData["PageTitle"] = "Activities";
+    ViewData["Title"] = T("Programs", "البرامج");
+    ViewData["PageTitle"] = T("Programs", "البرامج");
+    string TypeText(ActivityType t) => t switch
+    {
+        ActivityType.Lecture => T("Lecture", "محاضرة"),
+        ActivityType.Event => T("Event", "فعالية"),
+        ActivityType.Workshop => T("Workshop", "ورشة عمل"),
+        ActivityType.TrainingProgram => T("Training", "تدريب"),
+        ActivityType.Course => T("Course", "دورة"),
+        ActivityType.Activity => T("Activity", "نشاط"),
+        _ => t.ToString()
+    };
+    string Org(Organization? o) => o is null ? "—" : (ar && !string.IsNullOrWhiteSpace(o.NameAr) ? o.NameAr : o.NameEn);
+    string ProgTitle(Activity a) => ar && !string.IsNullOrWhiteSpace(a.TitleAr) ? a.TitleAr : a.TitleEn;
+    string StatusText(ActivityStatus s) => s switch
+    {
+        ActivityStatus.Draft => T("Draft", "مسودة"),
+        ActivityStatus.Published => T("Published", "منشور"),
+        ActivityStatus.Closed => T("Closed", "مغلق"),
+        ActivityStatus.Cancelled => T("Cancelled", "ملغى"),
+        _ => s.ToString()
+    };
     var partners = ViewBag.Partners as List<Organization> ?? new();
     var seasons = ViewBag.Seasons as List<Season> ?? new();
     var pendingCount = (int)(ViewBag.PendingCount ?? 0);
@@ -21,49 +39,49 @@
     string Who(string? id) => !string.IsNullOrWhiteSpace(id) && submitters.TryGetValue(id!, out var n) ? n : "—";
 }
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-    <div class="fw-semibold">Activities</div>
+    <div class="fw-semibold">@T("Programs", "البرامج")</div>
     <div class="d-flex gap-2">
         @* The review queue is a filter over this same list rather than a second admin module. *@
         <a class="btn btn-sm @(pendingOnly ? "btn-warning" : "btn-outline-warning")" href="/Admin/Activities?pendingOnly=true">
-            <i class="bi bi-inbox" aria-hidden="true"></i> @T("Awaiting approval", "بانتظار الاعتماد") @if (pendingCount > 0) { <span class="badge text-bg-dark">@pendingCount</span> }
+            <i class="bi bi-inbox" aria-hidden="true"></i> @T("Awaiting DSC approval", "بانتظار اعتماد المجلس") @if (pendingCount > 0) { <span class="badge text-bg-dark">@pendingCount</span> }
         </a>
-        @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Activities/Create"><i class="bi bi-plus-lg"></i> Create</a> }
+        @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Activities/Create"><i class="bi bi-plus-lg"></i> @T("Create program", "إنشاء برنامج")</a> }
     </div>
 </div>
 
 <form method="get" class="ghars-filter-card row g-2 align-items-end mb-3">
     <div class="col-md-3">
-        <label class="form-label" for="f-partner">Implementing entity</label>
+        <label class="form-label" for="f-partner">@T("Implementing entity", "الجهة المنفذة")</label>
         <select class="form-select" id="f-partner" name="partnerId">
-            <option value="">All</option>
-            @foreach (var p in partners) { <option value="@p.Id" selected="@(fPartner == p.Id)">@p.NameEn</option> }
+            <option value="">@T("All entities", "جميع الجهات")</option>
+            @foreach (var p in partners) { <option value="@p.Id" selected="@(fPartner == p.Id)">@Org(p)</option> }
         </select>
     </div>
     <div class="col-md-2">
-        <label class="form-label" for="f-season">Season</label>
+        <label class="form-label" for="f-season">@T("Season", "الموسم")</label>
         <select class="form-select" id="f-season" name="seasonId">
-            <option value="">All</option>
-            @foreach (var s in seasons) { <option value="@s.Id" selected="@(fSeason == s.Id)">@s.TitleEn</option> }
+            <option value="">@T("All seasons", "جميع المواسم")</option>
+            @foreach (var s in seasons) { <option value="@s.Id" selected="@(fSeason == s.Id)">@(ar && !string.IsNullOrWhiteSpace(s.TitleAr) ? s.TitleAr : s.TitleEn)</option> }
         </select>
     </div>
     <div class="col-md-2">
-        <label class="form-label" for="f-type">Type</label>
+        <label class="form-label" for="f-type">@T("Type", "النوع")</label>
         <select class="form-select" id="f-type" name="type">
-            <option value="">All</option>
-            @foreach (ActivityType t in Enum.GetValues(typeof(ActivityType))) { <option value="@t" selected="@(fType == t)">@t</option> }
+            <option value="">@T("All types", "جميع الأنواع")</option>
+            @foreach (ActivityType t in Enum.GetValues(typeof(ActivityType))) { <option value="@t" selected="@(fType == t)">@TypeText(t)</option> }
         </select>
     </div>
     <div class="col-md-3">
-        <label class="form-label" for="f-approval">Approval status</label>
+        <label class="form-label" for="f-approval">@T("Approval status", "حالة الاعتماد")</label>
         <select class="form-select" id="f-approval" name="approval">
-            <option value="">All</option>
+            <option value="">@T("All", "الكل")</option>
             @foreach (OfferingApprovalStatus s in Enum.GetValues(typeof(OfferingApprovalStatus))) { <option value="@s" selected="@(fApproval == s)">@OfferingWorkflow.Label(s)</option> }
         </select>
     </div>
     @* flex-wrap: the pair is wider than the column at tablet widths and would otherwise spill. *@
     <div class="col-md-2 d-flex flex-wrap gap-2">
-        <button class="btn btn-primary">Filter</button>
-        <a class="btn btn-outline-secondary" href="/Admin/Activities">Reset</a>
+        <button class="btn btn-primary">@T("Filter", "تصفية")</button>
+        <a class="btn btn-outline-secondary" href="/Admin/Activities">@T("Reset", "إعادة تعيين")</a>
     </div>
 </form>
 
@@ -85,7 +103,7 @@
                    for no gain, and the secondary lines read perfectly well on a narrow screen. *@
                 <tr>
                     <th scope="col">@T("Program", "البرنامج")</th>
-                    <th scope="col">@T("Implementing Entity", "الجهة المنفذة")</th>
+                    <th scope="col">@T("Implementing entity", "الجهة المنفذة")</th>
                     <th scope="col">@T("Submitted", "تاريخ الإرسال")</th>
                     <th scope="col">@T("Status", "الحالة")</th>
                     <th scope="col"><span class="visually-hidden">@T("Review", "مراجعة")</span></th>
@@ -98,9 +116,9 @@
                         <td>
                             <div class="fw-semibold">@a.TitleEn</div>
                             <div class="text-muted small" dir="rtl">@a.TitleAr</div>
-                            <div class="text-muted small">@a.Type · @(a.Season?.TitleEn ?? "—")</div>
+                            <div class="text-muted small">@TypeText(a.Type) · @((ar ? a.Season?.TitleAr : a.Season?.TitleEn) ?? a.Season?.TitleEn ?? "—")</div>
                         </td>
-                        <td>@(a.PartnerOrganization?.NameEn ?? "—")</td>
+                        <td>@Org(a.PartnerOrganization)</td>
                         <td>
                             <div>@(a.SubmittedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "—")</div>
                             <div class="text-muted small">@T("by", "بواسطة") @Who(a.SubmittedByUserId)</div>
@@ -131,12 +149,12 @@ else
                approval workflow landed and had become the widest page in the admin area on a phone.
                Every value it showed is still shown. *@
             <tr>
-                <th scope="col">ID</th>
-                <th scope="col">Title</th>
-                <th scope="col">Type / Start</th>
-                <th scope="col">Approval</th>
-                <th scope="col">Status</th>
-                <th scope="col"><span class="visually-hidden">Actions</span></th>
+                <th scope="col">@T("ID", "الرقم")</th>
+                <th scope="col">@T("Program", "البرنامج")</th>
+                <th scope="col">@T("Type / start", "النوع / البداية")</th>
+                <th scope="col">@T("Approval", "الاعتماد")</th>
+                <th scope="col">@T("Publication status", "حالة النشر")</th>
+                <th scope="col"><span class="visually-hidden">@T("Actions", "الإجراءات")</span></th>
             </tr>
             </thead>
             <tbody>
@@ -145,12 +163,12 @@ else
                 <tr>
                     <td>@a.Id</td>
                     <td>
-                        <div class="fw-semibold">@a.TitleEn</div>
+                        <div class="fw-semibold">@ProgTitle(a)</div>
                         @* Partner-managed offerings carry an owning entity; DSC-created activities do not. *@
-                        <div class="text-muted small">@(a.PartnerOrganization?.NameEn ?? "—")</div>
+                        <div class="text-muted small">@Org(a.PartnerOrganization)</div>
                     </td>
                     <td>
-                        <div>@a.Type</div>
+                        <div>@TypeText(a.Type)</div>
                         <div class="text-muted small">@a.StartDateTime.ToString("yyyy-MM-dd HH:mm")</div>
                     </td>
                     <td>
@@ -168,25 +186,31 @@ else
 	                            a.Status == ActivityStatus.Published ? "success" :
 	                            a.Status == ActivityStatus.Closed ? "secondary" :
 	                            a.Status == ActivityStatus.Cancelled ? "danger" :
-	                            "warning")">@a.Status</span>
+	                            "warning")">@StatusText(a.Status)</span>
 	                    </td>
                     <td class="text-end">
                         <a class="btn btn-sm btn-primary super-admin-action" href="/Admin/Activities/Details/@a.Id">
-                            @(OfferingWorkflow.DscCanReview(a.ApprovalStatus) ? "Review" : "Details")
+                            @(OfferingWorkflow.DscCanReview(a.ApprovalStatus) ? T("Review", "مراجعة") : T("Details", "التفاصيل"))
                         </a>
-                        @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-outline-primary" href="/Admin/Activities/Edit/@a.Id">Edit</a> }
+                        @if (User.IsInRole("Super Admin")) { <a class="btn btn-sm btn-outline-primary" href="/Admin/Activities/Edit/@a.Id">@T("Edit", "تعديل")</a> }
                         @if (User.IsInRole("Super Admin") && a.Status != ActivityStatus.Published)
                         {
-                            <form method="post" action="/Admin/Activities/Publish/@a.Id" class="d-inline">
+                            var pubName = ar && !string.IsNullOrWhiteSpace(a.TitleAr) ? a.TitleAr : a.TitleEn;
+                            <form method="post" action="/Admin/Activities/Publish/@a.Id" class="d-inline"
+                                  data-confirm="@T($"Publish '{pubName}'? Clubs will be able to see and book it while its season is active and its booking window is open.", $"نشر البرنامج '{pubName}'؟ ستتمكن الأندية من رؤيته وحجزه ما دام موسمه نشطاً وفترة الحجز مفتوحة.")"
+                                  data-confirm-ok="@T("Publish", "نشر")">
                                 @Html.AntiForgeryToken()
-                                <button class="btn btn-sm btn-success" type="submit">Publish</button>
+                                <button class="btn btn-sm btn-success" type="submit">@T("Publish", "نشر")</button>
                             </form>
                         }
                         @if (User.IsInRole("Super Admin"))
                         {
-                            <form method="post" action="/Admin/Activities/Delete/@a.Id" class="d-inline" data-confirm="Delete this activity?">
+                            var delName = ar && !string.IsNullOrWhiteSpace(a.TitleAr) ? a.TitleAr : a.TitleEn;
+                            <form method="post" action="/Admin/Activities/Delete/@a.Id" class="d-inline"
+                                  data-confirm="@T($"Delete '{delName}'? If it has bookings it is cancelled instead, and its bookings are kept. Otherwise it and its attachments are permanently deleted.", $"حذف البرنامج '{delName}'؟ إذا كانت عليه حجوزات فسيُلغى بدلاً من حذفه وتبقى حجوزاته، وإلا فسيُحذف نهائياً مع مرفقاته.")"
+                                  data-confirm-ok="@T("Delete", "حذف")">
                                 @Html.AntiForgeryToken()
-                                <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                                <button class="btn btn-sm btn-outline-danger" type="submit">@T("Delete", "حذف")</button>
                             </form>
                         }
                     </td>
@@ -194,7 +218,7 @@ else
             }
             @if (!Model.Any())
             {
-                <tr><td colspan="6"><div class="empty-state">No activities match these filters.</div></td></tr>
+                <tr><td colspan="6"><div class="empty-state">@T("No programs match these filters.", "لا توجد برامج مطابقة لهذه التصفية.")</div></td></tr>
             }
             </tbody>
         </table>

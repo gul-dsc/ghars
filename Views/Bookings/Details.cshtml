@@ -34,17 +34,9 @@
         ActivityType.Activity => T("Activity", "نشاط"),
         _ => type.ToString()
     };
-    string StatusText(BookingStatus st) => st switch
-    {
-        BookingStatus.Pending => T("Pending Partner Approval", "بانتظار موافقة الشريك"),
-        BookingStatus.Approved => T("Approved", "موافق عليه"),
-        BookingStatus.Rejected => T("Rejected", "مرفوض"),
-        BookingStatus.Cancelled => T("Cancelled", "ملغي"),
-        BookingStatus.PartnerProposedNewTime => T("Awaiting club response", "بانتظار رد النادي"),
-        BookingStatus.Confirmed => T("Confirmed", "مؤكد"),
-        BookingStatus.ClubRejectedProposedTimes => T("Awaiting partner update", "بانتظار تحديث الشريك"),
-        _ => st.ToString()
-    };
+    // Shared, audience-aware labels: the club and the entity each see the call to action that is theirs.
+    var statusViewer = isClubSide ? BookingStatusText.Viewer.Club : isPartnerSide ? BookingStatusText.Viewer.Entity : BookingStatusText.Viewer.Neutral;
+    string StatusText(BookingStatus st) => BookingStatusText.Label(st, statusViewer);
     string AudienceText(string value) => value switch
     {
         "Players" => T("Players", "اللاعبون"),
@@ -65,8 +57,28 @@
         "PartnerApproved" => T("Implementing entity confirmed the booking", "أكدت الجهة المنفذة الحجز"),
         "PartnerRejected" => T("Implementing entity rejected the request", "رفضت الجهة المنفذة الطلب"),
         "PartnerProposedNewTime" => T("Implementing entity proposed alternative times", "اقترحت الجهة المنفذة أوقاتاً بديلة"),
+        "Approved" => T("DSC approved the booking", "اعتمد المجلس الحجز"),
+        "Rejected" => T("DSC rejected the request", "رفض المجلس الطلب"),
         _ => action
     };
+
+    // Rejection reasons are stored inside Notes with an English prefix (decision D3: no separate
+    // field). Display only: lines with a known prefix are pulled out and shown under a proper label;
+    // everything else stays under "Additional notes". Anything unrecognised is left as written.
+    var rejectionReasons = new List<string>();
+    var declineReasons = new List<string>();
+    var plainNoteLines = new List<string>();
+    foreach (var line in (Model.Notes ?? "").Split('\n'))
+    {
+        var text = line.Trim();
+        if (text.Length == 0) continue;
+        string? After(string prefix) => text.StartsWith(prefix, StringComparison.Ordinal) ? text[prefix.Length..].Trim() : null;
+        var reason = After("Partner rejection reason:") ?? After("Rejected reason:");
+        var declined = After("Club rejected proposed times:");
+        if (!string.IsNullOrEmpty(reason)) rejectionReasons.Add(reason);
+        else if (!string.IsNullOrEmpty(declined)) declineReasons.Add(declined);
+        else plainNoteLines.Add(text);
+    }
 
     var activeOptions = Model.ProposedTimeOptions.Where(x => x.IsActive && !x.IsSelected).OrderBy(x => x.ProposedStartUtc).ToList();
     var targetAudiences = (Model.TargetAudienceCsv ?? string.Empty)
@@ -87,25 +99,25 @@
 
 @if (isClubSide && Model.Status == BookingStatus.PartnerProposedNewTime && activeOptions.Any())
 {
-    <div class="required-action-banner"><i class="bi bi-exclamation-triangle me-2"></i>@T("Partner proposed new time options. Your response is required.", "اقترح الشريك أوقاتاً جديدة. مطلوب ردكم.")</div>
+    <div class="required-action-banner"><i class="bi bi-exclamation-triangle me-2"></i>@T("The implementing entity proposed new times. Choose one or decline.", "اقترحت الجهة المنفذة أوقاتاً جديدة. اختاروا أحدها أو اعتذروا عنها.")</div>
 }
 
 <div class="metric-card mb-4 booking-section-card">
     <div class="d-flex justify-content-between align-items-start gap-3 mb-3 flex-wrap">
         <div>
             <h1 class="h3 mb-1">@T("Booking Details", "تفاصيل الحجز")</h1>
-            <div class="text-muted">@T("Review the request details, partner actions, and booking history.", "راجع تفاصيل الطلب وإجراءات الشريك وسجل الحجز.")</div>
+            <div class="text-muted">@T("Review the request details, the implementing entity's response, and the booking history.", "راجعوا تفاصيل الطلب ورد الجهة المنفذة وسجل الحجز.")</div>
         </div>
         <div class="text-md-end">
             <div class="small text-muted">@T("Reference number", "الرقم المرجعي")</div>
             <div class="fw-bold">@Model.ReferenceNumber</div>
-            <span class="badge text-bg-@(Model.Status==BookingStatus.Confirmed||Model.Status==BookingStatus.Approved?"success":Model.Status==BookingStatus.Pending||Model.Status==BookingStatus.PartnerProposedNewTime?"warning":"danger") fs-6 mt-2">@StatusText(Model.Status)</span>
+            <span class="badge @BookingStatusText.BadgeClass(Model.Status) fs-6 mt-2">@StatusText(Model.Status)</span>
         </div>
     </div>
 
     <div class="row g-3">
         <div class="col-md-6 col-xl-3"><div class="text-muted small">@T("Club", "النادي")</div><div class="fw-semibold">@OrgName(Model.Organization)</div></div>
-        <div class="col-md-6 col-xl-3"><div class="text-muted small">@T("Partner", "الشريك")</div><div class="fw-semibold">@(OrgName(Model.PartnerOrganization) == "" ? T("Not assigned", "غير محدد") : OrgName(Model.PartnerOrganization))</div></div>
+        <div class="col-md-6 col-xl-3"><div class="text-muted small">@T("Implementing entity", "الجهة المنفذة")</div><div class="fw-semibold">@(OrgName(Model.PartnerOrganization) == "" ? T("Not assigned", "غير محدد") : OrgName(Model.PartnerOrganization))</div></div>
         <div class="col-md-6 col-xl-3">
             <div class="text-muted small">@T("Program", "البرنامج")</div>
             <div class="fw-semibold">@ProgramTitle()</div>
@@ -194,10 +206,18 @@
                 <div class="col-md-6"><div class="text-muted small">@T("Contact mobile", "هاتف التواصل")</div><div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.ContactPhone) ? T("Not provided", "غير متوفر") : Model.ContactPhone)</div></div>
                 <div class="col-12"><div class="text-muted small">@T("Contact email", "البريد الإلكتروني للتواصل")</div><div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.ContactEmail) ? T("Not provided", "غير متوفر") : Model.ContactEmail)</div></div>
                 <div class="col-12"><div class="text-muted small">@T("Special requirements / logistics", "المتطلبات الخاصة / الترتيبات اللوجستية")</div><div>@(string.IsNullOrWhiteSpace(Model.SpecialRequirements) ? T("No special requirements", "لا توجد متطلبات خاصة") : Model.SpecialRequirements)</div></div>
-                <div class="col-12"><div class="text-muted small">@T("Additional notes", "ملاحظات إضافية")</div><div>@(string.IsNullOrWhiteSpace(Model.Notes) ? T("No additional notes", "لا توجد ملاحظات إضافية") : Model.Notes)</div></div>
-                <div class="col-12"><div class="text-muted small">@T("Logistical requirements / partner comments", "المتطلبات اللوجستية / تعليقات الشريك")</div><div>@(string.IsNullOrWhiteSpace(Model.PartnerResponseNotes) ? T("No partner comments", "لا توجد تعليقات من الشريك") : Model.PartnerResponseNotes)</div></div>
+                <div class="col-12"><div class="text-muted small">@T("Additional notes", "ملاحظات إضافية")</div><div>@(plainNoteLines.Count == 0 ? T("No additional notes", "لا توجد ملاحظات إضافية") : string.Join(" ", plainNoteLines))</div></div>
+                @if (rejectionReasons.Count > 0)
+                {
+                    <div class="col-12"><div class="text-muted small">@T("Reason for rejection", "سبب الرفض")</div>@foreach (var reasonLine in rejectionReasons){<div>@reasonLine</div>}</div>
+                }
+                @if (declineReasons.Count > 0)
+                {
+                    <div class="col-12"><div class="text-muted small">@T("Reason for declining the proposed times", "سبب الاعتذار عن الأوقات المقترحة")</div>@foreach (var reasonLine in declineReasons){<div>@reasonLine</div>}</div>
+                }
+                <div class="col-12"><div class="text-muted small">@T("Logistical requirements / implementing entity comments", "المتطلبات اللوجستية / تعليقات الجهة المنفذة")</div><div>@(string.IsNullOrWhiteSpace(Model.PartnerResponseNotes) ? T("No comments from the implementing entity", "لا توجد تعليقات من الجهة المنفذة") : Model.PartnerResponseNotes)</div></div>
                 <div class="col-md-6"><div class="text-muted small">@T("Assigned lecturer", "المحاضر المكلّف")</div><div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.LecturerName) ? T("Not assigned yet", "لم يتم التكليف بعد") : Model.LecturerName)</div></div>
-                <div class="col-md-6"><div class="text-muted small">@T("Lecturer contact", "رقم التواصل مع المحاضر")</div><div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.LecturerContact) ? T("Not provided", "غير متوفر") : Model.LecturerContact)</div></div>
+                <div class="col-md-6"><div class="text-muted small">@T("Lecturer contact (phone or email)", "بيانات التواصل مع المحاضر (هاتف أو بريد)")</div><div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.LecturerContact) ? T("Not provided", "غير متوفر") : Model.LecturerContact)</div></div>
             </div>
         </div>
     </div>
@@ -228,7 +248,7 @@
                         <input class="form-control" name="lecturerName" value="@Model.LecturerName" required />
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">@T("Contact details", "رقم التواصل")</label>
+                        <label class="form-label">@T("Lecturer contact (phone or email)", "بيانات التواصل مع المحاضر (هاتف أو بريد)")</label>
                         <input class="form-control" name="lecturerContact" value="@Model.LecturerContact" />
                     </div>
                     <div class="col-12">
@@ -242,8 +262,9 @@
         <div class="col-lg-4">
             <form method="post" action="/partner/bookings/reject" class="metric-card booking-section-card h-100">
                 @Html.AntiForgeryToken()<input type="hidden" name="id" value="@Model.Id" />
-                <h5>@T("Reject booking", "رفض الحجز")</h5>
-                <input class="form-control mb-2" name="reason" placeholder="@T("Reason", "السبب")" />
+                <h5>@T("Reject booking request", "رفض طلب الحجز")</h5>
+                <label class="form-label" for="rejectReason">@T("Reason for rejecting (shared with the club)", "سبب الرفض (يظهر للنادي)")</label>
+                <input class="form-control mb-2" id="rejectReason" name="reason" />
                 <button class="btn btn-outline-danger w-100" type="submit">@T("Reject", "رفض")</button>
                 <hr />
                 <div class="text-muted small">@T("Or propose alternative times / subject using the form below.", "أو اقترح أوقاتاً أو موضوعاً بديلاً باستخدام النموذج أدناه.")</div>
@@ -267,7 +288,8 @@
     </div>
 }
 
-@if (isPartnerSide)
+@* Offered only in the statuses the server accepts a proposal in (BookingWorkflow). *@
+@if (isPartnerSide && BookingWorkflow.IsAllowed(BookingDecision.EntityProposeTimes, Model.Status))
 {
     <form method="post" action="/partner/bookings/propose-times" class="metric-card booking-section-card mb-4" id="proposalForm">
         @Html.AntiForgeryToken()
@@ -277,7 +299,7 @@
             <label class="form-label" for="proposedSubject">@T("Proposed program name (optional)", "اسم البرنامج المقترح (اختياري)")</label>
             <input class="form-control" id="proposedSubject" name="proposedSubject" maxlength="250" value="@Model.ProposedSubject" placeholder="@T("Leave empty to keep the requested program name", "اتركه فارغاً للإبقاء على اسم البرنامج المطلوب")" />
         </div>
-        <textarea name="partnerComments" class="form-control mb-3" rows="2" placeholder="@T("Optional partner comments", "تعليقات اختيارية من الشريك")"></textarea>
+        <textarea name="partnerComments" class="form-control mb-3" rows="2" placeholder="@T("Optional comments to the club", "تعليقات اختيارية للنادي")"></textarea>
         <div id="proposalRows">
             <div class="proposal-option row g-2 align-items-end">
                 <div class="col-md-4"><label class="form-label">@T("Start", "البداية")</label><input class="form-control" type="datetime-local" name="starts" required /></div>

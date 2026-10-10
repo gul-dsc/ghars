@@ -4,6 +4,7 @@ using GharsPlatform.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using System.Security.Claims;
 
 namespace GharsPlatform.Controllers.Public;
@@ -36,13 +37,13 @@ public class AttendanceController : Controller
 
         if (session is null)
         {
-            ModelState.AddModelError("", "Invalid QR token.");
+            ModelState.AddModelError("", T("This QR code isn't valid. Ask the organiser for the current code.", "رمز QR غير صالح. اطلبوا الرمز الحالي من المنظم."));
             return View(vm);
         }
 
         if (session.SessionEndUtc != null)
         {
-            ModelState.AddModelError("", "This session is closed.");
+            ModelState.AddModelError("", T("Check-in for this session has closed.", "انتهى تسجيل الحضور لهذه الجلسة."));
             return View(vm);
         }
 
@@ -54,7 +55,7 @@ public class AttendanceController : Controller
 
         if (exists)
         {
-            TempData["ToastInfo"] = "You are already checked in.";
+            TempData["ToastInfo"] = T("You're already checked in.", "تم تسجيل حضوركم مسبقاً.");
             return RedirectToAction("Index", "Home", new { area = "" });
         }
 
@@ -79,9 +80,12 @@ public class AttendanceController : Controller
         await EnsureWalletAsync(userId);
         await AddPointsAsync(userId, 10, "Attendance points", "نقاط الحضور", PointsReferenceType.Attendance, session.Id);
 
-        TempData["ToastSuccess"] = "Check-in successful. Thank you!";
+        TempData["ToastSuccess"] = T("You're checked in. Thank you.", "تم تسجيل حضوركم. شكراً لكم.");
         return RedirectToAction("Index", "Home", new { area = "" });
     }
+
+    private static string T(string en, string ar) =>
+        CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? ar : en;
 
     private async Task EnsureWalletAsync(string userId)
     {

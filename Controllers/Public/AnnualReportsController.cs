@@ -342,25 +342,13 @@ public class AnnualReportsController : Controllers.BaseController
             MessageEn = $"{club.NameEn} submitted its Ghars Annual Report for {season.TitleEn}. Your review is required.",
             MessageAr = $"قدّم {club.NameAr} التقرير السنوي لغرس عن {season.TitleAr}. مطلوب مراجعتكم.",
             Type = NotificationType.Warning,
-            TargetType = NotificationTargetType.Role,
-            TargetRoleName = RoleNames.DscAdmin,
             LinkUrl = $"/Admin/AnnualReports/Details/{report.Id}",
             CreatedAtUtc = DateTime.UtcNow,
             CreatedByUserId = CurrentUserId
         };
-        Db.Notifications.Add(n);
-        await Db.SaveChangesAsync();
-
         // Delivered to DSC Admins and Super Admins, so a site with no DSC Admin yet cannot lose a
         // submission into a notification nobody receives.
-        var roleNames = new[] { RoleNames.DscAdmin, RoleNames.SuperAdmin };
-        var roleIds = await Db.Roles.Where(r => r.Name != null && roleNames.Contains(r.Name)).Select(r => r.Id).ToListAsync();
-        var userIds = await Db.UserRoles.Where(ur => roleIds.Contains(ur.RoleId)).Select(ur => ur.UserId).Distinct().ToListAsync();
-        foreach (var uid in userIds)
-            Db.NotificationDeliveries.Add(new NotificationDelivery { NotificationId = n.Id, UserId = uid, DeliveredAtUtc = DateTime.UtcNow });
-        await Db.SaveChangesAsync();
-
-        await _hub.Clients.All.SendAsync("notificationReceived", new { title = n.TitleEn, message = n.MessageEn, linkUrl = n.LinkUrl });
+        await NotificationDispatcher.SendToDscReviewersAsync(Db, _hub, n);
     }
 
     private async Task<AnnualReportVm> BuildVmAsync(Organization club, int seasonId, GharsAnnualReport? report)

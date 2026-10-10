@@ -1,18 +1,21 @@
 @model GharsPlatform.ViewModels.AttendanceScanVm
+@using System.Globalization
 @{
-    ViewData["Title"] = "Attendance Check-In";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Attendance check-in", "تسجيل الحضور");
 }
 <div class="row justify-content-center">
     <div class="col-lg-7">
         <div class="card shadow-sm border-0 rounded-4">
             <div class="card-body p-4 p-md-5">
-                <h3 class="mb-2"><i class="bi bi-qr-code-scan me-2"></i>Attendance Check-In</h3>
-                <p class="text-muted">Confirm check-in for this session.</p>
+                <h3 class="mb-2"><i class="bi bi-qr-code-scan me-2"></i>@T("Attendance check-in", "تسجيل الحضور")</h3>
+                <p class="text-muted">@T("Confirm your check-in for this session.", "أكّدوا تسجيل حضوركم لهذه الجلسة.")</p>
 
                 <form method="post">
                     @Html.AntiForgeryToken()
                     <input type="hidden" asp-for="Token" />
-                    <button class="btn btn-primary" type="submit">Check In</button>
+                    <button class="btn btn-primary" type="submit">@T("Check in", "تسجيل الحضور")</button>
                 </form>
 
                 <div class="text-danger small mt-3" asp-validation-summary="All"></div>

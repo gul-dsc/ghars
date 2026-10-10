@@ -108,15 +108,15 @@ public class KpiController : Controllers.BaseController
         var (titleEn, titleAr, messageEn, messageAr) = status switch
         {
             KpiSubmissionStatus.Approved => (
-                "KPI data approved", "تم اعتماد بيانات المؤشرات",
+                "KPI data approved", "تم اعتماد بيانات مؤشرات الأداء",
                 "Your KPI submission was approved and now appears in the Ghars KPI table.",
                 "تم اعتماد بيانات مؤشرات الأداء وتظهر الآن في جدول مؤشرات غرس."),
             KpiSubmissionStatus.MoreInfoRequired => (
-                "KPI data returned for correction", "إعادة بيانات المؤشرات للتصحيح",
+                "KPI data returned for correction", "إعادة بيانات مؤشرات الأداء للتصحيح",
                 "Your KPI submission was returned for correction. Please review the notes and resubmit.",
                 "تمت إعادة بيانات مؤشرات الأداء للتصحيح. يرجى مراجعة الملاحظات وإعادة الإرسال."),
             _ => (
-                "KPI data rejected", "تم رفض بيانات المؤشرات",
+                "KPI data rejected", "تم رفض بيانات مؤشرات الأداء",
                 "Your KPI submission was rejected. Please review the notes.",
                 "تم رفض بيانات مؤشرات الأداء. يرجى مراجعة الملاحظات.")
         };
@@ -128,20 +128,11 @@ public class KpiController : Controllers.BaseController
             MessageEn = string.IsNullOrWhiteSpace(notes) ? messageEn : $"{messageEn} — {notes}",
             MessageAr = string.IsNullOrWhiteSpace(notes) ? messageAr : $"{messageAr} — {notes}",
             Type = status == KpiSubmissionStatus.Approved ? NotificationType.Success : NotificationType.Warning,
-            TargetType = NotificationTargetType.Organization,
-            TargetOrganizationId = e.OrganizationId,
             LinkUrl = "/kpi",
             CreatedAtUtc = DateTime.UtcNow,
             CreatedByUserId = CurrentUserId
         };
-        Db.Notifications.Add(n);
-        await Db.SaveChangesAsync();
-
-        var users = await Db.OrganizationAdminLinks.Where(x => x.OrganizationId == e.OrganizationId).Select(x => x.UserId).Distinct().ToListAsync();
-        foreach (var u in users)
-            Db.NotificationDeliveries.Add(new NotificationDelivery { NotificationId = n.Id, UserId = u, DeliveredAtUtc = DateTime.UtcNow });
-        await Db.SaveChangesAsync();
-        await _hub.Clients.All.SendAsync("notificationReceived", new { title = n.TitleEn, message = n.MessageEn, linkUrl = n.LinkUrl });
+        await NotificationDispatcher.SendToOrganizationAsync(Db, _hub, n, e.OrganizationId);
 
         TempData["ToastSuccess"] = IsAr() ? "تم تسجيل قرار المراجعة." : "Review decision recorded.";
         return RedirectToAction(nameof(Details), new { id });

@@ -40,7 +40,7 @@
 
             <div class="d-flex flex-wrap gap-2 mt-4">
                 <a class="btn btn-light fw-bold" asp-controller="Home" asp-action="About">
-                    <i class="bi bi-info-circle me-1"></i> @T("About Us", "حول البرنامج")
+                    <i class="bi bi-info-circle me-1"></i> @T("About Ghars", "عن غرس")
                 </a>
                 <a class="btn btn-outline-light fw-bold" asp-controller="Home" asp-action="Vision">
                     <i class="bi bi-bullseye me-1"></i> @T("Vision & Objectives", "الرؤية والأهداف")
@@ -111,7 +111,7 @@
 </div>
 
 <div class="row g-4">
-    <div class="col-lg-7">
+    <div class="@(stories.Count > 0 ? "col-lg-7" : "col-12")">
         <div class="card">
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between mb-3">
@@ -153,6 +153,9 @@
         </div>
     </div>
 
+    @* D6: the whole section, heading included, is hidden until at least one story is published. *@
+    @if (stories.Count > 0)
+    {
     <div class="col-lg-5">
         <div class="card">
             <div class="card-body ghars-story-section">
@@ -160,14 +163,7 @@
                     <h3 class="section-title h4 mb-0">
                         <i class="bi bi-trophy me-2"></i> @T("Success Stories", "قصص النجاح")
                     </h3>
-                    <span class="ghars-story-kicker">@T("Impact in action", "الأثر في الواقع")</span>
                 </div>
-                @if (stories.Count == 0)
-                {
-                    <p class="text-muted mb-0">@T("Stories will appear here after publication.", "ستظهر القصص هنا بعد نشرها.")</p>
-                }
-                else
-                {
                     @if (featuredStory is not null)
                     {
                         var featuredImage = string.IsNullOrWhiteSpace(featuredStory.HeroImagePath)
@@ -211,8 +207,8 @@
                             }
                         </div>
                     }
-                }
             </div>
         </div>
     </div>
+    }
 </div>

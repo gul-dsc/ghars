@@ -29,13 +29,26 @@
     -MigrationScript skips the explicit migration (startup will still apply it).
     Both are announced, never silent.
 
+    -DeploymentTarget is required and checked before anything is touched. Production must name
+    exactly the production site, application pool and host. Staging must name none of them, nor
+    the production release, backup or database names, nor any folder inside or around the
+    production site. There is no default target and no default path, so a staging run cannot
+    fall through to C:\inetpub\ghars. -ValidateOnly runs only that check and exits.
+
 .EXAMPLE
-    .\Deploy-Ghars.ps1 -Source C:\drop\site -SitePath C:\inetpub\ghars -AppPool GharsPlatform `
-        -SqlServer . -Database GharsPlatformDb -BackupRoot D:\GharsBackups\predeploy `
-        -MigrationScript C:\drop\migrations\ghars-migrations.sql -HealthCheckUrl http://localhost:89/
+    .\Deploy-Ghars.ps1 -DeploymentTarget Production -Source C:\drop\site -SitePath C:\inetpub\ghars `
+        -AppPool GharsPlatform -SqlServer . -Database GharsPlatformDb -BackupRoot D:\GharsBackups\predeploy `
+        -MigrationScript C:\drop\migrations\ghars-migrations.sql -HealthCheckUrl https://ghars.dubaisc.ae/
+
+.EXAMPLE
+    .\Deploy-Ghars.ps1 -DeploymentTarget Staging -ValidateOnly -Source C:\drop\site `
+        -SitePath C:\inetpub\ghars-staging -AppPool GharsPlatform-Staging
 #>
 [CmdletBinding()]
 param(
+    # Production or Staging. No default: the caller must say which, and the paths must agree.
+    [Parameter(Mandatory)][ValidateSet('Production', 'Staging')][string] $DeploymentTarget,
+
     # Published output to deploy - the folder containing GharsPlatform.dll and web.config.
     [Parameter(Mandatory)][string] $Source,
 
@@ -68,7 +81,10 @@ param(
     [string] $ReleaseHistoryRoot,
     [int]    $KeepReleases = 5,
 
-    [int]    $AppPoolTimeoutSeconds = 90
+    [int]    $AppPoolTimeoutSeconds = 90,
+
+    # Check the target and exit without changing anything.
+    [switch] $ValidateOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -105,6 +121,65 @@ function Invoke-Robocopy {
     # and would fail every successful deployment.
     if ($LASTEXITCODE -ge 8) { Fail "$What failed (robocopy exit $LASTEXITCODE)." }
     Write-Host ("    robocopy exit {0} (0-7 = success)" -f $LASTEXITCODE)
+}
+
+# ---------------------------------------------------------------------------
+Step "Validate deployment target ($DeploymentTarget)"
+
+# The production resources. Staging may use none of them; production must use exactly these.
+$Production = @{
+    SitePath        = 'C:\inetpub\ghars'
+    AppPool         = 'GharsPlatform'
+    AppPoolIdentity = 'IIS AppPool\GharsPlatform'
+    HostName        = 'ghars.dubaisc.ae'
+    ReleaseRoot     = 'D:\GharsReleases'
+    BackupRoot      = 'D:\GharsBackups'
+    Databases       = @('GharsPlatformDb', 'ghars')
+}
+
+function Get-NormalPath([string] $Path) { [IO.Path]::GetFullPath($Path).TrimEnd('\') }
+
+# True when one folder is the other, or inside it.
+function Test-Overlap([string] $A, [string] $B) {
+    $x = Get-NormalPath $A; $y = Get-NormalPath $B
+    $x -ieq $y -or $x.StartsWith("$y\", [StringComparison]::OrdinalIgnoreCase) -or
+        $y.StartsWith("$x\", [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Get-UrlHost([string] $Url) {
+    $u = $null
+    if (-not [Uri]::TryCreate($Url, [UriKind]::Absolute, [ref] $u)) { Fail "-HealthCheckUrl '$Url' is not an absolute URL." }
+    $u.Host
+}
+
+if ($DeploymentTarget -eq 'Production') {
+    if ((Get-NormalPath $SitePath) -ine $Production.SitePath) { Fail "Production must deploy to '$($Production.SitePath)', not '$SitePath'." }
+    if ($AppPool -ine $Production.AppPool) { Fail "Production must use application pool '$($Production.AppPool)', not '$AppPool'." }
+    if (-not $HealthCheckUrl -or (Get-UrlHost $HealthCheckUrl) -ine $Production.HostName) {
+        Fail "Production must be smoke-tested at https://$($Production.HostName)/."
+    }
+}
+else {
+    $refuse = @()
+    if (Test-Overlap $SitePath $Production.SitePath) { $refuse += "-SitePath '$SitePath' is or contains the production site" }
+    if (Test-Overlap $Source $Production.SitePath) { $refuse += "-Source '$Source' is inside the production site" }
+    if ($AppPool -ieq $Production.AppPool) { $refuse += "-AppPool '$AppPool' is the production pool" }
+    if ($AppPoolIdentity -and $AppPoolIdentity -ieq $Production.AppPoolIdentity) { $refuse += '-AppPoolIdentity is the production identity' }
+    if ($ReleaseHistoryRoot) {
+        foreach ($p in @($Production.ReleaseRoot, $Production.SitePath)) {
+            if (Test-Overlap $ReleaseHistoryRoot $p) { $refuse += "-ReleaseHistoryRoot '$ReleaseHistoryRoot' overlaps '$p'" }
+        }
+    }
+    if ($BackupRoot -and (Test-Overlap $BackupRoot $Production.BackupRoot)) { $refuse += "-BackupRoot '$BackupRoot' overlaps '$($Production.BackupRoot)'" }
+    if ($Database -and ($Production.Databases -icontains $Database)) { $refuse += "-Database '$Database' is a production database name" }
+    if ($HealthCheckUrl -and (Get-UrlHost $HealthCheckUrl) -ieq $Production.HostName) { $refuse += '-HealthCheckUrl is the production host' }
+    if ($refuse) { Fail ("Staging deployment refused:`n    " + ($refuse -join "`n    ")) }
+}
+Write-Host "    target      : $DeploymentTarget -> $SitePath ($AppPool)"
+
+if ($ValidateOnly) {
+    Write-Host '    -ValidateOnly: target accepted, nothing changed.'
+    return
 }
 
 # ---------------------------------------------------------------------------
@@ -269,7 +344,7 @@ catch {
     Write-Host '!!! DEPLOYMENT FAILED - the site is being held offline on purpose.' -ForegroundColor Red
     Write-Host '    app_offline.htm is in place and the application pool is stopped.'
     if ($ReleaseHistoryRoot) {
-        Write-Host "    Roll back by re-running this script with -Source '$snapshot' and no -MigrationScript."
+        Write-Host "    Roll back by re-running this script with -DeploymentTarget $DeploymentTarget -Source '$snapshot' and no -MigrationScript."
     }
     Write-Host '    If the migration step ran, restore the pre-deploy backup as well - a code'
     Write-Host '    rollback does not undo a schema change.'

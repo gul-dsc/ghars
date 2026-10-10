@@ -403,23 +403,11 @@ public class ChannelContentController : Controllers.BaseController
             MessageEn = $"{nameEn} submitted '{item.TitleEn}' to the Ghars Channel for approval. Your review is required.",
             MessageAr = $"قدّمت {nameAr} '{item.TitleAr}' إلى قناة غرس للاعتماد. مطلوب مراجعتكم.",
             Type = NotificationType.Warning,
-            TargetType = NotificationTargetType.Role,
-            TargetRoleName = RoleNames.DscAdmin,
             LinkUrl = $"/Admin/Gallery/ChannelReview/{item.Id}",
             CreatedAtUtc = DateTime.UtcNow,
             CreatedByUserId = CurrentUserId
         };
-        Db.Notifications.Add(n);
-        await Db.SaveChangesAsync();
-
-        var roleNames = new[] { RoleNames.DscAdmin, RoleNames.SuperAdmin };
-        var roleIds = await Db.Roles.Where(r => r.Name != null && roleNames.Contains(r.Name)).Select(r => r.Id).ToListAsync();
-        var userIds = await Db.UserRoles.Where(ur => roleIds.Contains(ur.RoleId)).Select(ur => ur.UserId).Distinct().ToListAsync();
-        foreach (var uid in userIds)
-            Db.NotificationDeliveries.Add(new NotificationDelivery { NotificationId = n.Id, UserId = uid, DeliveredAtUtc = DateTime.UtcNow });
-        await Db.SaveChangesAsync();
-
-        await _hub.Clients.All.SendAsync("notificationReceived", new { title = n.TitleEn, message = n.MessageEn, linkUrl = n.LinkUrl });
+        await NotificationDispatcher.SendToDscReviewersAsync(Db, _hub, n);
     }
 
     private void TryDeleteUpload(string webRelativePath)

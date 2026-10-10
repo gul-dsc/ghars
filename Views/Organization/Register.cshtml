@@ -1,14 +1,17 @@
 @model GharsPlatform.ViewModels.OrganizationRegistrationVm
+@using System.Globalization
 @{
-    ViewData["Title"] = "Organization Registration";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Register an organization", "تسجيل جهة");
 }
 <div class="row justify-content-center">
     <div class="col-xl-10">
         <div class="card shadow-sm border-0 rounded-4">
             <div class="card-body p-4 p-md-5">
-                <h4 class="mb-2">Club / Academy / Partner Registration</h4>
+                <h4 class="mb-2">@T("Register a club, academy or implementing entity", "تسجيل نادٍ أو أكاديمية أو جهة منفذة")</h4>
                 <p class="text-muted mb-4">
-                    Submit your organization profile. the Council team will review and approve before enabling booking and participation features.
+                    @T("Enter the organization's profile. It will be listed in Organizations as pending until it is approved; booking and participation features are enabled after approval.", "أدخلوا بيانات الجهة. ستظهر في قائمة الجهات بانتظار الاعتماد، ولا تُفعَّل خصائص الحجز والمشاركة إلا بعد الاعتماد.")
                 </p>
 
                 <form method="post" enctype="multipart/form-data">
@@ -16,111 +19,112 @@
 
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label">Organization Type</label>
-                            <select class="form-select" asp-for="OrganizationType" asp-items="Html.GetEnumSelectList<OrganizationType>()"></select>
+                            <label class="form-label">@T("Organization type", "نوع الجهة")</label>
+                            <select class="form-select" asp-for="OrganizationType" >@foreach (var t in GharsPlatform.Controllers.Admin.OrganizationText.Types.Where(t => t != OrganizationType.DubaiSportsCouncil)){<option value="@((int)t)">@GharsPlatform.Controllers.Admin.OrganizationText.TypeLabel(t)</option>}</select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Email</label>
+                            <label class="form-label">@T("Email", "البريد الإلكتروني")</label>
                             <input class="form-control" asp-for="Email" />
                             <span class="text-danger small" asp-validation-for="Email"></span>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Phone</label>
+                            <label class="form-label">@T("Phone", "رقم الهاتف")</label>
                             <input class="form-control" asp-for="Phone" />
                             <span class="text-danger small" asp-validation-for="Phone"></span>
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label">Name (English)</label>
+                            <label class="form-label">@T("Name (English)", "الاسم (بالإنجليزية)")</label>
                             <input class="form-control" asp-for="NameEn" />
                             <span class="text-danger small" asp-validation-for="NameEn"></span>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Name (Arabic)</label>
+                            <label class="form-label">@T("Name (Arabic)", "الاسم (بالعربية)")</label>
                             <input class="form-control" asp-for="NameAr" />
                             <span class="text-danger small" asp-validation-for="NameAr"></span>
                         </div>
 
                         <div class="col-md-4">
-                            <label class="form-label">Trade License No (optional)</label>
+                            <label class="form-label">@T("Trade license number (optional)", "رقم الرخصة التجارية (اختياري)")</label>
                             <input class="form-control" asp-for="TradeLicenseNo" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">City</label>
+                            <label class="form-label">@T("City", "المدينة")</label>
                             <input class="form-control" asp-for="City" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Website</label>
+                            <label class="form-label">@T("Website", "الموقع الإلكتروني")</label>
                             <input class="form-control" asp-for="WebsiteUrl" placeholder="https://..." />
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label">Address (English)</label>
+                            <label class="form-label">@T("Address (English)", "العنوان (بالإنجليزية)")</label>
                             <input class="form-control" asp-for="AddressEn" />
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Address (Arabic)</label>
+                            <label class="form-label">@T("Address (Arabic)", "العنوان (بالعربية)")</label>
                             <input class="form-control" asp-for="AddressAr" />
                         </div>
 
                         <div class="col-12">
                             <hr class="my-3" />
-                            <h5 class="mb-2">Primary Contact</h5>
+                            <h5 class="mb-2">@T("Primary contact", "جهة الاتصال الرئيسية")</h5>
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label">Full Name</label>
+                            <label class="form-label">@T("Full name", "الاسم الكامل")</label>
                             <input class="form-control" asp-for="ContactFullName" />
                             <span class="text-danger small" asp-validation-for="ContactFullName"></span>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Position (EN)</label>
+                            <label class="form-label">@T("Position (English)", "المسمى الوظيفي (بالإنجليزية)")</label>
                             <input class="form-control" asp-for="ContactPositionEn" />
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Position (AR)</label>
+                            <label class="form-label">@T("Position (Arabic)", "المسمى الوظيفي (بالعربية)")</label>
                             <input class="form-control" asp-for="ContactPositionAr" />
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label">Contact Email</label>
+                            <label class="form-label">@T("Contact email", "البريد الإلكتروني لجهة الاتصال")</label>
                             <input class="form-control" asp-for="ContactEmail" />
                             <span class="text-danger small" asp-validation-for="ContactEmail"></span>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Contact Phone</label>
+                            <label class="form-label">@T("Contact phone", "هاتف جهة الاتصال")</label>
                             <input class="form-control" asp-for="ContactPhone" />
                             <span class="text-danger small" asp-validation-for="ContactPhone"></span>
                         </div>
 
                         <div class="col-12">
                             <hr class="my-3" />
-                            <h5 class="mb-2">Documents</h5>
-                            <div class="small text-muted">Accepted: PDF/JPG/PNG. Keep files under your organization approval policy limits.</div>
+                            <h5 class="mb-2">@T("Documents", "المستندات")</h5>
+                            <div class="small text-muted">@T("Accepted formats: PDF, JPG, PNG.", "الصيغ المقبولة: PDF وJPG وPNG.")</div>
                         </div>
 
                         <div class="col-md-4">
-                            <label class="form-label">Logo (optional)</label>
-                            <input class="form-control" type="file" asp-for="LogoFile" />
+                            <label class="form-label">@T("Logo (optional)", "الشعار (اختياري)")</label>
+                            <input class="form-control" type="file" asp-for="LogoFile" accept=".png,.jpg,.jpeg,.gif,.webp" />
+                            <span asp-validation-for="LogoFile" class="text-danger small"></span>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Trade License / License</label>
+                            <label class="form-label">@T("Trade license or license", "الرخصة التجارية أو الترخيص")</label>
                             <input class="form-control" type="file" asp-for="LicenseFile" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Supporting Document (optional)</label>
+                            <label class="form-label">@T("Supporting document (optional)", "مستند داعم (اختياري)")</label>
                             <input class="form-control" type="file" asp-for="SupportingFile" />
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label">Notes (optional)</label>
+                            <label class="form-label">@T("Notes (optional)", "ملاحظات (اختياري)")</label>
                             <textarea class="form-control" asp-for="Notes" rows="3"></textarea>
                         </div>
                     </div>
 
                     <div class="d-flex justify-content-end gap-2 mt-4">
-                        <a class="btn btn-outline-secondary" href="/">Cancel</a>
-                        <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Submit Registration</button>
+                        <a class="btn btn-outline-secondary" href="/">@T("Cancel", "إلغاء")</a>
+                        <button class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>@T("Register organization", "تسجيل الجهة")</button>
                     </div>
 
                     <div class="text-danger small mt-3" asp-validation-summary="All"></div>

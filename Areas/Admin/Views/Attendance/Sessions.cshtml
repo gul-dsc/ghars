@@ -1,11 +1,14 @@
 @model List<GharsPlatform.Models.Core.AttendanceSession>
+@using System.Globalization
 @{
-    ViewData["Title"] = "Attendance";
-    ViewData["PageTitle"] = "Attendance Sessions";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Attendance", "الحضور");
+    ViewData["PageTitle"] = T("Attendance sessions", "جلسات الحضور");
 }
 <div class="d-flex align-items-center justify-content-between mb-3">
-    <div class="fw-semibold">Attendance Sessions</div>
-    <a class="btn btn-sm btn-primary" href="/Admin/Attendance/CreateSession"><i class="bi bi-plus-lg"></i> New Session</a>
+    <div class="fw-semibold">@T("Attendance sessions", "جلسات الحضور")</div>
+    <a class="btn btn-sm btn-primary" href="/Admin/Attendance/CreateSession"><i class="bi bi-plus-lg"></i> @T("New session", "جلسة جديدة")</a>
 </div>
 
 <div class="card border-0 shadow-sm rounded-4">
@@ -13,12 +16,12 @@
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
             <tr>
-                <th>ID</th>
-                <th>Activity</th>
-                <th>Start</th>
-                <th>End</th>
-                <th>Attendees</th>
-                <th></th>
+                <th>@T("ID", "الرقم")</th>
+                <th>@T("Program", "البرنامج")</th>
+                <th>@T("Start", "البداية")</th>
+                <th>@T("End", "النهاية")</th>
+                <th>@T("Attendees", "الحضور")</th>
+                <th><span class="visually-hidden">@T("Actions", "الإجراءات")</span></th>
             </tr>
             </thead>
             <tbody>
@@ -26,14 +29,18 @@
             {
                 <tr>
                     <td>@s.Id</td>
-                    <td class="fw-semibold">@s.Activity?.TitleEn</td>
+                    <td class="fw-semibold">@(ar && !string.IsNullOrWhiteSpace(s.Activity?.TitleAr) ? s.Activity!.TitleAr : s.Activity?.TitleEn)</td>
                     <td>@s.SessionStartUtc.ToString("yyyy-MM-dd HH:mm")</td>
                     <td>@(s.SessionEndUtc?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
                     <td>@(s.AttendanceRecords?.Count ?? 0)</td>
                     <td class="text-end">
-                        <a class="btn btn-sm btn-outline-primary" href="/Admin/Attendance/SessionDetails/@s.Id">Details</a>
+                        <a class="btn btn-sm btn-outline-primary" href="/Admin/Attendance/SessionDetails/@s.Id">@T("Details", "التفاصيل")</a>
                     </td>
                 </tr>
+            }
+            @if (!Model.Any())
+            {
+                <tr><td colspan="6" class="text-muted p-3">@T("No attendance sessions yet.", "لا توجد جلسات حضور بعد.")</td></tr>
             }
             </tbody>
         </table>

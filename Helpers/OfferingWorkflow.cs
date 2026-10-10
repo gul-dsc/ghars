@@ -23,7 +23,7 @@ public static class OfferingWorkflow
     public static string Label(OfferingApprovalStatus? s) => s switch
     {
         OfferingApprovalStatus.Draft => IsAr ? "مسودة" : "Draft",
-        OfferingApprovalStatus.SubmittedForApproval => IsAr ? "قيد المراجعة" : "Submitted for approval",
+        OfferingApprovalStatus.SubmittedForApproval => IsAr ? "بانتظار اعتماد المجلس" : "Awaiting DSC approval",
         OfferingApprovalStatus.ReturnedForCorrection => IsAr ? "أُعيد للتعديل" : "Returned for correction",
         OfferingApprovalStatus.Approved => IsAr ? "معتمد" : "Approved",
         OfferingApprovalStatus.Rejected => IsAr ? "مرفوض" : "Rejected",

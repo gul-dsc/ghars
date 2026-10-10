@@ -1,17 +1,32 @@
 @model GharsPlatform.Models.Core.AttendanceSession
+@using System.Globalization
 @{
-    ViewData["Title"] = "Session Details";
-    ViewData["PageTitle"] = "Session Details";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    var recipients = ViewBag.Recipients as Dictionary<string, string[]> ?? new();
+}
+@{
+    ViewData["Title"] = T("Attendance session details", "تفاصيل جلسة الحضور");
+    ViewData["PageTitle"] = T("Attendance session details", "تفاصيل جلسة الحضور");
+    string MethodText(AttendanceMethod m) => m switch
+    {
+        AttendanceMethod.Manual => T("Added manually", "إضافة يدوية"),
+        AttendanceMethod.Qr => T("QR check-in", "تسجيل عبر رمز QR"),
+        AttendanceMethod.Import => T("Imported", "استيراد"),
+        _ => m.ToString()
+    };
     var scanUrl = ViewBag.ScanUrl as string ?? "";
 }
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Attendance/Sessions"><i class="bi bi-arrow-left"></i> Back</a>
+    <a class="btn btn-sm btn-outline-secondary" href="/Admin/Attendance/Sessions"><i class="bi bi-arrow-left"></i> @T("Back", "رجوع")</a>
     <div class="d-flex gap-2 align-items-center">
         @if (Model.SessionEndUtc == null)
         {
-            <form method="post" action="/Admin/Attendance/CloseSession/@Model.Id">
+            <form method="post" action="/Admin/Attendance/CloseSession/@Model.Id"
+                  data-confirm="@T("Close this attendance session? The check-in link will stop accepting check-ins.", "إغلاق جلسة الحضور هذه؟ سيتوقف رابط تسجيل الحضور عن قبول التسجيلات.")"
+                  data-confirm-ok="@T("Close session", "إغلاق الجلسة")">
                 @Html.AntiForgeryToken()
-                <button class="btn btn-sm btn-danger" type="submit">Close Session</button>
+                <button class="btn btn-sm btn-danger" type="submit">@T("Close session", "إغلاق الجلسة")</button>
             </form>
         }
     </div>
@@ -21,23 +36,23 @@
     <div class="col-lg-5">
         <div class="card border-0 shadow-sm rounded-4">
             <div class="card-body">
-                <div class="fw-semibold">@Model.Activity?.TitleEn</div>
+                <div class="fw-semibold">@(ar && !string.IsNullOrWhiteSpace(Model.Activity?.TitleAr) ? Model.Activity!.TitleAr : Model.Activity?.TitleEn)</div>
                 <div class="small text-muted">@Model.SessionStartUtc.ToString("yyyy-MM-dd HH:mm")</div>
 
                 <hr />
                 <div class="small mb-3">
-                    <div><strong>Session ID:</strong> @Model.Id</div>
-                    <div><strong>QR Token:</strong> @Model.QrToken</div>
-                    <div><strong>Scan URL:</strong> <a href="@scanUrl" target="_blank">@scanUrl</a></div>
+                    <div><strong>@T("Session ID:", "رقم الجلسة:")</strong> @Model.Id</div>
+                    <div><strong>@T("Session code:", "رمز الجلسة:")</strong> <bdi dir="ltr">@Model.QrToken</bdi></div>
+                    <div><strong>@T("Check-in link:", "رابط تسجيل الحضور:")</strong> <a href="@scanUrl" target="_blank" dir="ltr">@scanUrl</a></div>
                 </div>
                 @if (User.IsInRole("Super Admin"))
                 {
                     <form method="post" action="/Admin/Attendance/AddRecord/@Model.Id" class="border rounded-3 p-3 bg-light">
                         @Html.AntiForgeryToken()
-                        <label class="form-label small fw-semibold">Add attendee by email</label>
+                        <label class="form-label small fw-semibold" for="attendee-email">@T("Add attendee by email", "إضافة حاضر عبر البريد الإلكتروني")</label>
                         <div class="input-group input-group-sm">
-                            <input class="form-control" type="email" name="email" placeholder="club user email" required />
-                            <button class="btn btn-primary" type="submit">Add</button>
+                            <input class="form-control" type="email" id="attendee-email" name="email" dir="ltr" placeholder="@T("Club user's email", "البريد الإلكتروني لمستخدم النادي")" required />
+                            <button class="btn btn-primary" type="submit">@T("Add", "إضافة")</button>
                         </div>
                     </form>
                 }
@@ -48,25 +63,25 @@
     <div class="col-lg-7">
         <div class="card border-0 shadow-sm rounded-4">
             <div class="card-body">
-                <h6 class="fw-semibold mb-2"><i class="bi bi-people me-2"></i>Attendees (@(Model.AttendanceRecords?.Count ?? 0))</h6>
+                <h6 class="fw-semibold mb-2"><i class="bi bi-people me-2"></i>@T("Attendees", "الحضور") (@(Model.AttendanceRecords?.Count ?? 0))</h6>
                 @if (Model.AttendanceRecords == null || !Model.AttendanceRecords.Any())
                 {
-                    <div class="text-muted">No attendees yet.</div>
+                    <div class="text-muted">@T("No attendees yet.", "لا يوجد حضور بعد.")</div>
                 }
                 else
                 {
                     <div class="table-responsive">
                         <table class="table table-sm align-middle">
                             <thead>
-                                <tr><th>UserId</th><th>Check-in</th><th>Method</th></tr>
+                                <tr><th>@T("Attendee", "الحاضر")</th><th>@T("Check-in time", "وقت التسجيل")</th><th>@T("Method", "الطريقة")</th></tr>
                             </thead>
                             <tbody>
                             @foreach (var r in Model.AttendanceRecords.OrderByDescending(x => x.CheckInUtc))
                             {
                                 <tr>
-                                    <td class="text-truncate" style="max-width: 260px;">@r.UserId</td>
+                                    <td>@if (!string.IsNullOrEmpty(r.UserId) && recipients.TryGetValue(r.UserId, out var who)) { <div class="fw-semibold">@(string.IsNullOrWhiteSpace(who[0]) ? who[1] : who[0])</div><div class="small text-muted"><bdi>@who[1]</bdi></div> } else { <span class="text-muted small">@T("Unknown user", "مستخدم غير معروف")</span> }</td>
                                     <td>@r.CheckInUtc.ToString("yyyy-MM-dd HH:mm")</td>
-                                    <td>@r.Method</td>
+                                    <td>@MethodText(r.Method)</td>
                                 </tr>
                             }
                             </tbody>

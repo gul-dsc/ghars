@@ -3,6 +3,7 @@ using GharsPlatform.Data;
 using GharsPlatform.Helpers;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
+using GharsPlatform.Models.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -14,6 +15,8 @@ namespace GharsPlatform.Controllers.Admin;
 [Authorize(Roles = RoleNames.SuperAdmin)]
 public class UsersController : Controller
 {
+    private static bool IsAr() => System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+
     private readonly AppDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
@@ -37,7 +40,7 @@ public class UsersController : Controller
         var user = await _userManager.FindByIdAsync(id);
         if (user == null) return NotFound();
         var (ok, error) = await SendCredentialsToAsync(user);
-        if (ok) TempData["ToastSuccess"] = $"Login details sent to {user.Email}.";
+        if (ok) TempData["ToastSuccess"] = IsAr() ? $"تم إرسال بيانات الدخول إلى {user.Email}." : $"Login details sent to {user.Email}.";
         else TempData["ToastWarning"] = error;
         return RedirectToAction(nameof(Index));
     }
@@ -48,12 +51,12 @@ public class UsersController : Controller
     {
         if (ids == null || ids.Count == 0)
         {
-            TempData["ToastWarning"] = "Select at least one user.";
+            TempData["ToastWarning"] = IsAr() ? "اختاروا مستخدماً واحداً على الأقل." : "Select at least one user.";
             return RedirectToAction(nameof(Index));
         }
         if (!_email.IsConfigured)
         {
-            TempData["ToastWarning"] = "Email is not configured on this server yet.";
+            TempData["ToastWarning"] = IsAr() ? "لا يمكن إرسال بيانات الدخول بالبريد حالياً لأن إرسال البريد الإلكتروني غير مُعدّ على الخادم." : "Login details can't be emailed yet because email sending isn't set up on this server.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -66,8 +69,8 @@ public class UsersController : Controller
             var (ok, _) = await SendCredentialsToAsync(user);
             if (ok) sent++; else failed.Add(user.Email ?? id);
         }
-        TempData["ToastSuccess"] = $"Login details sent to {sent} user(s).";
-        if (failed.Count > 0) TempData["ToastWarning"] = "Not sent: " + string.Join(", ", failed);
+        TempData["ToastSuccess"] = IsAr() ? $"تم إرسال بيانات الدخول إلى {sent} من المستخدمين." : $"Login details sent to {sent} user(s).";
+        if (failed.Count > 0) TempData["ToastWarning"] = (IsAr() ? "لم تُرسل إلى: " : "Not sent: ") + string.Join(", ", failed);
         return RedirectToAction(nameof(Index));
     }
 
@@ -75,18 +78,18 @@ public class UsersController : Controller
 
     private async Task<(bool ok, string? error)> SendCredentialsToAsync(ApplicationUser user)
     {
-        if (!_email.IsConfigured) return (false, "Email is not configured on this server yet.");
-        if (string.IsNullOrWhiteSpace(user.Email)) return (false, "This user has no email address.");
+        if (!_email.IsConfigured) return (false, IsAr() ? "لا يمكن إرسال بيانات الدخول بالبريد حالياً لأن إرسال البريد الإلكتروني غير مُعدّ على الخادم." : "Login details can't be emailed yet because email sending isn't set up on this server.");
+        if (string.IsNullOrWhiteSpace(user.Email)) return (false, IsAr() ? "لا يوجد بريد إلكتروني لهذا المستخدم." : "This user has no email address.");
         if (user.Email.EndsWith(".local", StringComparison.OrdinalIgnoreCase))
-            return (false, $"{user.Email} is a test address and cannot receive email.");
+            return (false, IsAr() ? $"{user.Email} عنوان اختباري ولا يمكنه استقبال البريد." : $"{user.Email} is a test address and cannot receive email.");
         if (user.LockoutEnd.HasValue && user.LockoutEnd.Value.UtcDateTime > DateTime.UtcNow.AddYears(1))
-            return (false, $"{user.Email} is deactivated. Activate the account first.");
+            return (false, IsAr() ? $"الحساب {user.Email} معطّل. فعّلوا الحساب أولاً." : $"{user.Email} is deactivated. Activate the account first.");
 
         var password = PlatformUserSeeder.GeneratePassword();
         var token = await _userManager.GeneratePasswordResetTokenAsync(user);
         var reset = await _userManager.ResetPasswordAsync(user, token, password);
         if (!reset.Succeeded)
-            return (false, $"Could not set a password for {user.Email}: " + string.Join("; ", reset.Errors.Select(e => e.Description)));
+            return (false, (IsAr() ? $"تعذّر تعيين كلمة مرور لـ {user.Email}: " : $"Could not set a password for {user.Email}: ") + string.Join("; ", reset.Errors.Select(e => e.Description)));
 
         var loginUrl = Url.Action("Login", "Account", new { area = "" }, Request.Scheme)!;
         var forgotUrl = Url.Action("ForgotPassword", "Account", new { area = "" }, Request.Scheme)!;
@@ -125,7 +128,7 @@ public class UsersController : Controller
         catch (Exception ex)
         {
             // The password was already changed; the user can still recover through Forgot password.
-            return (false, $"Password was reset but the email to {user.Email} failed: {ex.Message}");
+            return (false, IsAr() ? $"تمت إعادة تعيين كلمة المرور، لكن تعذّر إرسال البريد إلى {user.Email}: {ex.Message}" : $"Password was reset but the email to {user.Email} failed: {ex.Message}");
         }
     }
 
@@ -175,10 +178,14 @@ public class UsersController : Controller
     public async Task<IActionResult> Create(UserEditVm vm)
     {
         await LoadLookupsAsync();
+        // Required here, not only by the browser: a request without a password used to fail inside
+        // Identity with an unrelated message, or create an account nobody could sign in to.
+        if (string.IsNullOrWhiteSpace(vm.Password))
+            ModelState.AddModelError(nameof(vm.Password), IsAr() ? "أدخلوا كلمة مرور للحساب الجديد." : "Enter a password for the new account.");
         if (!ModelState.IsValid) return View(vm);
         if (!await _roleManager.RoleExistsAsync(vm.RoleName))
         {
-            ModelState.AddModelError(nameof(vm.RoleName), "Selected role does not exist.");
+            ModelState.AddModelError(nameof(vm.RoleName), IsAr() ? "الدور المحدد غير موجود." : "Selected role does not exist.");
             return View(vm);
         }
         var user = new ApplicationUser
@@ -191,15 +198,39 @@ public class UsersController : Controller
             PrimaryOrganizationId = vm.PrimaryOrganizationId,
             CreatedAtUtc = DateTime.UtcNow
         };
+        // Checked against the configured password rules before anything is written.
+        if (await AddPasswordErrorsAsync(user, vm.Password!)) return View(vm);
+
+        // The account and its role are created together, or not at all.
+        await using var tx = await _db.Database.BeginTransactionAsync();
         var created = await _userManager.CreateAsync(user, vm.Password!);
-        if (!created.Succeeded)
+        var result = created.Succeeded ? await _userManager.AddToRoleAsync(user, vm.RoleName) : created;
+        if (!result.Succeeded)
         {
-            foreach (var e in created.Errors) ModelState.AddModelError("", e.Description);
+            await tx.RollbackAsync();
+            foreach (var e in result.Errors) ModelState.AddModelError("", e.Description);
             return View(vm);
         }
-        await _userManager.AddToRoleAsync(user, vm.RoleName);
-        TempData["ToastSuccess"] = "User created.";
+        await tx.CommitAsync();
+        TempData["ToastSuccess"] = IsAr() ? "تم إنشاء المستخدم." : "User created.";
         return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>
+    /// Runs every configured password validator and adds its (bilingual) errors to the Password
+    /// field. True when the password was refused. The password itself is never logged or echoed.
+    /// </summary>
+    private async Task<bool> AddPasswordErrorsAsync(ApplicationUser user, string password)
+    {
+        var refused = false;
+        foreach (var validator in _userManager.PasswordValidators)
+        {
+            var result = await validator.ValidateAsync(_userManager, user, password);
+            if (result.Succeeded) continue;
+            refused = true;
+            foreach (var e in result.Errors) ModelState.AddModelError(nameof(UserEditVm.Password), e.Description);
+        }
+        return refused;
     }
 
     [Authorize(Roles = RoleNames.SuperAdmin)]
@@ -231,27 +262,65 @@ public class UsersController : Controller
         if (user == null) return NotFound();
         ModelState.Remove(nameof(vm.Password));
         if (!ModelState.IsValid) return View(vm);
+        if (!await _roleManager.RoleExistsAsync(vm.RoleName))
+        {
+            ModelState.AddModelError(nameof(vm.RoleName), IsAr() ? "الدور المحدد غير موجود." : "Selected role does not exist.");
+            return View(vm);
+        }
+
+        // All or nothing: a new password that breaks the rules, or any step that fails below, leaves
+        // the account exactly as it was, and the page says what was refused. Nothing is reported as
+        // updated unless every requested change was saved.
+        var newPassword = string.IsNullOrWhiteSpace(vm.Password) ? null : vm.Password;
+        if (newPassword is not null && await AddPasswordErrorsAsync(user, newPassword)) return View(vm);
+
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        await UserAdministration.LockSuperAdminRosterAsync(_db);
+        await _db.Entry(user).ReloadAsync();
+
+        var refusal = await UserAdministration.CheckSuperAdminContinuityAsync(_db, _userManager, _userManager.GetUserId(User), user,
+            keepsSuperAdmin: vm.RoleName == RoleNames.SuperAdmin, staysActive: vm.IsActive);
+        if (refusal is not null)
+        {
+            ModelState.AddModelError("", refusal);
+            return View(vm);
+        }
+
         user.Email = vm.Email.Trim();
         user.UserName = vm.Email.Trim();
         user.FullName = vm.FullName.Trim();
         user.PreferredLanguage = vm.PreferredLanguage;
         user.PrimaryOrganizationId = vm.PrimaryOrganizationId;
         user.LockoutEnd = vm.IsActive ? null : DateTimeOffset.UtcNow.AddYears(100);
-        var updated = await _userManager.UpdateAsync(user);
-        if (!updated.Succeeded)
+
+        var result = await _userManager.UpdateAsync(user);
+        if (result.Succeeded)
         {
-            foreach (var e in updated.Errors) ModelState.AddModelError("", e.Description);
-            return View(vm);
+            var currentRoles = await _userManager.GetRolesAsync(user);
+            if (!(currentRoles.Count == 1 && currentRoles[0] == vm.RoleName))
+            {
+                if (currentRoles.Any()) result = await _userManager.RemoveFromRolesAsync(user, currentRoles);
+                if (result.Succeeded) result = await _userManager.AddToRoleAsync(user, vm.RoleName);
+            }
         }
-        var currentRoles = await _userManager.GetRolesAsync(user);
-        if (currentRoles.Any()) await _userManager.RemoveFromRolesAsync(user, currentRoles);
-        if (!string.IsNullOrWhiteSpace(vm.RoleName)) await _userManager.AddToRoleAsync(user, vm.RoleName);
-        if (!string.IsNullOrWhiteSpace(vm.Password))
+        if (result.Succeeded && newPassword is not null)
         {
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-            await _userManager.ResetPasswordAsync(user, token, vm.Password);
+            result = await _userManager.ResetPasswordAsync(user, token, newPassword);
         }
-        TempData["ToastSuccess"] = "User updated.";
+
+        if (!result.Succeeded)
+        {
+            await tx.RollbackAsync();
+            ModelState.AddModelError("", IsAr() ? "لم يتم حفظ أي تغيير على الحساب:" : "No changes were saved to this account:");
+            foreach (var e in result.Errors) ModelState.AddModelError("", e.Description);
+            return View(vm);
+        }
+
+        await tx.CommitAsync();
+        TempData["ToastSuccess"] = newPassword is null
+            ? (IsAr() ? "تم تحديث المستخدم." : "User updated.")
+            : (IsAr() ? "تم تحديث المستخدم وتعيين كلمة المرور الجديدة." : "User updated and the new password set.");
         return RedirectToAction(nameof(Index));
     }
 
@@ -262,9 +331,28 @@ public class UsersController : Controller
     {
         var user = await _userManager.FindByIdAsync(id);
         if (user == null) return NotFound();
+
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        await UserAdministration.LockSuperAdminRosterAsync(_db);
+        await _db.Entry(user).ReloadAsync();
+        var refusal = await UserAdministration.CheckSuperAdminContinuityAsync(_db, _userManager, _userManager.GetUserId(User), user,
+            keepsSuperAdmin: true, staysActive: false);
+        if (refusal is not null)
+        {
+            TempData["ToastWarning"] = refusal;
+            return RedirectToAction(nameof(Index));
+        }
+
         user.LockoutEnd = DateTimeOffset.UtcNow.AddYears(100);
-        await _userManager.UpdateAsync(user);
-        TempData["ToastWarning"] = "User deactivated.";
+        var result = await _userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            await tx.RollbackAsync();
+            TempData["ToastWarning"] = (IsAr() ? "تعذّر تعطيل المستخدم: " : "The user could not be deactivated: ") + string.Join(" ", result.Errors.Select(e => e.Description));
+            return RedirectToAction(nameof(Index));
+        }
+        await tx.CommitAsync();
+        TempData["ToastWarning"] = IsAr() ? "تم تعطيل المستخدم." : "User deactivated.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -275,8 +363,23 @@ public class UsersController : Controller
     {
         var user = await _userManager.FindByIdAsync(id);
         if (user == null) return NotFound();
-        await DeleteWithLinksAsync(user);
-        TempData["ToastWarning"] = "User deleted.";
+        var email = user.Email;
+
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        await UserAdministration.LockSuperAdminRosterAsync(_db);
+        await _db.Entry(user).ReloadAsync();
+        var refusal = await UserAdministration.CheckSuperAdminContinuityAsync(_db, _userManager, _userManager.GetUserId(User), user,
+            keepsSuperAdmin: false, staysActive: false);
+        if (refusal is not null)
+        {
+            TempData["ToastWarning"] = refusal;
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (await DeleteWithLinksAsync(user, tx))
+            TempData["ToastWarning"] = IsAr() ? $"تم حذف المستخدم {email}." : $"User {email} deleted.";
+        else
+            TempData["ToastWarning"] = IsAr() ? $"تعذّر حذف المستخدم {email}، ولم يتم تغيير أي شيء." : $"User {email} could not be deleted. Nothing was changed.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -305,17 +408,36 @@ public class UsersController : Controller
     {
         int deleted = 0;
         foreach (var user in await PlaceholderAccountsAsync())
-            if (await DeleteWithLinksAsync(user)) deleted++;
-        TempData["ToastSuccess"] = $"Removed {deleted} placeholder organization account(s).";
+        {
+            // One transaction per account: a failure keeps that account and its links intact and
+            // does not undo the ones already removed.
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            if (await DeleteWithLinksAsync(user, tx)) deleted++;
+        }
+        TempData["ToastSuccess"] = IsAr() ? $"تم حذف {deleted} من حسابات الإعداد غير المستخدمة." : $"Removed {deleted} unused setup account(s).";
         return RedirectToAction(nameof(Index));
     }
 
-    // OrganizationAdminLinks is not an Identity FK, so remove it first or it lingers as an orphan.
-    private async Task<bool> DeleteWithLinksAsync(ApplicationUser user)
+    // OrganizationAdminLinks is not an Identity FK, so it is removed with the account in one
+    // transaction: both go, or neither does. Records that name the user as history are kept.
+    private async Task<bool> DeleteWithLinksAsync(ApplicationUser user, Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction tx)
     {
-        _db.OrganizationAdminLinks.RemoveRange(await _db.OrganizationAdminLinks.Where(x => x.UserId == user.Id).ToListAsync());
-        await _db.SaveChangesAsync();
-        return (await _userManager.DeleteAsync(user)).Succeeded;
+        try
+        {
+            var result = await UserAdministration.DeleteUserWithLinksAsync(_db, _userManager, user);
+            if (result.Succeeded)
+            {
+                await tx.CommitAsync();
+                return true;
+            }
+        }
+        catch (DbUpdateException)
+        {
+            // Rolled back below; the account and its links stay as they were.
+        }
+        await tx.RollbackAsync();
+        _db.ChangeTracker.Clear();
+        return false;
     }
 
     private async Task LoadLookupsAsync()
@@ -340,8 +462,8 @@ public class UsersController : Controller
     public class UserEditVm
     {
         public string? Id { get; set; }
-        [Required, MaxLength(200)] public string FullName { get; set; } = "";
-        [Required, EmailAddress, MaxLength(256)] public string Email { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "Enter the full name.", Ar = "أدخلوا الاسم الكامل."), MaxLength(200)] public string FullName { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "Enter the email address.", Ar = "أدخلوا البريد الإلكتروني."), BilingualEmailAddress(ErrorMessage = "Enter a valid email address.", Ar = "أدخلوا بريداً إلكترونياً صالحاً."), MaxLength(256)] public string Email { get; set; } = "";
         [DataType(DataType.Password)] public string? Password { get; set; }
         [Required] public string RoleName { get; set; } = RoleNames.Viewer;
         public int? PrimaryOrganizationId { get; set; }

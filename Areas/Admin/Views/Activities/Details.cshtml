@@ -7,8 +7,8 @@
     // works in Arabic reviews Arabic submissions and should not read the decision buttons in English.
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string e, string a) => ar ? a : e;
-    ViewData["Title"] = "Activity Details";
-    ViewData["PageTitle"] = "Activity Details";
+    ViewData["Title"] = T("Program details", "تفاصيل البرنامج");
+    ViewData["PageTitle"] = T("Program details", "تفاصيل البرنامج");
     var bookings = Model.BookingRequests?.OrderByDescending(x => x.CreatedAtUtc).ToList() ?? new List<GharsPlatform.Models.Core.BookingRequest>();
     var isOffering = OfferingWorkflow.IsPartnerOffering(Model);
     var awaiting = OfferingWorkflow.DscCanReview(Model.ApprovalStatus);
@@ -39,7 +39,7 @@
         "Staff" => T("Staff", "موظفون"),
         "Administrators" => T("Administrators", "إداريون"),
         "Parents" => T("Parents", "أولياء أمور"),
-        "Others" => T("Others", "أخرى"),
+        "Others" => T("Others", "فئات أخرى"),
         _ => a
     };
 
@@ -81,12 +81,12 @@
     <div class="col-lg-8">
         @* 1. Program Information — everything the reviewer judges the submission on. *@
         <section class="card border-0 shadow-sm rounded-4 mb-3"><div class="card-body">
-            <h2 class="h5 mb-3">@T("Program Information", "معلومات البرنامج")</h2>
+            <h2 class="h5 mb-3">@T("Program information", "معلومات البرنامج")</h2>
             <dl class="row mb-0">
                 <dt class="col-sm-4">@T("Title (English)", "العنوان بالإنجليزية")</dt><dd class="col-sm-8" dir="ltr">@Model.TitleEn</dd>
                 <dt class="col-sm-4">@T("Title (Arabic)", "العنوان بالعربية")</dt><dd class="col-sm-8" dir="rtl">@Model.TitleAr</dd>
                 <dt class="col-sm-4">@T("Type", "النوع")</dt><dd class="col-sm-8">@TypeText(Model.Type)</dd>
-                <dt class="col-sm-4">@T("Implementing Entity", "الجهة المنفذة")</dt><dd class="col-sm-8">@(Model.PartnerOrganization is null ? T("— (DSC-created activity)", "— (نشاط من إنشاء المجلس)") : (ar && !string.IsNullOrWhiteSpace(Model.PartnerOrganization.NameAr) ? Model.PartnerOrganization.NameAr : Model.PartnerOrganization.NameEn))</dd>
+                <dt class="col-sm-4">@T("Implementing entity", "الجهة المنفذة")</dt><dd class="col-sm-8">@(Model.PartnerOrganization is null ? T("— (created by DSC)", "— (من إنشاء المجلس)") : (ar && !string.IsNullOrWhiteSpace(Model.PartnerOrganization.NameAr) ? Model.PartnerOrganization.NameAr : Model.PartnerOrganization.NameEn))</dd>
                 <dt class="col-sm-4">@T("Season", "الموسم")</dt><dd class="col-sm-8">@((ar ? Model.Season?.TitleAr : Model.Season?.TitleEn) ?? "—")</dd>
                 <dt class="col-sm-4">@T("Target audience", "الفئة المستهدفة")</dt>
                 <dd class="col-sm-8">
@@ -102,7 +102,7 @@
                 <dt class="col-sm-4">@T("Capacity", "السعة")</dt><dd class="col-sm-8">@Model.Capacity</dd>
                 <dt class="col-sm-4">@T("Availability", "الإتاحة")</dt><dd class="col-sm-8">@Availability()</dd>
                 <dt class="col-sm-4">@T("Indicative session", "الجلسة الاسترشادية")</dt><dd class="col-sm-8">@Model.StartDateTime.ToString("yyyy-MM-dd HH:mm") – @Model.EndDateTime.ToString("HH:mm")</dd>
-                <dt class="col-sm-4">@T("Location", "الموقع")</dt><dd class="col-sm-8">@(string.IsNullOrWhiteSpace(Model.LocationEn) ? "—" : Model.LocationEn)</dd>
+                <dt class="col-sm-4">@T("Location", "الموقع")</dt><dd class="col-sm-8">@(ar && !string.IsNullOrWhiteSpace(Model.LocationAr) ? Model.LocationAr : string.IsNullOrWhiteSpace(Model.LocationEn) ? "—" : Model.LocationEn)</dd>
                 <dt class="col-sm-4">@T("Publication status", "حالة النشر")</dt><dd class="col-sm-8">@(Model.Status == ActivityStatus.Published ? T("Published", "منشور") : Model.Status == ActivityStatus.Draft ? T("Draft", "مسودة") : Model.Status == ActivityStatus.Closed ? T("Closed", "مغلق") : T("Cancelled", "ملغى"))</dd>
             </dl>
         </div></section>
@@ -117,14 +117,14 @@
            the review actions in reading order rather than tucked beside them. Full partial path: a
            bare name resolves against Areas/Admin/Views and is not found. *@
         <section class="card border-0 shadow-sm rounded-4 mb-3"><div class="card-body">
-            <h2 class="h5 mb-3">@T("Supporting Documents", "المستندات الداعمة")</h2>
+            <h2 class="h5 mb-3">@T("Supporting documents", "المستندات الداعمة")</h2>
             @await Html.PartialAsync("~/Views/Shared/_ProgramAttachments.cshtml", ViewBag.Attachments as List<ActivityAttachment> ?? new List<ActivityAttachment>())
         </div></section>
 
         @if (isOffering)
         {
             <section class="card border-0 shadow-sm rounded-4"><div class="card-body">
-                <h2 class="h5 mb-3">@T("Workflow History", "سجل سير العمل")</h2>
+                <h2 class="h5 mb-3">@T("Workflow history", "سجل سير العمل")</h2>
                 @{
                     // Recognised workflow transitions only; the audit payload itself is never rendered.
                     var entries = history
@@ -157,7 +157,7 @@
         {
             @* 2. Submission Information — who sent it, when, and what state it is in. *@
             <section class="card border-0 shadow-sm rounded-4 mb-3"><div class="card-body">
-                <h2 class="h5 mb-3">@T("Submission Information", "معلومات الإرسال")</h2>
+                <h2 class="h5 mb-3">@T("Submission information", "معلومات الإرسال")</h2>
                 <dl class="row mb-0">
                     <dt class="col-6">@T("Status", "الحالة")</dt>
                     <dd class="col-6"><span class="badge @OfferingWorkflow.BadgeClass(Model.ApprovalStatus)"><i class="bi @OfferingWorkflow.Icon(Model.ApprovalStatus) me-1" aria-hidden="true"></i>@OfferingWorkflow.Label(Model.ApprovalStatus)</span></dd>
@@ -174,7 +174,7 @@
 
             @* 3. Review Decision — the three outcomes, with notes required for two of them. *@
             <section class="card border-0 shadow-sm rounded-4 mb-3"><div class="card-body">
-                <h2 class="h5 mb-3">@T("Review Decision", "قرار المراجعة")</h2>
+                <h2 class="h5 mb-3">@T("Review decision", "قرار المراجعة")</h2>
                 @if (awaiting)
                 {
                     @* Notes are required for a return or a rejection; the server enforces that too,
@@ -188,15 +188,15 @@
                         <div class="form-text mb-2">@T("Notes are sent to the implementing entity. Not required to approve.", "تُرسل الملاحظات إلى الجهة المنفذة، وهي غير مطلوبة عند الاعتماد.")</div>
                         <div class="d-grid gap-2">
                             <button class="btn btn-success" type="submit" formaction="/Admin/Activities/Approve"
-                                    data-confirm="@T("Approve this program and make it available for club booking?", "اعتماد هذا البرنامج وإتاحته لحجز الأندية؟")">
+                                    data-confirm="@T("Approve this program and publish it? Clubs will be able to see and book it, and the implementing entity will be notified.", "اعتماد هذا البرنامج ونشره؟ ستتمكن الأندية من رؤيته وحجزه، وسيتم إبلاغ الجهة المنفذة.")">
                                 @T("Approve & publish", "اعتماد ونشر")
                             </button>
                             <button class="btn btn-outline-warning" type="submit" formaction="/Admin/Activities/ReturnForCorrection"
-                                    data-confirm="@T("Return this program to the partner for correction?", "إعادة هذا البرنامج إلى الجهة المنفذة للتعديل؟")">
+                                    data-confirm="@T("Return this program to the implementing entity for correction? Your notes will be sent to them.", "إعادة هذا البرنامج إلى الجهة المنفذة للتعديل؟ سيتم إرسال ملاحظاتكم إليها.")">
                                 @T("Return for correction", "إعادة للتعديل")
                             </button>
                             <button class="btn btn-outline-danger" type="submit" formaction="/Admin/Activities/Reject"
-                                    data-confirm="@T("Reject this program?", "رفض هذا البرنامج؟")">
+                                    data-confirm="@T("Reject this program? It will not be published, and your notes will be sent to the implementing entity.", "رفض هذا البرنامج؟ لن يُنشر، وسيتم إرسال ملاحظاتكم إلى الجهة المنفذة.")">
                                 @T("Reject", "رفض")
                             </button>
                         </div>
@@ -204,14 +204,15 @@
                 }
                 else if (OfferingWorkflow.CanUnpublish(Model.ApprovalStatus))
                 {
-                    <p class="text-muted small">@T("This program is approved and visible to clubs. Unpublishing withdraws it from the catalogue; existing bookings are unaffected.", "هذا البرنامج معتمد وظاهر للأندية. إلغاء النشر يسحبه من الكتالوج، ولا يؤثر على الحجوزات القائمة.")</p>
+                    <p class="text-muted small">@T("This program is approved and visible to clubs. Withdrawing it removes it from the catalogue; existing bookings are unaffected.", "هذا البرنامج معتمد وظاهر للأندية. سحبه يزيله من الكتالوج، ولا يؤثر على الحجوزات القائمة.")</p>
                     <form method="post" action="/Admin/Activities/UnpublishOffering"
-                          data-confirm="@T("Withdraw this program from the club catalogue? Clubs will no longer be able to request it.", "سحب هذا البرنامج من كتالوج الأندية؟ لن تتمكن الأندية من طلبه بعد ذلك.")">
+                          data-confirm="@T("Withdraw this program from the club catalogue? Clubs will no longer be able to request it, and the implementing entity will be notified.", "سحب هذا البرنامج من كتالوج الأندية؟ لن تتمكن الأندية من طلبه بعد ذلك، وسيتم إبلاغ الجهة المنفذة.")"
+                          data-confirm-ok="@T("Withdraw program", "سحب البرنامج")">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="id" value="@Model.Id" />
                         <label class="form-label" for="unpublish-notes">@T("Reason (optional)", "السبب (اختياري)")</label>
                         <textarea class="form-control mb-2" id="unpublish-notes" name="notes" rows="2" maxlength="2000"></textarea>
-                        <button class="btn btn-outline-secondary w-100" type="submit">@T("Unpublish offering", "إلغاء نشر البرنامج")</button>
+                        <button class="btn btn-outline-secondary w-100" type="submit">@T("Withdraw program", "سحب البرنامج")</button>
                     </form>
                 }
                 else
@@ -229,8 +230,8 @@
                     @foreach (var b in bookings)
                     {
                         <a class="list-group-item list-group-item-action" href="/Admin/Bookings/Details/@b.Id">
-                            <div class="fw-semibold">@b.Organization?.NameEn</div>
-                            <div class="small text-muted">@b.Status · @b.RequestedSeats @T("seats", "مقعد")</div>
+                            <div class="fw-semibold">@(ar && !string.IsNullOrWhiteSpace(b.Organization?.NameAr) ? b.Organization!.NameAr : b.Organization?.NameEn)</div>
+                            <div class="small text-muted">@BookingStatusText.Label(b.Status) · @b.RequestedSeats @T("seats", "مقعد")</div>
                         </a>
                     }
                 </div>

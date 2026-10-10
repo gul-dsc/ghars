@@ -18,9 +18,7 @@
 
     string Name(Organization o) => isAr && !string.IsNullOrWhiteSpace(o.NameAr) ? o.NameAr : o.NameEn;
     string Title(Activity a) => isAr && !string.IsNullOrWhiteSpace(a.TitleAr) ? a.TitleAr : a.TitleEn;
-    string Logo(Organization o) => string.IsNullOrWhiteSpace(o.LogoPath)
-        ? Url.Content("~/img/partners/default-partner.svg")
-        : Url.Content(o.LogoPath);
+    string Logo(Organization o) => Url.Content("~" + GharsPlatform.Helpers.OrganizationLogo.SrcOrDefault(o.LogoPath));
 
     ViewData["Title"] = T($"{Name(partner)} — Available Times", $"{Name(partner)} — الأوقات المتاحة");
 

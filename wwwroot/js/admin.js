@@ -20,12 +20,40 @@
       const div = document.createElement('div');
       div.className = "alert alert-info alert-dismissible fade show";
       div.setAttribute("role","alert");
-      div.innerHTML = `
-        <div class="fw-semibold">${payload.titleEn ?? "Notification"}</div>
-        <div class="small">${payload.messageEn ?? ""}</div>
-        ${payload.linkUrl ? `<div class="mt-2"><a class="small" href="${payload.linkUrl}">Open</a></div>` : ""}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-      `;
+      // The layouts set <html dir="rtl"> for Arabic; prefer the Arabic fields there, falling back to English.
+      const isAr = document.documentElement.dir === 'rtl';
+      const title = (isAr ? (payload.titleAr || payload.titleEn) : payload.titleEn) || (isAr ? "إشعار" : "Notification");
+      const message = (isAr ? (payload.messageAr || payload.messageEn) : payload.messageEn) || "";
+
+      // Built as text nodes: titles and messages carry user-entered text (names, subjects, notes)
+      // and must never be parsed as markup.
+      const titleEl = document.createElement('div');
+      titleEl.className = "fw-semibold";
+      titleEl.textContent = title;
+      const messageEl = document.createElement('div');
+      messageEl.className = "small";
+      messageEl.textContent = message;
+      div.append(titleEl, messageEl);
+
+      // Only a path on this site becomes a link (no "//host", no "javascript:").
+      const link = typeof payload.linkUrl === "string" ? payload.linkUrl : "";
+      if (/^\/(?![\/\\])/.test(link)) {
+        const linkWrap = document.createElement('div');
+        linkWrap.className = "mt-2";
+        const a = document.createElement('a');
+        a.className = "small";
+        a.href = link;
+        a.textContent = isAr ? "عرض" : "View";
+        linkWrap.append(a);
+        div.append(linkWrap);
+      }
+
+      const close = document.createElement('button');
+      close.type = "button";
+      close.className = "btn-close";
+      close.setAttribute("data-bs-dismiss", "alert");
+      close.setAttribute("aria-label", isAr ? "إغلاق" : "Close");
+      div.append(close);
       host.prepend(div);
       setTimeout(() => { try { div.remove(); } catch {} }, 9000);
     });

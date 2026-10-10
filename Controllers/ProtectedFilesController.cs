@@ -183,6 +183,40 @@ public class ProtectedFilesController : Controller
     }
 
     /// <summary>
+    /// A DSC gallery album's cover image — CONDITIONAL on the album: public while the album is
+    /// public (the public gallery shows it to anonymous visitors), DSC reviewers otherwise. A deleted
+    /// album is excluded by its query filter and answers 404.
+    /// </summary>
+    [HttpGet("album-cover/{id:int}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> AlbumCover(int id)
+    {
+        var album = await _db.MediaAlbums.FirstOrDefaultAsync(x => x.Id == id);
+        if (album is null || !GalleryMediaUrls.IsStoredUpload(album.CoverImagePath)) return NotFound();
+        if (!album.IsPublic && !IsDscAdmin) return NotFound();
+
+        return Stream(album.CoverImagePath, null, inline: true);
+    }
+
+    /// <summary>
+    /// A file in a DSC gallery album (photo, video or PDF) — same rule as the album's cover. Static
+    /// access to /uploads/gallery is denied in Program.cs, so making an album private hides its files.
+    /// </summary>
+    [HttpGet("album-media/{id:int}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> AlbumMedia(int id)
+    {
+        var item = await _db.MediaItems.FirstOrDefaultAsync(x => x.Id == id);
+        if (item is null || !GalleryMediaUrls.IsStoredUpload(item.FilePath)) return NotFound();
+
+        var album = await _db.MediaAlbums.FirstOrDefaultAsync(x => x.Id == item.AlbumId);
+        if (album is null) return NotFound();
+        if (!album.IsPublic && !IsDscAdmin) return NotFound();
+
+        return Stream(item.FilePath, null, inline: true);
+    }
+
+    /// <summary>
     /// Streams a stored file after the caller has already been authorised. Missing files return 404
     /// rather than an error page, so a broken row never leaks its storage key or server path.
     /// </summary>

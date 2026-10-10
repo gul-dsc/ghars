@@ -1,40 +1,45 @@
-@model GharsPlatform.Models.Core.Certificate
+@model GharsPlatform.ViewModels.CertificateVerificationVm
+@using System.Globalization
 @{
-    ViewData["Title"] = "Certificate Verification";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Certificate verification", "التحقق من الشهادة");
+    var issued = Model.IsValid;
+    var activityTitle = ar && !string.IsNullOrWhiteSpace(Model.ActivityTitleAr) ? Model.ActivityTitleAr : Model.ActivityTitleEn;
 }
+@* Public page: no participant name (decision D4) and no revocation reason, which only DSC administrators see. *@
 <div class="row justify-content-center">
     <div class="col-lg-9">
         <div class="card shadow-sm border-0 rounded-4">
             <div class="card-body p-4 p-md-5">
-                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                    <h3 class="mb-0"><i class="bi bi-award me-2"></i>Certificate Verification</h3>
-                    <span class="badge @(Model.Status == CertificateStatus.Issued ? "text-bg-success" : "text-bg-danger")">@Model.Status</span>
-                </div>
-                <hr />
-                <dl class="row mb-0">
-                    <dt class="col-sm-4">Certificate No</dt>
-                    <dd class="col-sm-8">@Model.CertificateNo</dd>
-
-                    <dt class="col-sm-4">Issued At (UTC)</dt>
-                    <dd class="col-sm-8">@Model.IssuedAtUtc.ToString("yyyy-MM-dd HH:mm")</dd>
-
-                    <dt class="col-sm-4">Activity</dt>
-                    <dd class="col-sm-8">@Model.Activity?.TitleEn</dd>
-                </dl>
-
-                @if (Model.Status == CertificateStatus.Revoked)
+                <h3 class="mb-3"><i class="bi bi-award me-2"></i>@T("Certificate verification", "التحقق من الشهادة")</h3>
+                @if (issued)
                 {
-                    <div class="alert alert-danger mt-4">
-                        This certificate has been revoked.
-                        @if (!string.IsNullOrWhiteSpace(Model.RevokeReason))
-                        {
-                            <div class="small mt-1">Reason: @Model.RevokeReason</div>
-                        }
+                    <div class="alert alert-success mb-0">
+                        <i class="bi bi-patch-check me-1"></i>@T("Valid certificate issued by the Ghars Program, Dubai Sports Council.", "شهادة صالحة صادرة عن برنامج غرس – مجلس دبي الرياضي.")
                     </div>
                 }
+                else
+                {
+                    <div class="alert alert-danger mb-0">
+                        <i class="bi bi-x-octagon me-1"></i>@T("This certificate has been revoked and is no longer valid.", "تم إلغاء هذه الشهادة ولم تعد صالحة.")
+                        <div class="small mt-1">@T("For more information, contact the Ghars Program at Dubai Sports Council.", "لمزيد من المعلومات، يرجى التواصل مع برنامج غرس في مجلس دبي الرياضي.")</div>
+                    </div>
+                }
+                <hr />
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">@T("Certificate number", "رقم الشهادة")</dt>
+                    <dd class="col-sm-8" dir="ltr">@Model.CertificateNo</dd>
+
+                    <dt class="col-sm-4">@T("Issued on", "تاريخ الإصدار")</dt>
+                    <dd class="col-sm-8" dir="ltr">@Model.IssuedAtUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</dd>
+
+                    <dt class="col-sm-4">@T("Activity", "النشاط")</dt>
+                    <dd class="col-sm-8">@activityTitle</dd>
+                </dl>
 
                 <div class="mt-4">
-                    <a class="btn btn-primary" href="/">Back to Home</a>
+                    <a class="btn btn-primary" href="/">@T("Back to home", "العودة إلى الرئيسية")</a>
                 </div>
             </div>
         </div>

@@ -13,6 +13,8 @@ namespace GharsPlatform.Controllers.Admin;
 [Authorize(Roles = $"{RoleNames.SuperAdmin},{RoleNames.DscAdmin}")]
 public class CertificatesController : Controllers.BaseController
 {
+    private static bool IsAr() => System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+
     private readonly IWebHostEnvironment _env;
 
     public CertificatesController(AppDbContext db, IWebHostEnvironment env) : base(db)
@@ -27,6 +29,10 @@ public class CertificatesController : Controllers.BaseController
             .OrderByDescending(x => x.IssuedAtUtc)
             .Take(300)
             .ToListAsync();
+        // Recipient name and email for display; certificates and attendance store only the user id.
+        var recipientIds = list.Select(x => x.UserId).Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
+        ViewBag.Recipients = await Db.Users.Where(u => recipientIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => new[] { u.FullName ?? "", u.Email ?? "" });
         return View(list);
     }
 
@@ -68,13 +74,11 @@ public class CertificatesController : Controllers.BaseController
 
         if (attendees.Count == 0)
         {
-            TempData["ToastWarning"] = "No attendees found for this session.";
+            TempData["ToastWarning"] = IsAr() ? "لا يوجد حضور مسجّل في هذه الجلسة، لذلك لم تُصدر أي شهادات." : "No attendance is recorded for this session, so no certificates were issued.";
             return RedirectToAction(nameof(Issue));
         }
 
         var issuedBy = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
-        var uploadRoot = Path.Combine(_env.WebRootPath, "uploads", "certificates");
-        Directory.CreateDirectory(uploadRoot);
 
         var already = await Db.Certificates
             .Where(x => x.ActivityId == session.ActivityId && attendees.Contains(x.UserId) && x.Status == CertificateStatus.Issued)
@@ -93,9 +97,8 @@ public class CertificatesController : Controllers.BaseController
 
             // Participant name
             var user = await Db.Users.FirstOrDefaultAsync(x => x.Id == userId);
-            var participantName = user?.FullName ?? user?.Email ?? "Participant";
-
             var isRtl = string.Equals(vm.Language, "ar", StringComparison.OrdinalIgnoreCase);
+            var participantName = user?.FullName ?? user?.Email ?? (isRtl ? "المشارك" : "Participant");
             var activityTitle = isRtl ? (session.Activity?.TitleAr ?? "") : (session.Activity?.TitleEn ?? "");
 
             var qrBytes = QrCodeHelper.GeneratePng(verifyUrl, 10);
@@ -110,9 +113,9 @@ public class CertificatesController : Controllers.BaseController
                 IsRtl: isRtl
             ));
 
-            var pdfFile = $"{verifyToken}.pdf";
-            var pdfPathFull = Path.Combine(uploadRoot, pdfFile);
-            await System.IO.File.WriteAllBytesAsync(pdfPathFull, pdfBytes);
+            // Outside wwwroot, under a random name unrelated to the verification token: the PDF names
+            // the participant, and the token is printed in a public QR code.
+            var pdfKey = await ProtectedFileStore.SaveBytesAsync(pdfBytes, _env, ProtectedFileStore.Certificates, ".pdf");
 
             var cert = new Certificate
             {
@@ -122,7 +125,7 @@ public class CertificatesController : Controllers.BaseController
                 IssuedAtUtc = DateTime.UtcNow,
                 CertificateNo = certNo,
                 VerifyToken = verifyToken,
-                PdfPath = "/uploads/certificates/" + pdfFile,
+                PdfPath = pdfKey,
                 Status = CertificateStatus.Issued
             };
 
@@ -133,21 +136,30 @@ public class CertificatesController : Controllers.BaseController
         await Db.SaveChangesAsync();
         await AuditAsync("IssueCertificates", nameof(Certificate), session.ActivityId.ToString(), null, new { SessionId = session.Id, Issued = count });
 
-        TempData["ToastSuccess"] = $"Issued {count} certificates. Skipped {already.Count} existing.";
+        TempData["ToastSuccess"] = IsAr()
+            ? $"تم إصدار {count} شهادة، وتم تخطي {already.Count} شهادة صادرة مسبقاً."
+            : $"{count} certificates issued. {already.Count} skipped because they were already issued.";
         return RedirectToAction(nameof(Index));
     }
 
+    /// <summary>
+    /// The only way to obtain a certificate PDF: DSC Admin or Super Admin (the controller's roles),
+    /// issued or revoked alike. Handles both the protected storage key and the legacy
+    /// <c>/uploads/certificates/...</c> path of rows not yet migrated; static access to that legacy
+    /// folder is denied in Program.cs.
+    /// </summary>
     public async Task<IActionResult> Download(int id)
     {
         var cert = await Db.Certificates.FirstOrDefaultAsync(x => x.Id == id);
         if (cert is null) return NotFound();
-        if (string.IsNullOrWhiteSpace(cert.PdfPath)) return NotFound();
 
-        var full = Path.Combine(_env.WebRootPath, cert.PdfPath.TrimStart('/').Replace("/", Path.DirectorySeparatorChar.ToString()));
-        if (!System.IO.File.Exists(full)) return NotFound();
+        var full = ProtectedFileStore.ResolvePhysicalPath(cert.PdfPath, _env);
+        if (full is null || !System.IO.File.Exists(full)) return NotFound();
 
-        var bytes = await System.IO.File.ReadAllBytesAsync(full);
-        return File(bytes, "application/pdf", $"{cert.CertificateNo}.pdf");
+        Response.Headers.XContentTypeOptions = "nosniff";
+        Response.Headers.CacheControl = "no-store";
+        var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, useAsync: true);
+        return File(stream, "application/pdf", $"{cert.CertificateNo}.pdf");
     }
 
     [HttpPost]
@@ -160,7 +172,7 @@ public class CertificatesController : Controllers.BaseController
 
         if (cert.Status == CertificateStatus.Revoked)
         {
-            TempData["ToastInfo"] = "Already revoked.";
+            TempData["ToastInfo"] = IsAr() ? "هذه الشهادة ملغاة مسبقاً." : "This certificate is already revoked.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -174,7 +186,7 @@ public class CertificatesController : Controllers.BaseController
         await Db.SaveChangesAsync();
         await AuditAsync("Revoke", nameof(Certificate), id.ToString(), old, cert);
 
-        TempData["ToastWarning"] = "Certificate revoked.";
+        TempData["ToastWarning"] = IsAr() ? $"تم إلغاء الشهادة {cert.CertificateNo}." : $"Certificate {cert.CertificateNo} revoked.";
         return RedirectToAction(nameof(Index));
     }
 

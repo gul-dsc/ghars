@@ -1,26 +1,30 @@
 @model GharsPlatform.Controllers.Admin.GalleryController.MediaItemVm
 @using GharsPlatform.Models.Core
+@using System.Globalization
 @{
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
     var album = ViewBag.Album as MediaAlbum;
-    ViewData["Title"]="Edit Media";
-    ViewData["PageTitle"]="Edit Media";
+    var albumTitle = ar ? (string.IsNullOrWhiteSpace(album?.TitleAr) ? album?.TitleEn : album?.TitleAr) : album?.TitleEn;
+    ViewData["Title"] = T("Edit media", "تعديل الوسائط");
+    ViewData["PageTitle"] = ViewData["Title"];
 }
 <form method="post" enctype="multipart/form-data" class="card p-4 rounded-4 border-0 shadow-sm">
     @Html.AntiForgeryToken()
     <input type="hidden" asp-for="AlbumId" />
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <div><h5 class="mb-0">Edit media item</h5><div class="text-muted small">Album: @album?.TitleEn</div></div>
-        <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@Model.AlbumId">Back to Album</a>
+        <div><h5 class="mb-0">@T("Edit media item", "تعديل عنصر الوسائط")</h5><div class="text-muted small">@T("Album:", "الألبوم:") <bdi>@albumTitle</bdi></div></div>
+        <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@Model.AlbumId">@T("Back to album", "العودة إلى الألبوم")</a>
     </div>
     <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
     <div class="row g-3">
-        <div class="col-md-3"><label class="form-label">Media Type</label><select class="form-select" asp-for="MediaType"><option value="Image">Image</option><option value="Video">Video</option><option value="Pdf">PDF</option></select></div>
-        <div class="col-md-3"><label class="form-label">Sort Order</label><input class="form-control" asp-for="SortOrder" type="number" /></div>
-        <div class="col-md-6"><label class="form-label">Replace File</label><input class="form-control" type="file" asp-for="File" accept="image/*,video/*,.pdf,application/pdf" /><div class="form-text">Leave empty to keep the current uploaded file.</div></div>
-        <div class="col-12"><label class="form-label">External Link (YouTube/video/PDF URL)</label><input class="form-control" asp-for="ExternalUrl" /></div>
-        <div class="col-md-6"><label class="form-label">Caption EN</label><input class="form-control" asp-for="CaptionEn" /></div>
-        <div class="col-md-6"><label class="form-label">Caption AR</label><input class="form-control" asp-for="CaptionAr" /></div>
-        <div class="col-12 d-flex gap-2"><button class="btn btn-primary">Save Changes</button><a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@Model.AlbumId">Cancel</a></div>
+        <div class="col-md-3"><label class="form-label">@T("Media type", "نوع الوسائط")</label><select class="form-select" asp-for="MediaType"><option value="Image">@T("Image", "صورة")</option><option value="Video">@T("Video", "فيديو")</option><option value="Pdf">@T("PDF", "ملف PDF")</option></select></div>
+        <div class="col-md-3"><label class="form-label">@T("Display order", "ترتيب العرض")</label><input class="form-control" asp-for="SortOrder" type="number" /></div>
+        <div class="col-md-6"><label class="form-label">@T("Replace file", "استبدال الملف")</label><input class="form-control" type="file" asp-for="File" accept="image/*,video/*,.pdf,application/pdf" /><span class="text-danger small" asp-validation-for="File"></span><div class="form-text">@T("Leave empty to keep the current file.", "اتركوا الحقل فارغاً للإبقاء على الملف الحالي.")</div></div>
+        <div class="col-12"><label class="form-label">@T("External link (YouTube, video or PDF URL)", "رابط خارجي (يوتيوب أو فيديو أو ملف PDF)")</label><input class="form-control" asp-for="ExternalUrl" dir="ltr" /></div>
+        <div class="col-md-6"><label class="form-label">@T("Caption (English)", "الوصف المختصر بالإنجليزية")</label><input class="form-control" asp-for="CaptionEn" /></div>
+        <div class="col-md-6"><label class="form-label">@T("Caption (Arabic)", "الوصف المختصر بالعربية")</label><input class="form-control" asp-for="CaptionAr" /></div>
+        <div class="col-12 d-flex gap-2"><button class="btn btn-primary">@T("Save changes", "حفظ التغييرات")</button><a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@Model.AlbumId">@T("Cancel", "إلغاء")</a></div>
     </div>
 </form>
 @section Scripts { <partial name="_ValidationScriptsPartial" /> }

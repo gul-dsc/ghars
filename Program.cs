@@ -12,7 +12,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 // MVC + Localization (Views + DataAnnotations)
 builder.Services
-    .AddControllersWithViews()
+    // Bilingual text for the framework's own validation and model-binding messages.
+    .AddControllersWithViews(GharsPlatform.Models.Validation.FrameworkValidationMessages.Apply)
     .AddViewLocalization()
     .AddDataAnnotationsLocalization();
 
@@ -48,7 +49,9 @@ builder.Services
         options.SignIn.RequireConfirmedEmail = false;
     })
     .AddEntityFrameworkStores<AppDbContext>()
-    .AddDefaultTokenProviders();
+    .AddDefaultTokenProviders()
+    // Identity's password-rule and account errors in the request's language.
+    .AddErrorDescriber<BilingualIdentityErrorDescriber>();
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
@@ -129,6 +132,16 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0
         }));
 
+    // Browser CSP violation reports. One page can raise several at once, so the limit is per minute.
+    options.AddPolicy("csp-report", context => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 30,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+
     options.OnRejected = async (context, token) =>
     {
         context.HttpContext.Response.ContentType = "text/plain; charset=utf-8";
@@ -143,14 +156,31 @@ var app = builder.Build();
 
 // One-time operational utility for relocating protected uploads out of wwwroot. Runs instead of the
 // web host (and without seeding) so it can never fire as a side effect of a normal start.
-//   dotnet run -- migrate-protected-files [--commit | --purge]
+// Dry run by default; see Helpers/ProtectedFileMigrator.cs for --commit, --rollback and --purge.
+//   dotnet run -- migrate-protected-files [--commit | --rollback <manifest> | --purge <manifest>] [--production]
 if (args.Length > 0 && string.Equals(args[0], "migrate-protected-files", StringComparison.OrdinalIgnoreCase))
 {
     using var migrationScope = app.Services.CreateScope();
-    return await ProtectedFileMigrator.RunAsync(
-        migrationScope.ServiceProvider,
-        commit: args.Contains("--commit"),
-        purge: args.Contains("--purge"));
+    return await ProtectedFileMigrator.RunAsync(migrationScope.ServiceProvider, args);
+}
+
+// Moves certificate PDFs issued before protected storage out of wwwroot, under new random names.
+// Dry run by default; see Helpers/CertificateFileMigrator.cs for --commit, --rollback and --purge.
+//   dotnet run -- migrate-certificate-files [--commit | --rollback <manifest> | --purge <manifest>] [--production]
+if (args.Length > 0 && string.Equals(args[0], "migrate-certificate-files", StringComparison.OrdinalIgnoreCase))
+{
+    using var certificateScope = app.Services.CreateScope();
+    return await CertificateFileMigrator.RunAsync(certificateScope.ServiceProvider, args);
+}
+
+// Read-only report of organization links that point at deleted accounts, links whose holder lacks the
+// organization's workspace role, and bookings whose implementing organization cannot be determined.
+// --cleanup lists the orphan links it would remove; --cleanup --confirm removes them.
+//   dotnet run -- org-link-diagnostics [--cleanup [--confirm]] [--production]
+if (args.Length > 0 && string.Equals(args[0], "org-link-diagnostics", StringComparison.OrdinalIgnoreCase))
+{
+    using var diagnosticsScope = app.Services.CreateScope();
+    return await OrganizationLinkDiagnostics.RunAsync(diagnosticsScope.ServiceProvider, args);
 }
 
 // Explicit developer recovery for a forgotten demo password. Like the migrator above it runs instead
@@ -279,6 +309,10 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// Content Security Policy — report-only until the violation reports have been reviewed. See
+// Helpers/SecurityHeaders.cs; switch with Security:Csp:Mode (ReportOnly | Enforce | Off).
+app.UseGharsSecurityHeaders(SecurityHeaders.ModeFrom(app.Configuration));
+
 // Defence in depth: these folders are served exclusively through ProtectedFilesController, so deny
 // static access even for rows that have not yet been migrated out of wwwroot.
 //   /uploads/kpi, /uploads/surveys — only ever held protected content (KPI evidence, official reports).
@@ -286,9 +320,16 @@ app.UseHttpsRedirection();
 //     fetched through /protected-files/gallery/{id}; served statically, hiding a photo would not hide it.
 //   /uploads/channel — implementing-entity content submitted to the Ghars Channel. Visibility depends on
 //     a DSC approval, so an unapproved draft's file must not be reachable by guessing its URL.
-// /uploads/org is deliberately absent: it also holds public organization logos. Its documents are
-// removed from disk by the --purge phase of the migration instead.
-string[] deniedStaticPrefixes = { "/uploads/kpi", "/uploads/surveys", "/uploads/agenda", "/uploads/channel" };
+//   /uploads/certificates — legacy certificate PDFs, named after the public verification token and
+//     carrying the participant's name. Served only by Admin/Certificates/Download; moved out of wwwroot
+//     by `migrate-certificate-files`.
+//   /uploads/gallery — DSC gallery media. Channel items are served by /protected-files/gallery/{id}
+//     (hiding one hides its file) and album media by /protected-files/album-media|album-cover/{id}
+//     (an unpublished album's files are not public).
+//   /uploads/library — Digital Library files and covers. Served by /Library/Stream|Cover/{id}, which apply
+//     the item's publication rules; new uploads are stored outside wwwroot, and `migrate-protected-files`
+//     moves the older ones.
+string[] deniedStaticPrefixes = { "/uploads/kpi", "/uploads/surveys", "/uploads/agenda", "/uploads/channel", "/uploads/certificates", "/uploads/gallery", "/uploads/library" };
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value ?? string.Empty;
@@ -297,6 +338,22 @@ app.Use(async (context, next) =>
         context.Response.StatusCode = StatusCodes.Status404NotFound;
         return;
     }
+
+    // /uploads/org holds public organization logos alongside licence and supporting documents uploaded
+    // before protected storage. A file there is served only when it is a well-formed uploaded image that
+    // is an organization's current logo and is not recorded as an organization document; every other
+    // file — a legacy document, an original kept after migration, a traversal attempt — answers 404.
+    // See Helpers/OrganizationLogo.cs.
+    if (path.StartsWith("/uploads/org", StringComparison.OrdinalIgnoreCase))
+    {
+        var db = context.RequestServices.GetRequiredService<AppDbContext>();
+        if (!await OrganizationLogo.IsServableUploadAsync(db, path))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+    }
+
     await next();
 });
 
@@ -313,6 +370,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHub<NotificationsHub>("/hubs/notifications");
+app.MapCspReports().RequireRateLimiting("csp-report");
 
 app.MapControllerRoute(
     name: "areas",
@@ -325,3 +383,6 @@ app.MapControllerRoute(
 app.Run();
 
 return 0;
+
+// Exposes the entry point to the integration tests in tests/GharsPlatform.Tests (WebApplicationFactory<Program>).
+public partial class Program { }

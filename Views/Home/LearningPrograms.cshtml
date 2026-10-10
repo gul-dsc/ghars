@@ -30,7 +30,7 @@
     <a class="btn btn-sm @(type == ActivityType.Workshop ? "btn-success" : "btn-outline-success")" href="/partners/@partnerId/learning-programs?type=Workshop">@T("Workshops", "ورش العمل")</a>
     <a class="btn btn-sm @(type == ActivityType.Lecture ? "btn-success" : "btn-outline-success")" href="/partners/@partnerId/learning-programs?type=Lecture">@T("Lectures", "المحاضرات")</a>
 </div>
-@if(Model.Count == 0){<div class="empty-state">@T("No learning programs are currently available for this partner.", "لا توجد برامج تعليمية متاحة حالياً لهذا الشريك.")</div>}
+@if(Model.Count == 0){<div class="empty-state">@T("No learning programs are currently available from this implementing entity.", "لا توجد برامج تعليمية متاحة حالياً لدى هذه الجهة المنفذة.")</div>}
 else{
     <div class="row g-3">
         @foreach(var p in Model){
@@ -39,12 +39,12 @@ else{
             <div class="col-lg-6">
                 <article class="program-card h-100">
                     <div class="d-flex justify-content-between gap-3 mb-2"><h2 class="h5 fw-bold mb-0">@Title(p)</h2><span class="program-type">@ProgramType(p.Type)</span></div>
-                    <p class="text-muted">@(!string.IsNullOrWhiteSpace(Desc(p)) ? Desc(p) : T("Learning program provided by the partner.", "برنامج تعليمي مقدم من الشريك."))</p>
+                    <p class="text-muted">@(!string.IsNullOrWhiteSpace(Desc(p)) ? Desc(p) : T("Learning program provided by the implementing entity.", "برنامج تعليمي مقدم من الجهة المنفذة."))</p>
                     <div class="program-meta mb-3"><span>@T("Start", "البداية"): @p.StartDateTime.ToString("g")</span><span>@T("End", "النهاية"): @p.EndDateTime.ToString("g")</span><span>@T("Capacity", "السعة"): @p.Capacity</span><span>@T("Available seats", "المقاعد المتاحة"): @available</span></div>
                     @if(User.IsInRole(RoleNames.ClubAdmin)){
                         <a class="btn btn-success" href="/bookings/create?activityId=@p.Id"><i class="bi bi-calendar-check me-1"></i>@T("Book", "احجز")</a>
                     }else if(!(User.Identity?.IsAuthenticated ?? false)){
-                        <a class="btn btn-outline-success" asp-controller="Account" asp-action="Login">@T("Login to book", "تسجيل الدخول للحجز")</a>
+                        <a class="btn btn-outline-success" asp-controller="Account" asp-action="Login">@T("Sign in to book", "سجّل الدخول للحجز")</a>
                     }
                 </article>
             </div>

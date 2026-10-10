@@ -49,18 +49,18 @@ public static class CertificatePdfBuilder
                     col.Item().AlignCenter().Text(data.IsRtl ? "شهادة مشاركة" : "Certificate of Participation")
                         .FontSize(34).SemiBold();
 
-                    col.Item().AlignCenter().Text(data.IsRtl ? "منصة غرس" : "Ghars Platform")
+                    col.Item().AlignCenter().Text(data.IsRtl ? "برنامج غرس – مجلس دبي الرياضي" : "Ghars Program – Dubai Sports Council")
                         .FontSize(16).FontColor(Colors.Grey.Darken2);
 
                     col.Item().LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
 
-                    col.Item().PaddingTop(6).AlignCenter().Text(data.IsRtl ? "يشهد بأن" : "This is to certify that")
+                    col.Item().PaddingTop(6).AlignCenter().Text(data.IsRtl ? "تُمنح هذه الشهادة إلى" : "This is to certify that")
                         .FontSize(16);
 
                     col.Item().AlignCenter().Text(data.ParticipantName)
                         .FontSize(28).Bold();
 
-                    col.Item().AlignCenter().Text(data.IsRtl ? "قد شارك في" : "has successfully participated in")
+                    col.Item().AlignCenter().Text(data.IsRtl ? "تقديراً للمشاركة في" : "has participated in")
                         .FontSize(16);
 
                     col.Item().AlignCenter().Text(data.ActivityTitle)
@@ -87,7 +87,7 @@ public static class CertificatePdfBuilder
 
                     col.Item().PaddingTop(10).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
 
-                    col.Item().AlignCenter().Text(data.IsRtl ? "منصة غرس" : "Ghars Platform")
+                    col.Item().AlignCenter().Text(data.IsRtl ? "برنامج غرس – مجلس دبي الرياضي" : "Ghars Program – Dubai Sports Council")
                         .FontSize(12).FontColor(Colors.Grey.Darken2);
                 });
             });

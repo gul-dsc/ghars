@@ -76,7 +76,7 @@
     <div class="col-6 col-lg-3">
         <a class="text-decoration-none" href="/partner/programs?status=@OfferingApprovalStatus.SubmittedForApproval">
             <div class="metric-card h-100">
-                <div class="label"><i class="bi @OfferingWorkflow.Icon(OfferingApprovalStatus.SubmittedForApproval) me-1" aria-hidden="true"></i>@T("Awaiting DSC Approval","بانتظار اعتماد المجلس")</div>
+                <div class="label"><i class="bi @OfferingWorkflow.Icon(OfferingApprovalStatus.SubmittedForApproval) me-1" aria-hidden="true"></i>@T("Awaiting DSC approval","بانتظار اعتماد المجلس")</div>
                 <div class="value">@awaiting</div>
             </div>
         </a>
@@ -179,7 +179,7 @@
                 }
                 @if(x.ApprovalStatus==OfferingApprovalStatus.SubmittedForApproval)
                 {
-                    <span class="text-muted small align-self-center">@T("Awaiting DSC review","بانتظار مراجعة المجلس")</span>
+                    <span class="text-muted small align-self-center">@T("Awaiting DSC approval","بانتظار اعتماد المجلس")</span>
                 }
             </div>
         </td>

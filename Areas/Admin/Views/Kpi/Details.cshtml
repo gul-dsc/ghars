@@ -4,14 +4,14 @@
 @{
     var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
     string T(string e, string a) => ar ? a : e;
-    ViewData["Title"] = T("KPI Details", "تفاصيل مؤشرات الأداء");
+    ViewData["Title"] = T("KPI details", "تفاصيل مؤشرات الأداء");
     ViewData["PageTitle"] = ViewData["Title"];
     string N(Organization? o) => ar ? (o?.NameAr ?? o?.NameEn ?? "") : (o?.NameEn ?? o?.NameAr ?? "");
     var previousViolations = ViewBag.PreviousViolations as int?;
     var previousSeasonTitle = ViewBag.PreviousSeasonTitle as string;
     var diseaseFree = GharsKpiCatalog.DiseaseFreePercent(Model);
     var reduction = GharsKpiCatalog.ViolationsReductionPercent(previousViolations, Model.WarningsAndRedCards);
-    string NoData() => T("No Data", "لا توجد بيانات");
+    string NoData() => T("No data", "لا توجد بيانات");
     string Pct(decimal? v) => v.HasValue ? $"{v.Value:0.#}%" : NoData();
 
     // Achieved / at-risk / not-achieved badge against the approved target.
@@ -26,7 +26,7 @@
     {
         if (!actual.HasValue || !kpi.Target.HasValue) return NoData();
         var cls = Badge(actual, kpi);
-        return cls.Contains("success") ? T("Achieved", "محقق") : cls.Contains("warning") ? T("At risk", "معرض للخطر") : T("Not achieved", "غير محقق");
+        return cls.Contains("success") ? T("Achieved", "محقق") : cls.Contains("warning") ? T("At risk", "معرّض للخطر") : T("Not achieved", "غير محقق");
     }
 }
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
@@ -135,10 +135,10 @@
                 }
                 else
                 {
-                    <div>@nativeSatisfaction.ResponseCount @T("responses collected", "استجابة مُجمّعة")</div>
+                    <div>@nativeSatisfaction.ResponseCount @T("responses collected", "إجابة مُجمّعة")</div>
                     @if (nativeSatisfaction.Percent is null)
                     {
-                        <div class="small text-muted">@string.Format(T("At least {0} responses are needed before this becomes the official figure.", "يلزم {0} استجابة على الأقل قبل أن تصبح هذه النسبة الرسمية."), minimumResponses)</div>
+                        <div class="small text-muted">@string.Format(T("At least {0} responses are needed before this becomes the official figure.", "يلزم {0} إجابة على الأقل قبل أن تصبح هذه النسبة الرسمية."), minimumResponses)</div>
                     }
                     <a class="btn btn-sm btn-outline-primary mt-1" asp-area="Admin" asp-controller="Surveys" asp-action="Results" asp-route-id="@nativeSatisfaction.SurveyId">
                         <i class="bi bi-bar-chart"></i> @T("View survey results", "عرض نتائج الاستبيان")
@@ -210,7 +210,7 @@
                     </select>
                     <label class="form-label">@T("Notes to the club", "ملاحظات للنادي")</label>
                     <textarea class="form-control mb-3" name="notes" rows="3">@Model.ReviewNotes</textarea>
-                    <button class="btn btn-success">@T("Submit decision", "اعتماد القرار")</button>
+                    <button class="btn btn-success">@T("Submit decision", "إرسال القرار")</button>
                 </form>
             </div>
         </div>

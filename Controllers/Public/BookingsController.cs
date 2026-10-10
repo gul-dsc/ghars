@@ -396,16 +396,16 @@ public class BookingsController : Controller
             if (activity is null)
             {
                 await CreateAndDispatchNotificationAsync("New Custom Program Request", "طلب برنامج مخصص جديد",
-                    $"{clubEn} requested a custom program '{subjectEn}' ({booking.ReferenceNumber}). Your review is required.",
-                    $"طلب {clubAr} برنامجاً مخصصاً '{subjectAr}' ({booking.ReferenceNumber}). مطلوب المراجعة.",
+                    $"{clubEn} requested a custom program '{subjectEn}' ({booking.ReferenceNumber}). Please respond.",
+                    $"طلب {clubAr} برنامجاً مخصصاً '{subjectAr}' ({booking.ReferenceNumber}). يرجى الرد على الطلب.",
                     NotificationType.Warning, NotificationTargetType.Organization, partnerOrgId.Value,
                     Url.Action(nameof(Details), "Bookings", new { area = "", id = booking.Id }));
             }
             else
             {
                 await CreateAndDispatchNotificationAsync("New Booking Request", "طلب حجز جديد",
-                    $"{clubEn} submitted booking request {booking.ReferenceNumber} for '{subjectEn}'. Your review is required.",
-                    $"قدّم {clubAr} طلب الحجز {booking.ReferenceNumber} للنشاط '{subjectAr}'. مطلوب المراجعة.",
+                    $"{clubEn} submitted booking request {booking.ReferenceNumber} for '{subjectEn}'. Please respond.",
+                    $"قدّم {clubAr} طلب الحجز {booking.ReferenceNumber} للنشاط '{subjectAr}'. يرجى الرد على الطلب.",
                     NotificationType.Warning, NotificationTargetType.Organization, partnerOrgId.Value,
                     Url.Action(nameof(Details), "Bookings", new { area = "", id = booking.Id }));
             }
@@ -422,6 +422,14 @@ public class BookingsController : Controller
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
         var orgIds = await UserOrganizationIds(userId);
+        // The entity side uses the one booking rule the entity dashboard and decisions use
+        // (BookingWorkflow): the booking's implementing organization, never the program's creator.
+        var entityOrgIds = User.IsInRole(RoleNames.PartnerAdmin)
+            ? await BookingWorkflow.EntityOrganizationIdsAsync(_db, userId)
+            : new List<int>();
+        var visible = BookingWorkflow.ForEntities(_db.BookingRequests, entityOrgIds)
+            .Select(x => x.Id)
+            .Concat(_db.BookingRequests.Where(x => orgIds.Contains(x.OrganizationId)).Select(x => x.Id));
         var booking = await _db.BookingRequests
             .Include(x => x.Activity).ThenInclude(x => x!.Season)
             // The offering's supporting documents, shown on the existing-program path. A custom
@@ -433,11 +441,11 @@ public class BookingsController : Controller
             .Include(x => x.PartnerAvailabilitySlot)
             .Include(x => x.ProposedTimeOptions.OrderBy(o => o.ProposedStartUtc))
             .Include(x => x.AuditTrail.OrderByDescending(t => t.AtUtc))
-            .FirstOrDefaultAsync(x => x.Id == id && (orgIds.Contains(x.OrganizationId) || (x.PartnerOrganizationId.HasValue && orgIds.Contains(x.PartnerOrganizationId.Value))));
+            .FirstOrDefaultAsync(x => x.Id == id && visible.Contains(x.Id));
 
         if (booking is null) return NotFound();
         ViewBag.IsClubSide = orgIds.Contains(booking.OrganizationId);
-        ViewBag.IsPartnerSide = booking.PartnerOrganizationId.HasValue && orgIds.Contains(booking.PartnerOrganizationId.Value);
+        ViewBag.IsPartnerSide = BookingWorkflow.BelongsToEntities(booking, entityOrgIds);
         return View(booking);
     }
 
@@ -456,15 +464,24 @@ public class BookingsController : Controller
             .FirstOrDefaultAsync(x => x.Id == bookingId && orgIds.Contains(x.OrganizationId));
         if (booking is null) return NotFound();
 
+        if (!BookingWorkflow.IsAllowed(BookingDecision.ClubAcceptProposedTime, booking.Status))
+            return ClubDecisionNotAllowed(booking);
+
         var option = booking.ProposedTimeOptions.FirstOrDefault(x => x.Id == optionId && x.IsActive);
         if (option is null)
         {
-            TempData["ToastWarning"] = "Selected option is no longer available.";
+            TempData["ToastWarning"] = T("The selected time is no longer available.", "الوقت المختار لم يعد متاحاً.");
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
 
         var old = new { booking.Status, booking.ConfirmedStartUtc, booking.ConfirmedEndUtc, booking.AcceptedProposedTimeOptionId, booking.Subject };
-        booking.Status = BookingStatus.Confirmed;
+
+        // The claim matches only if nobody changed the booking since it was loaded — in particular
+        // the entity replacing its proposals — so the option accepted here is still one on offer.
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        var claim = await BookingWorkflow.TryClaimAsync(_db, booking, BookingDecision.ClubAcceptProposedTime, userId);
+        if (claim != BookingClaimResult.Claimed) return ClubDecisionRefused(claim, booking);
+
         booking.ConfirmedStartUtc = option.ProposedStartUtc;
         booking.ConfirmedEndUtc = option.ProposedEndUtc;
         booking.AcceptedProposedTimeOptionId = option.Id;
@@ -494,18 +511,20 @@ public class BookingsController : Controller
             ByUserId = userId
         });
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
         await BookingAgendaHelper.EnsureDraftAgendaEntryAsync(_db, booking, userId);
 
-        if (booking.PartnerOrganizationId.HasValue)
+        // The entity is told by the same organization rule that grants it access to the booking.
+        if (BookingWorkflow.ImplementingOrganizationId(booking) is int entityOrgId)
         {
             await CreateAndDispatchNotificationAsync("Club Accepted Proposed Time", "وافق النادي على الوقت المقترح",
                 $"{booking.Organization?.NameEn} accepted a proposed time for booking {booking.ReferenceNumber}.",
                 $"وافق النادي على وقت مقترح لطلب الحجز {booking.ReferenceNumber}.",
-                NotificationType.Success, NotificationTargetType.Organization, booking.PartnerOrganizationId.Value,
+                NotificationType.Success, NotificationTargetType.Organization, entityOrgId,
                 Url.Action(nameof(Details), "Bookings", new { area = "", id = booking.Id }));
         }
 
-        TempData["ToastSuccess"] = "Proposed time accepted and booking confirmed.";
+        TempData["ToastSuccess"] = T("Proposed time accepted. The booking is confirmed.", "تم قبول الوقت المقترح وتأكيد الحجز.");
         return RedirectToAction(nameof(Details), new { id = bookingId });
     }
 
@@ -521,8 +540,15 @@ public class BookingsController : Controller
             .FirstOrDefaultAsync(x => x.Id == bookingId && orgIds.Contains(x.OrganizationId));
         if (booking is null) return NotFound();
 
+        if (!BookingWorkflow.IsAllowed(BookingDecision.ClubRejectProposedTimes, booking.Status))
+            return ClubDecisionNotAllowed(booking);
+
         var old = new { booking.Status, booking.Notes, booking.ProposedSubject };
-        booking.Status = BookingStatus.ClubRejectedProposedTimes;
+
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        var claim = await BookingWorkflow.TryClaimAsync(_db, booking, BookingDecision.ClubRejectProposedTimes, userId);
+        if (claim != BookingClaimResult.Claimed) return ClubDecisionRefused(claim, booking);
+
         booking.ProposedSubject = null;
         if (!string.IsNullOrWhiteSpace(reason))
             booking.Notes = (booking.Notes ?? "") + Environment.NewLine + "Club rejected proposed times: " + reason;
@@ -537,6 +563,7 @@ public class BookingsController : Controller
             ByUserId = userId
         });
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
         // Defensive and idempotent, and AFTER the save: the slot must never be freed by a request
         // whose own state change did not survive. The entity's proposal already released whichever
         // slot the club had selected, so this normally moves nothing — the status guard inside makes
@@ -544,17 +571,36 @@ public class BookingsController : Controller
         // holding a time.
         await PartnerAvailabilityWorkflow.ReleaseForBookingAsync(_db, booking, userId);
 
-        if (booking.PartnerOrganizationId.HasValue)
+        if (BookingWorkflow.ImplementingOrganizationId(booking) is int entityOrgId)
         {
             await CreateAndDispatchNotificationAsync("Club Rejected Proposed Times", "رفض النادي الأوقات المقترحة",
                 $"{booking.Organization?.NameEn} rejected all proposed times for booking {booking.ReferenceNumber}.",
                 $"رفض النادي جميع الأوقات المقترحة لطلب الحجز {booking.ReferenceNumber}.",
-                NotificationType.Warning, NotificationTargetType.Organization, booking.PartnerOrganizationId.Value,
+                NotificationType.Warning, NotificationTargetType.Organization, entityOrgId,
                 Url.Action(nameof(Details), "Bookings", new { area = "", id = booking.Id }));
         }
 
-        TempData["ToastWarning"] = "All proposed times rejected.";
+        TempData["ToastWarning"] = T("You declined all proposed times. The implementing entity has been asked for new options.", "تم الاعتذار عن جميع الأوقات المقترحة، وطُلب من الجهة المنفذة تقديم خيارات جديدة.");
         return RedirectToAction(nameof(Details), new { id = bookingId });
+    }
+
+    /// <summary>The booking's status does not allow this club decision; nothing was changed.</summary>
+    private IActionResult ClubDecisionNotAllowed(BookingRequest booking)
+    {
+        var label = BookingStatusText.Label(booking.Status, BookingStatusText.Viewer.Club);
+        TempData["ToastWarning"] = T(
+            $"This request can no longer be answered this way: its status is now \"{label}\". Nothing was changed.",
+            $"لم يعد بالإمكان تنفيذ هذا الإجراء على الطلب لأن حالته الآن: «{label}». لم يتم تغيير أي شيء.");
+        return RedirectToAction(nameof(Details), new { id = booking.Id });
+    }
+
+    private IActionResult ClubDecisionRefused(BookingClaimResult claim, BookingRequest booking)
+    {
+        if (claim == BookingClaimResult.NotAllowed) return ClubDecisionNotAllowed(booking);
+        TempData["ToastWarning"] = T(
+            "This booking was updated a moment ago, so your action was not applied. Nothing was changed. Check its current status and try again if needed.",
+            "تم تحديث هذا الحجز قبل لحظات، لذلك لم يُنفَّذ إجراؤكم ولم يتم تغيير أي شيء. راجعوا حالته الحالية وحاولوا مرة أخرى عند الحاجة.");
+        return RedirectToAction(nameof(Details), new { id = booking.Id });
     }
 
 
@@ -782,12 +828,10 @@ public class BookingsController : Controller
             CreatedAtUtc = DateTime.UtcNow,
             CreatedByUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
         };
-        _db.Notifications.Add(n);
-        await _db.SaveChangesAsync();
-        var users = await _db.OrganizationAdminLinks.Where(x => x.OrganizationId == targetOrganizationId).Select(x => x.UserId).Distinct().ToListAsync();
-        foreach (var uid in users)
-            _db.NotificationDeliveries.Add(new NotificationDelivery { NotificationId = n.Id, UserId = uid, DeliveredAtUtc = DateTime.UtcNow });
-        await _db.SaveChangesAsync();
-        await _hub.Clients.All.SendAsync("notificationReceived", new { title = titleEn, message = messageEn, linkUrl });
+        // Recipients resolved on the server; the live push reaches only them.
+        await NotificationDispatcher.SendAsync(_db, _hub, n);
     }
+
+    private static string T(string en, string ar) =>
+        CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? ar : en;
 }

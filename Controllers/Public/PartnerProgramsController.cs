@@ -516,23 +516,11 @@ public class PartnerProgramsController : Controllers.BaseController
             MessageEn = messageEn,
             MessageAr = messageAr,
             Type = NotificationType.Warning,
-            TargetType = NotificationTargetType.Role,
-            TargetRoleName = RoleNames.DscAdmin,
             LinkUrl = linkUrl,
             CreatedAtUtc = DateTime.UtcNow,
             CreatedByUserId = CurrentUserId
         };
-        Db.Notifications.Add(n);
-        await Db.SaveChangesAsync();
-
-        var roleNames = new[] { RoleNames.DscAdmin, RoleNames.SuperAdmin };
-        var roleIds = await Db.Roles.Where(r => r.Name != null && roleNames.Contains(r.Name)).Select(r => r.Id).ToListAsync();
-        var userIds = await Db.UserRoles.Where(ur => roleIds.Contains(ur.RoleId)).Select(ur => ur.UserId).Distinct().ToListAsync();
-        foreach (var uid in userIds)
-            Db.NotificationDeliveries.Add(new NotificationDelivery { NotificationId = n.Id, UserId = uid, DeliveredAtUtc = DateTime.UtcNow });
-        await Db.SaveChangesAsync();
-
-        await _hub.Clients.All.SendAsync("notificationReceived", new { title = titleEn, message = messageEn, linkUrl });
+        await NotificationDispatcher.SendToDscReviewersAsync(Db, _hub, n);
     }
 
     /// <summary>The implementing entities this user administers. Copied in shape from

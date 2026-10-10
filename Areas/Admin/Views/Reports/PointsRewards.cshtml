@@ -1,23 +1,26 @@
 @model List<GharsPlatform.Models.Core.UserPointsWallet>
+@using System.Globalization
 @{
-    ViewData["Title"] = "Points & Rewards Report";
-    ViewData["PageTitle"] = "Points & Rewards";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Points and rewards report", "تقرير النقاط والمكافآت");
+    ViewData["PageTitle"] = T("Points and rewards", "النقاط والمكافآت");
 }
 <div class="card border-0 shadow-sm rounded-4">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
             <tr>
-                <th>UserId</th>
-                <th>Balance</th>
-                <th>Updated</th>
+                <th>@T("User ID", "معرّف المستخدم")</th>
+                <th>@T("Balance", "الرصيد")</th>
+                <th>@T("Updated", "آخر تحديث")</th>
             </tr>
             </thead>
             <tbody>
             @foreach (var w in Model)
             {
                 <tr>
-                    <td class="text-truncate" style="max-width:320px;">@w.UserId</td>
+                    <td class="text-truncate" style="max-width:320px;"><bdi>@w.UserId</bdi></td>
                     <td class="fw-semibold">@w.Balance</td>
                     <td>@(w.UpdatedAtUtc?.ToString("yyyy-MM-dd") ?? "-")</td>
                 </tr>

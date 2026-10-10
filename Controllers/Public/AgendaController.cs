@@ -5,6 +5,7 @@ using GharsPlatform.Models.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using GharsPlatform.Models.Validation;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Security.Claims;
@@ -59,8 +60,8 @@ public class AgendaController : Controller
 
         var entry = new AgendaEntry{
             SeasonId=vm.SeasonId, OrganizationId=vm.OrganizationId, ActivityType=vm.ActivityType,
-            SubjectEn=vm.SubjectEn.Trim(), SubjectAr=vm.SubjectAr.Trim(), ActivityDate=vm.ActivityDate,
-            Category=vm.Category, OtherCategory=vm.OtherCategory?.Trim(), LecturerName=vm.LecturerName.Trim(),
+            SubjectEn=vm.SubjectEn!.Trim(), SubjectAr=vm.SubjectAr!.Trim(), ActivityDate=vm.ActivityDate,
+            Category=vm.Category, OtherCategory=vm.OtherCategory?.Trim(), LecturerName=vm.LecturerName!.Trim(),
             DepartmentOrOrganization=vm.DepartmentOrOrganization, NumberOfParticipants=vm.NumberOfParticipants,
             Status=vm.SaveAsDraft?AgendaEntryStatus.Draft:AgendaEntryStatus.Submitted, Notes=vm.Notes,
             CreatedAtUtc=DateTime.UtcNow, CreatedByUserId=User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -70,8 +71,8 @@ public class AgendaController : Controller
         await SaveAgendaMedia(entry, vm.MediaFiles);
         await AuditAsync(vm.SaveAsDraft ? "AgendaDraftCreated" : "AgendaSubmitted", entry.Id, null, new { entry.Status, entry.SubjectEn, entry.ActivityDate, entry.NumberOfParticipants });
         TempData["ToastSuccess"] = vm.SaveAsDraft
-            ? IsAr() ? "تم حفظ النشاط كمسودة." : "Agenda saved as draft."
-            : IsAr() ? "تم إرسال النشاط." : "Agenda entry submitted.";
+            ? IsAr() ? "تم حفظ النشاط كمسودة." : "Activity saved as draft."
+            : IsAr() ? "تم إرسال النشاط لاعتماد المجلس." : "Activity submitted for DSC approval.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -86,7 +87,7 @@ public class AgendaController : Controller
         if (entry is null) return NotFound();
         if (entry.Status is AgendaEntryStatus.Approved)
         {
-            TempData["ToastWarning"] = IsAr() ? "لا يمكن تعديل نشاط معتمد." : "An approved agenda entry cannot be edited.";
+            TempData["ToastWarning"] = IsAr() ? "لا يمكن تعديل نشاط معتمد." : "An approved activity cannot be edited.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -121,7 +122,7 @@ public class AgendaController : Controller
         if (entry is null) return NotFound();
         if (entry.Status is AgendaEntryStatus.Approved)
         {
-            TempData["ToastWarning"] = IsAr() ? "لا يمكن تعديل نشاط معتمد." : "An approved agenda entry cannot be edited.";
+            TempData["ToastWarning"] = IsAr() ? "لا يمكن تعديل نشاط معتمد." : "An approved activity cannot be edited.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -137,12 +138,12 @@ public class AgendaController : Controller
         var old = new { entry.SubjectEn, entry.ActivityDate, entry.LecturerName, entry.NumberOfParticipants, entry.Status };
         entry.SeasonId = vm.SeasonId;
         entry.ActivityType = vm.ActivityType;
-        entry.SubjectEn = vm.SubjectEn.Trim();
-        entry.SubjectAr = vm.SubjectAr.Trim();
+        entry.SubjectEn = vm.SubjectEn!.Trim();
+        entry.SubjectAr = vm.SubjectAr!.Trim();
         entry.ActivityDate = vm.ActivityDate;
         entry.Category = vm.Category;
         entry.OtherCategory = vm.OtherCategory?.Trim();
-        entry.LecturerName = vm.LecturerName.Trim();
+        entry.LecturerName = vm.LecturerName!.Trim();
         entry.DepartmentOrOrganization = vm.DepartmentOrOrganization;
         entry.NumberOfParticipants = vm.NumberOfParticipants;
         entry.Notes = vm.Notes;
@@ -155,7 +156,7 @@ public class AgendaController : Controller
 
         TempData["ToastSuccess"] = vm.SaveAsDraft
             ? IsAr() ? "تم تحديث المسودة." : "Draft updated."
-            : IsAr() ? "تم إرسال النشاط للاعتماد." : "Agenda entry submitted for approval.";
+            : IsAr() ? "تم إرسال النشاط لاعتماد المجلس." : "Activity submitted for DSC approval.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -239,15 +240,15 @@ public class AgendaController : Controller
     public class AgendaVm
     {
         public int Id { get; set; }
-        [Required] public int SeasonId { get; set; }
+        [BilingualRequired(ErrorMessage = "Select a sports season.", Ar = "اختاروا الموسم الرياضي.")] public int SeasonId { get; set; }
         public int OrganizationId { get; set; }
         public ActivityType ActivityType { get; set; } = ActivityType.Lecture;
-        [Required, MaxLength(250)] public string SubjectEn { get; set; } = "";
-        [Required, MaxLength(250)] public string SubjectAr { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "Enter the subject in English.", Ar = "أدخلوا الموضوع بالإنجليزية."), MaxLength(250)] public string? SubjectEn { get; set; }
+        [BilingualRequired(ErrorMessage = "Enter the subject in Arabic.", Ar = "أدخلوا الموضوع بالعربية."), MaxLength(250)] public string? SubjectAr { get; set; }
         public DateTime ActivityDate { get; set; }
         public AgendaTargetCategory Category { get; set; } = AgendaTargetCategory.Players;
         [MaxLength(150)] public string? OtherCategory { get; set; }
-        [Required, MaxLength(200)] public string LecturerName { get; set; } = "";
+        [BilingualRequired(ErrorMessage = "Enter the lecturer name.", Ar = "أدخلوا اسم المحاضر."), MaxLength(200)] public string? LecturerName { get; set; }
         [MaxLength(250)] public string? DepartmentOrOrganization { get; set; }
         [Range(0,100000)] public int NumberOfParticipants { get; set; }
         [MaxLength(2000)] public string? Notes { get; set; }

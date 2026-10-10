@@ -20,4 +20,13 @@
     <PackageReference Include="QuestPDF" Version="2024.3.0" />
   </ItemGroup>
 
+  <!-- The automated tests live in their own project under tests/; keep them out of the web app. -->
+  <ItemGroup>
+    <Compile Remove="tests/**" />
+    <Content Remove="tests/**" />
+    <None Remove="tests/**" />
+    <EmbeddedResource Remove="tests/**" />
+    <InternalsVisibleTo Include="GharsPlatform.Tests" />
+  </ItemGroup>
+
 </Project>

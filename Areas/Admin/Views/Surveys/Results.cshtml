@@ -47,7 +47,7 @@
 <div class="row g-3 mb-4">
     <div class="col-sm-6 col-xl-3">
         <div class="metric-card h-100">
-            <div class="text-muted small">@T("Total responses", "إجمالي الاستجابات")</div>
+            <div class="text-muted small">@T("Total responses", "إجمالي الإجابات")</div>
             <div class="h3 mb-0">@total</div>
         </div>
     </div>
@@ -84,8 +84,8 @@
             }
             else
             {
-                <div class="fw-semibold">@string.Format(T("{0} of {1} responses collected.", "تم جمع {0} من {1} استجابة."), total, minimum)</div>
-                <div class="small">@T("Until the minimum is reached, the satisfaction indicator continues to use the approved club-submitted average. Responses are still being recorded.", "حتى بلوغ الحد الأدنى، يستمر مؤشر الرضا في استخدام متوسط إدخالات الأندية المعتمدة. ولا تزال الاستجابات تُسجّل.")</div>
+                <div class="fw-semibold">@string.Format(T("{0} of {1} responses collected.", "تم جمع {0} من أصل {1} إجابة."), total, minimum)</div>
+                <div class="small">@T("Until the minimum is reached, the satisfaction indicator continues to use the approved club-submitted average. Responses are still being recorded.", "حتى بلوغ الحد الأدنى، يستمر مؤشر الرضا في استخدام متوسط إدخالات الأندية المعتمدة. ولا تزال الإجابات تُسجّل.")</div>
             }
         </div>
     </div>
@@ -122,7 +122,7 @@
                     <thead class="table-light">
                         <tr>
                             <th>@T("Club", "النادي")</th>
-                            <th>@T("Responses", "الاستجابات")</th>
+                            <th>@T("Responses", "الإجابات")</th>
                             <th>@T("Satisfaction", "نسبة الرضا")</th>
                         </tr>
                     </thead>
@@ -240,7 +240,7 @@
             type: 'bar',
             data: {
                 labels: JSON.parse(canvas.dataset.labels),
-                datasets: [{ label: '@T("Responses", "الاستجابات")', data: JSON.parse(canvas.dataset.values) }]
+                datasets: [{ label: '@T("Responses", "الإجابات")', data: JSON.parse(canvas.dataset.values) }]
             },
             options: {
                 responsive: true,

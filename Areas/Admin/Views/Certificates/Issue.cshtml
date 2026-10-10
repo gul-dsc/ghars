@@ -1,7 +1,10 @@
 @model GharsPlatform.Controllers.Admin.CertificatesController.IssueVm
+@using System.Globalization
 @{
-    ViewData["Title"] = "Issue Certificates";
-    ViewData["PageTitle"] = "Issue Certificates";
+    var ar = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string T(string e, string a) => ar ? a : e;
+    ViewData["Title"] = T("Issue certificates", "إصدار الشهادات");
+    ViewData["PageTitle"] = T("Issue certificates", "إصدار الشهادات");
     var sessions = ViewBag.Sessions as List<GharsPlatform.Models.Core.AttendanceSession> ?? new();
 }
 <div class="card border-0 shadow-sm rounded-4">
@@ -10,30 +13,31 @@
             @Html.AntiForgeryToken()
             <div class="row g-3">
                 <div class="col-md-8">
-                    <label class="form-label">Attendance Session</label>
+                    <label class="form-label" for="AttendanceSessionId">@T("Attendance session", "جلسة الحضور")</label>
                     <select class="form-select" asp-for="AttendanceSessionId">
                         @foreach (var s in sessions)
                         {
-                            <option value="@s.Id">@s.Id - @s.Activity?.TitleEn (@s.SessionStartUtc.ToString("yyyy-MM-dd"))</option>
+                            <option value="@s.Id">@s.Id - @(ar && !string.IsNullOrWhiteSpace(s.Activity?.TitleAr) ? s.Activity!.TitleAr : s.Activity?.TitleEn) (@s.SessionStartUtc.ToString("yyyy-MM-dd"))</option>
                         }
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Language</label>
+                    <label class="form-label" for="Language">@T("Certificate language", "لغة الشهادة")</label>
                     <select class="form-select" asp-for="Language">
-                        <option value="en">English</option>
-                        <option value="ar">Arabic</option>
+                        <option value="en">@T("English", "الإنجليزية")</option>
+                        <option value="ar">@T("Arabic", "العربية")</option>
                     </select>
                 </div>
             </div>
 
             <div class="d-flex justify-content-end gap-2 mt-4">
-                <a class="btn btn-outline-secondary" href="/Admin/Certificates">Back</a>
-                <button class="btn btn-primary" type="submit">Issue</button>
+                <a class="btn btn-outline-secondary" href="/Admin/Certificates">@T("Back", "رجوع")</a>
+                <button class="btn btn-primary" type="submit">@T("Issue certificates", "إصدار الشهادات")</button>
             </div>
 
             <div class="small text-muted mt-3">
-                Certificates are generated as PDF with QR code verification.
+                @T("A PDF certificate with a verification QR code is issued to each attendee of the selected session who does not already hold one for this program.",
+                   "تُصدر شهادة بصيغة PDF تحمل رمز QR للتحقق لكل من حضر الجلسة المختارة ولا يحمل شهادة سابقة لهذا البرنامج.")
             </div>
             <div class="text-danger small mt-2" asp-validation-summary="All"></div>
         </form>

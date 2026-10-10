@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using GharsPlatform.Data;
 using GharsPlatform.Models.Core;
 using GharsPlatform.Models.Identity;
+using GharsPlatform.Models.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,8 @@ namespace GharsPlatform.Controllers.Admin;
 public class NewsController : Controllers.BaseController
 {
     public NewsController(AppDbContext db) : base(db) { }
+
+    private static bool IsAr() => System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
 
     public async Task<IActionResult> Index()
     {
@@ -43,7 +46,7 @@ public class NewsController : Controllers.BaseController
 
         Db.NewsItems.Add(n);
         await Db.SaveChangesAsync();
-        TempData["ToastSuccess"] = "News item created.";
+        TempData["ToastSuccess"] = IsAr() ? "تمت إضافة الخبر." : "News item created.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -62,10 +65,10 @@ public class NewsController : Controllers.BaseController
 
     public class NewsVm
     {
-        [Required, MaxLength(200)]
+        [BilingualRequired(ErrorMessage = "Enter the title in English.", Ar = "أدخلوا العنوان بالإنجليزية."), MaxLength(200)]
         public string TitleEn { get; set; } = "";
 
-        [Required, MaxLength(200)]
+        [BilingualRequired(ErrorMessage = "Enter the title in Arabic.", Ar = "أدخلوا العنوان بالعربية."), MaxLength(200)]
         public string TitleAr { get; set; } = "";
 
         [MaxLength(600)]

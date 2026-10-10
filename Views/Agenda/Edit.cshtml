@@ -59,7 +59,7 @@ else
     </div>
 }
 
-<div class="col-12"><label class="form-label">@T("Add supporting media (photos / videos)","إضافة وسائط داعمة (صور / فيديو)")</label><input class="form-control" type="file" asp-for="MediaFiles" multiple accept="image/*,video/*" /><div class="form-text">@T("Uploaded media is automatically added to the Ghars gallery.","تُضاف الوسائط المرفوعة تلقائياً إلى معرض غرس.")</div><span asp-validation-for="MediaFiles" class="text-danger"></span></div>
+<div class="col-12"><label class="form-label">@T("Add supporting media (photos / videos)","إضافة وسائط داعمة (صور / فيديو)")</label><input class="form-control" type="file" asp-for="MediaFiles" multiple accept="image/*,video/*" /><div class="form-text">@T("Media may appear in the Ghars gallery after DSC review.","قد تظهر الوسائط في معرض غرس بعد مراجعة المجلس.")</div><span asp-validation-for="MediaFiles" class="text-danger"></span></div>
 <div class="col-12"><label class="form-label">@T("Notes","ملاحظات")</label><textarea class="form-control" asp-for="Notes" rows="3"></textarea></div>
 <div class="col-12 d-flex gap-2"><button class="btn btn-success" name="SaveAsDraft" value="false">@T("Submit for approval","إرسال للاعتماد")</button><button class="btn btn-outline-secondary" name="SaveAsDraft" value="true">@T("Save as Draft","حفظ كمسودة")</button><a class="btn btn-outline-dark" href="/agenda">@T("Cancel","إلغاء")</a></div>
 <div asp-validation-summary="ModelOnly" class="text-danger"></div></div></form>

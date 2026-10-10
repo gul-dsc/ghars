@@ -543,11 +543,12 @@ and views only — the upload roots are never copied). To go back:
 ```powershell
 cd C:\azagent\A1\_work\<n>\ghars-drop\deploy   # or wherever you keep the script
 .\Deploy-Ghars.ps1 `
+    -DeploymentTarget Production `
     -Source "D:\GharsReleases\rollback-20260910-143000" `
     -SitePath C:\inetpub\ghars `
     -AppPool GharsPlatform `
     -AppPoolIdentity "IIS AppPool\GharsPlatform" `
-    -HealthCheckUrl http://localhost:89/
+    -HealthCheckUrl https://ghars.dubaisc.ae/
 ```
 
 **A code rollback does not roll back the schema.** If the release included a migration, the old
